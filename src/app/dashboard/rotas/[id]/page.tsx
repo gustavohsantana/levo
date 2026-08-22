@@ -6,7 +6,7 @@ import { getRoute } from '@/presentation/queries';
 import { Button } from '@/presentation/ui/primitives';
 import { RouteMonitor } from '@/presentation/ui/patterns/route-monitor';
 
-export const metadata: Metadata = { title: 'Rota · Girô' };
+export const metadata: Metadata = { title: 'Rota · Levô' };
 export const dynamic = 'force-dynamic';
 
 export default async function RoutePage({ params }: { params: Promise<{ id: string }> }) {

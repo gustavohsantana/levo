@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DATABASE_URL: postgresql://giro:giro@localhost:5432/giro
+  DATABASE_URL: postgresql://levo:levo@localhost:5432/levo
   AUTH_SECRET: ci-secret-com-no-minimo-32-caracteres-aqui
   PUBLIC_BASE_URL: http://localhost:3000
 
@@ -22,12 +22,12 @@ jobs:
       postgres:
         image: postgres:17-alpine
         env:
-          POSTGRES_USER: giro
-          POSTGRES_PASSWORD: giro
-          POSTGRES_DB: giro
+          POSTGRES_USER: levo
+          POSTGRES_PASSWORD: levo
+          POSTGRES_DB: levo
         ports: ['5432:5432']
         options: >-
-          --health-cmd "pg_isready -U giro"
+          --health-cmd "pg_isready -U levo"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10

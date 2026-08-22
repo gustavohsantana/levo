@@ -57,11 +57,11 @@ function withTenantGuard(client: PrismaClient) {
   });
 }
 
-export type GiroPrismaClient = ReturnType<typeof withTenantGuard>;
+export type LevoPrismaClient = ReturnType<typeof withTenantGuard>;
 
-let singleton: GiroPrismaClient | undefined;
+let singleton: LevoPrismaClient | undefined;
 
-export function getPrismaClient(connectionString: string): GiroPrismaClient {
+export function getPrismaClient(connectionString: string): LevoPrismaClient {
   // Em desenvolvimento o Next recarrega módulos a cada mudança; sem o
   // singleton, cada recarga abre um pool novo e o Postgres recusa conexão.
   if (!singleton) {

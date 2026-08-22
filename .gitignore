@@ -32,6 +32,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...menos o template. O padrão acima é do scaffold do Next e engolia o próprio
+# arquivo que o README manda copiar — quem clonasse o repositório não teria por
+# onde começar.
+!.env.example
 
 # vercel
 .vercel
@@ -40,7 +44,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Girô
+# Levô
 .env
 .env*.local
 /prisma/*.db

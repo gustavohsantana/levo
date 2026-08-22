@@ -1,17 +1,17 @@
 services:
   postgres:
     image: postgres:17-alpine
-    container_name: giro-postgres
+    container_name: levo-postgres
     environment:
-      POSTGRES_USER: giro
-      POSTGRES_PASSWORD: giro
-      POSTGRES_DB: giro
+      POSTGRES_USER: levo
+      POSTGRES_PASSWORD: levo
+      POSTGRES_DB: levo
     ports:
       - '5432:5432'
     volumes:
-      - giro-pgdata:/var/lib/postgresql/data
+      - levo-pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U giro']
+      test: ['CMD-SHELL', 'pg_isready -U levo']
       interval: 5s
       timeout: 5s
       retries: 10
@@ -24,7 +24,7 @@ services:
   # que é o que torna o piloto viável de graça e dentro dos termos de uso.
   osrm:
     image: osrm/osrm-backend:latest
-    container_name: giro-osrm
+    container_name: levo-osrm
     command: osrm-routed --algorithm mld /data/region.osrm
     ports:
       - '5000:5000'
@@ -34,4 +34,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  giro-pgdata:
+  levo-pgdata:

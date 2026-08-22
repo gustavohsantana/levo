@@ -1,6 +1,6 @@
 # Imagem do aplicativo.
 #
-# Existe para o Girô não ficar preso à Vercel: a mesma imagem roda na VM
+# Existe para o Levô não ficar preso à Vercel: a mesma imagem roda na VM
 # gratuita da Oracle, em qualquer VPS ou no Fly.io. Multi-stage para a imagem
 # final não carregar as dependências de build.
 
@@ -24,14 +24,14 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # Não roda como root: se alguém escapar do processo, escapa como ninguém.
-RUN addgroup -g 1001 -S nodejs && adduser -S -u 1001 -G nodejs giro
+RUN addgroup -g 1001 -S nodejs && adduser -S -u 1001 -G nodejs levo
 
-COPY --from=build --chown=giro:nodejs /app/.next/standalone ./
-COPY --from=build --chown=giro:nodejs /app/.next/static ./.next/static
-COPY --from=build --chown=giro:nodejs /app/public ./public
-COPY --from=build --chown=giro:nodejs /app/prisma ./prisma
+COPY --from=build --chown=levo:nodejs /app/.next/standalone ./
+COPY --from=build --chown=levo:nodejs /app/.next/static ./.next/static
+COPY --from=build --chown=levo:nodejs /app/public ./public
+COPY --from=build --chown=levo:nodejs /app/prisma ./prisma
 
-USER giro
+USER levo
 EXPOSE 3000
 ENV PORT=3000 HOSTNAME=0.0.0.0
 

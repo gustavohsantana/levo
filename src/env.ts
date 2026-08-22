@@ -17,7 +17,7 @@ const schema = z.object({
 
   GEOCODER_BASE_URL: z.string().url().default('https://nominatim.openstreetmap.org'),
   GEOCODER_API_KEY: z.string().optional(),
-  GEOCODER_USER_AGENT: z.string().default('giro-mvp'),
+  GEOCODER_USER_AGENT: z.string().default('levo-mvp'),
 
   IFOOD_ENABLED: z.enum(['true', 'false']).default('false'),
   IFOOD_CLIENT_ID: z.string().optional(),

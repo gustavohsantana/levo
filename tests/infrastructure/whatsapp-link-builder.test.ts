@@ -15,7 +15,7 @@ function orderWith(phone: string | null) {
 }
 
 describe('WhatsAppLinkBuilder', () => {
-  const builder = new WhatsAppLinkBuilder('https://giro.app/');
+  const builder = new WhatsAppLinkBuilder('https://levo.app/');
 
   it('monta link wa.me com telefone normalizado e mensagem pronta', () => {
     const order = orderWith('(41) 99999-9999');
@@ -27,7 +27,7 @@ describe('WhatsAppLinkBuilder', () => {
     const text = url.searchParams.get('text')!;
     expect(text).toContain('Oi, Maria!');
     expect(text).toContain('Pizzaria do Zé');
-    expect(text).toContain(`https://giro.app/t/${order.trackingToken.value}`);
+    expect(text).toContain(`https://levo.app/t/${order.trackingToken.value}`);
   });
 
   it('trata a barra final da URL base sem duplicar', () => {

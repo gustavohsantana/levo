@@ -5,7 +5,7 @@ import { UnauthorizedError } from '@/core';
 import { env } from '@/env';
 import { getPrismaClient } from '@/infrastructure/persistence/prisma/client';
 
-const COOKIE = 'giro_session';
+const COOKIE = 'levo_session';
 const MAX_AGE_SECONDS = 60 * 60 * 12; // um turno de trabalho
 
 export interface Session {

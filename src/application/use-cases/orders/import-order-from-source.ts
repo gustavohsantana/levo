@@ -19,7 +19,7 @@ export interface ImportResult {
 }
 
 /**
- * Traz pedidos de uma plataforma externa para dentro do Girô.
+ * Traz pedidos de uma plataforma externa para dentro do Levô.
  *
  * Não sabe se está falando com iFood, aiqfome ou webhook — recebe um
  * `OrderSource` e pronto. Ligar uma plataforma nova é registrar outro adapter

@@ -6,7 +6,7 @@ import { getSession } from '@/presentation/http/session';
 import { getPilotMetrics } from '@/presentation/pilot-metrics';
 import { Button } from '@/presentation/ui/primitives';
 
-export const metadata: Metadata = { title: 'Piloto · Girô', robots: { index: false } };
+export const metadata: Metadata = { title: 'Piloto · Levô', robots: { index: false } };
 export const dynamic = 'force-dynamic';
 
 export default async function PilotPage() {

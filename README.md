@@ -1,10 +1,10 @@
-# Girô
+# Levô
 
 Gestão de rotas para estabelecimentos que entregam com **motoboy próprio**.
 
 Restaurantes pequenos recebem pedidos por iFood e aiqfome, mas entregam com a
 moto da casa. Hoje isso é gerido no papel: o dono anota os endereços, entrega um
-maço para o motoboy, e ele decide a ordem de cabeça. O Girô recebe os pedidos,
+maço para o motoboy, e ele decide a ordem de cabeça. O Levô recebe os pedidos,
 **calcula a melhor ordem das entregas**, põe a rota no celular do motoboy, mostra
 a posição dele ao vivo para o dono e gera um **link de WhatsApp** para o cliente
 acompanhar em tempo real.
@@ -152,8 +152,8 @@ SIG=$(printf '%s.%s' "$EST" "$BODY" \
 
 curl -X POST http://localhost:3000/api/webhooks/orders \
   -H "content-type: application/json" \
-  -H "x-giro-establishment: $EST" \
-  -H "x-giro-signature: $SIG" \
+  -H "x-levo-establishment: $EST" \
+  -H "x-levo-signature: $SIG" \
   -d "$BODY"
 ```
 

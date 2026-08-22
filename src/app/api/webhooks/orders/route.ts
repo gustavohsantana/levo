@@ -20,7 +20,7 @@ import { toErrorResponse } from '@/presentation/http/error-mapper';
  * cliente já use, sem depender de credenciamento nenhum. É o que permite
  * validar o produto enquanto a homologação anda em paralelo.
  *
- * Autenticado por HMAC-SHA256 do corpo cru, no cabeçalho `x-giro-signature`.
+ * Autenticado por HMAC-SHA256 do corpo cru, no cabeçalho `x-levo-signature`.
  */
 const MAX_BATCH = 100;
 
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
 
     const raw = await request.text();
 
-    const establishmentId = request.headers.get('x-giro-establishment');
+    const establishmentId = request.headers.get('x-levo-establishment');
     if (!establishmentId) throw new ForbiddenError('Estabelecimento não informado');
 
     /**
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
      * outro. Com um cliente só isso é teórico; com dois, é uma porta aberta —
      * e o dia de fechá-la é antes de existir o segundo, não depois.
      */
-    verifySignature(`${establishmentId}.${raw}`, request.headers.get('x-giro-signature'), secret);
+    verifySignature(`${establishmentId}.${raw}`, request.headers.get('x-levo-signature'), secret);
 
     const prisma = getPrismaClient(env().DATABASE_URL);
     const exists = await prisma.establishment.findUnique({ where: { id: establishmentId } });

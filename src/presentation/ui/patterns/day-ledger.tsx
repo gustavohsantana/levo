@@ -5,7 +5,7 @@ import { minutes } from '../format';
  *
  * A economia de tempo vem primeiro e em destaque tipográfico porque é a
  * pergunta que o piloto existe para responder — e é o número que o dono repete
- * quando alguém pergunta se o Girô serve para alguma coisa.
+ * quando alguém pergunta se o Levô serve para alguma coisa.
  */
 export function DayLedger({
   establishmentName,

@@ -78,7 +78,7 @@ export class PlanRoute {
      * ⭐ A comparação que vende o produto.
      *
      * `baseline` é o tempo da rota na ordem em que os pedidos chegaram — o que
-     * aconteceria hoje, com o maço de papéis. `optimized` é o que o Girô
+     * aconteceria hoje, com o maço de papéis. `optimized` é o que o Levô
      * propõe. Os dois saem da **mesma matriz**, então a comparação é honesta:
      * mesmo motor, mesmo trânsito, mesmo momento. Comparar contra uma
      * estimativa inventada daria um número maior e sem valor nenhum.

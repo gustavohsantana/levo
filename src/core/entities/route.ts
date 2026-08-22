@@ -29,7 +29,7 @@ interface RouteProps {
   durationSeconds: number;
   /**
    * Duração da rota na ordem em que os pedidos chegaram — o que aconteceria
-   * sem o Girô. É o "antes" da comparação.
+   * sem o Levô. É o "antes" da comparação.
    */
   baselineDurationSeconds: number;
   createdAt: Date;

@@ -4,7 +4,7 @@ import { WorkQueue } from '@/presentation/ui/patterns/work-queue';
 import { ActiveRoutes } from '@/presentation/ui/patterns/active-routes';
 import { DayLedger } from '@/presentation/ui/patterns/day-ledger';
 
-export const metadata: Metadata = { title: 'Painel · Girô' };
+export const metadata: Metadata = { title: 'Painel · Levô' };
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {

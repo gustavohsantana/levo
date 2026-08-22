@@ -1,5 +1,5 @@
 import type { Repositories, UnitOfWork } from '@/core';
-import type { GiroPrismaClient } from './client';
+import type { LevoPrismaClient } from './client';
 import { buildRepositories } from './repositories';
 
 /**
@@ -12,7 +12,7 @@ import { buildRepositories } from './repositories';
  */
 export class PrismaUnitOfWork implements UnitOfWork {
   constructor(
-    private readonly prisma: GiroPrismaClient,
+    private readonly prisma: LevoPrismaClient,
     private readonly establishmentId: string,
     private readonly timeoutMs = 15_000,
   ) {}

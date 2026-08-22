@@ -22,7 +22,7 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Girô',
+  title: 'Levô',
   description: 'Gestão inteligente de rotas para quem entrega com motoboy próprio',
 };
 

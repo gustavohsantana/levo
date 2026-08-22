@@ -135,7 +135,7 @@ export function CourierApp({ token, route }: { token: string; route: DriverRoute
     if (outcome === 'FAILED' && reason === null) return;
 
     // Confirma na tela ANTES de falar com o servidor. Sem isso, o motoboy
-    // espera o giro de carregamento parado no portão do cliente.
+    // espera o levo de carregamento parado no portão do cliente.
     setResolvedLocally((current) => ({ ...current, [stop.id]: outcome }));
 
     const item = {

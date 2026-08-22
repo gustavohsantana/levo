@@ -14,9 +14,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <div className="mx-auto flex h-13 max-w-[1400px] items-center gap-3 px-5 py-2.5">
           <Link href="/dashboard" className="flex items-center gap-2.5">
             <span className="grid size-6 place-items-center rounded-xs bg-accent text-xs font-semibold text-accent-ink">
-              G
+              L
             </span>
-            <span className="text-sm font-semibold tracking-tight text-ink">Girô</span>
+            <span className="text-sm font-semibold tracking-tight text-ink">Levô</span>
           </Link>
 
           <span className="text-ink-faint">/</span>

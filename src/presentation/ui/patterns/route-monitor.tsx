@@ -95,7 +95,7 @@ export function RouteMonitor({
           {/*
             Plano B do sábado à noite.
 
-            Se o Girô cair no pico, o dono não pode parar de vender. O papel
+            Se o Levô cair no pico, o dono não pode parar de vender. O papel
             volta — mas agora com as paradas na ordem otimizada. Custa uma
             folha de estilo de impressão e é a diferença entre um susto e um
             cliente perdido.

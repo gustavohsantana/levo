@@ -5,7 +5,7 @@
  * que o produto promete medir. O `dependency-cruiser` pegou esta no lugar
  * errado — que é exatamente para isso que ele existe.
  *
- * É o que aconteceria sem o Girô: o dono imprime os pedidos na ordem em que
+ * É o que aconteceria sem o Levô: o dono imprime os pedidos na ordem em que
  * caíram e o motoboy sai seguindo o maço. A diferença entre isso e a rota
  * otimizada é o número que o piloto precisa provar, então é calculado com a
  * mesma matriz do otimizador — comparação justa, não estimativa.

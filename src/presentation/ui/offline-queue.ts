@@ -2,7 +2,7 @@
 
 import { del, get, set } from 'idb-keyval';
 
-const KEY = 'giro:fila-offline';
+const KEY = 'levo:fila-offline';
 
 export interface QueuedStop {
   token: string;

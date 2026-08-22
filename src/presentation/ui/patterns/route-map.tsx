@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { decodePolyline } from '../polyline';
+import { MAP_COLORS, MAP_TILES } from '../map-config';
 
 export interface MapMarker {
   lat: number;
@@ -13,14 +14,11 @@ export interface MapMarker {
 }
 
 /**
- * Mapa Leaflet com tiles do OpenStreetMap.
- *
- * Sem chave de API e sem custo — o que mantém o piloto gratuito de ponta a
- * ponta. Trocar por MapTiler ou Google é mudar a URL do tile.
+ * Mapa da rota.
  *
  * Feito com Leaflet direto, sem react-leaflet: os marcadores mudam a cada 10
- * segundos e recriar a árvore React inteira a cada atualização faria o mapa
- * piscar. Aqui a camada é atualizada no lugar.
+ * segundos e recriar a árvore React inteira faria o mapa piscar. Aqui as
+ * camadas são atualizadas no lugar.
  */
 export function RouteMap({
   markers,
@@ -43,28 +41,53 @@ export function RouteMap({
   const map = useRef<L.Map | null>(null);
   const layer = useRef<L.LayerGroup | null>(null);
 
-  const path = useMemo(() => (geometry ? decodePolyline(geometry) : null), [geometry]);
+  /**
+   * O mapa de fundo não carregou.
+   *
+   * Acontece de verdade: rede corporativa que bloqueia o servidor de tiles,
+   * celular sem dados, servidor fora do ar. Sem tratar, sobra um retângulo
+   * cinza que parece bug — e o dono conclui que o produto está quebrado, quando
+   * a rota e as paradas estão ali, desenhadas e corretas.
+   */
+  const [tilesFailed, setTilesFailed] = useState(false);
 
-  // `onPick` guardado em ref para o handler de clique não precisar ser
-  // reassinado a cada render — o mapa é criado uma vez só. A atualização vai
-  // num efeito porque escrever em ref durante o render deixa o valor
-  // inconsistente entre a renderização e o que ficou na tela.
   const pick = useRef(onPick);
   useEffect(() => {
     pick.current = onPick;
   }, [onPick]);
 
+  const path = useMemo(() => (geometry ? decodePolyline(geometry) : null), [geometry]);
+
   useEffect(() => {
     if (!container.current || map.current) return;
 
-    map.current = L.map(container.current, { zoomControl: false, attributionControl: true });
+    map.current = L.map(container.current, {
+      zoomControl: false,
+      attributionControl: true,
+    });
+
     map.current.on('click', (event: L.LeafletMouseEvent) => {
       pick.current?.({ lat: event.latlng.lat, lng: event.latlng.lng });
     });
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap',
-    }).addTo(map.current);
+
+    const tiles = L.tileLayer(MAP_TILES.url, {
+      maxZoom: MAP_TILES.maxZoom,
+      attribution: MAP_TILES.attribution,
+      // Tiles em @2x deixam o texto das ruas nítido em tela retina, que é onde
+      // o dono e o motoboy olham.
+      detectRetina: true,
+    });
+
+    let failures = 0;
+    tiles.on('tileerror', () => {
+      // Um tile isolado falha por qualquer motivo; três seguidos indicam que a
+      // fonte inteira está inacessível.
+      failures += 1;
+      if (failures >= 3) setTilesFailed(true);
+    });
+    tiles.on('tileload', () => setTilesFailed(false));
+
+    tiles.addTo(map.current);
     L.control.zoom({ position: 'bottomright' }).addTo(map.current);
     layer.current = L.layerGroup().addTo(map.current);
 
@@ -81,7 +104,30 @@ export function RouteMap({
     const bounds: L.LatLngExpression[] = [];
 
     if (path) {
-      L.polyline(path, { color: 'oklch(56% 0.16 258)', weight: 4, opacity: 0.6 }).addTo(layer.current);
+      /**
+       * Traçado em duas camadas: uma branca mais grossa por baixo, a colorida
+       * por cima.
+       *
+       * É a técnica padrão de cartografia — sem o contorno, uma linha azul
+       * sobre ruas azuladas ou sobre um parque verde some. Com ele, a rota lê
+       * limpa em cima de qualquer fundo.
+       */
+      L.polyline(path, {
+        color: MAP_COLORS.routeCasing,
+        weight: 9,
+        opacity: 0.9,
+        lineJoin: 'round',
+        lineCap: 'round',
+      }).addTo(layer.current);
+
+      L.polyline(path, {
+        color: MAP_COLORS.route,
+        weight: 5,
+        opacity: 1,
+        lineJoin: 'round',
+        lineCap: 'round',
+      }).addTo(layer.current);
+
       bounds.push(...path);
     }
 
@@ -90,40 +136,58 @@ export function RouteMap({
       // diferença entre os dois é a informação mais útil da tela para o dono.
       L.polyline(
         trail.map((point) => [point.lat, point.lng] as [number, number]),
-        { color: 'oklch(78% 0.185 128)', weight: 3, dashArray: '4 5' },
+        { color: MAP_COLORS.trail, weight: 3.5, dashArray: '3 6', lineCap: 'round' },
       ).addTo(layer.current);
     }
 
     for (const marker of markers) {
-      L.marker([marker.lat, marker.lng], { icon: iconFor(marker), title: marker.label })
+      L.marker([marker.lat, marker.lng], {
+        icon: iconFor(marker),
+        title: marker.label,
+        // O motoboy fica por cima de tudo; paradas concluídas, por baixo.
+        zIndexOffset: marker.kind === 'courier' ? 1000 : marker.kind === 'done' ? -100 : 0,
+      })
         .addTo(layer.current)
         .bindPopup(marker.label);
+
       bounds.push([marker.lat, marker.lng]);
     }
 
     if (bounds.length > 0) {
-      map.current.fitBounds(L.latLngBounds(bounds), { padding: [36, 36], maxZoom: 16 });
+      map.current.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 16 });
     } else if (center) {
       map.current.setView([center.lat, center.lng], 14);
     }
   }, [markers, path, trail, center]);
 
   return (
-    <div
-      ref={container}
-      className={className}
-      role="application"
-      aria-label={onPick ? 'Mapa para escolher o local da entrega' : 'Mapa da rota'}
-    />
+    <div className="relative h-full w-full">
+      <div
+        ref={container}
+        className={className}
+        role="application"
+        aria-label={onPick ? 'Mapa para escolher o local da entrega' : 'Mapa da rota'}
+      />
+
+      {tilesFailed ? (
+        <p className="pointer-events-none absolute inset-x-3 top-3 z-[500] rounded-md bg-surface/95 px-3 py-2 text-xs text-ink-muted shadow-sm">
+          Mapa de fundo indisponível — sem internet ou servidor de mapas fora do ar.
+          <span className="text-ink-faint"> A rota e as paradas abaixo estão corretas.</span>
+        </p>
+      ) : null}
+    </div>
   );
 }
 
-const STYLES: Record<MapMarker['kind'], { bg: string; fg: string; size: number }> = {
-  origin: { bg: 'oklch(21% 0.012 75)', fg: '#fff', size: 26 },
-  stop: { bg: 'oklch(56% 0.16 258)', fg: '#fff', size: 26 },
-  done: { bg: 'oklch(90% 0.007 85)', fg: 'oklch(48% 0.012 75)', size: 22 },
-  destination: { bg: 'oklch(78% 0.185 128)', fg: 'oklch(26% 0.07 128)', size: 28 },
-  courier: { bg: 'oklch(78% 0.185 128)', fg: 'oklch(26% 0.07 128)', size: 32 },
+const STYLES: Record<
+  MapMarker['kind'],
+  { bg: string; fg: string; size: number; ring: string }
+> = {
+  origin: { bg: MAP_COLORS.origin, fg: MAP_COLORS.onDark, size: 28, ring: '#fff' },
+  stop: { bg: MAP_COLORS.stop, fg: MAP_COLORS.onDark, size: 28, ring: '#fff' },
+  done: { bg: MAP_COLORS.done, fg: MAP_COLORS.ink, size: 22, ring: '#fff' },
+  destination: { bg: MAP_COLORS.accent, fg: MAP_COLORS.accentInk, size: 30, ring: '#fff' },
+  courier: { bg: MAP_COLORS.accent, fg: MAP_COLORS.accentInk, size: 34, ring: '#fff' },
 };
 
 /**
@@ -148,15 +212,18 @@ function glyphFor(marker: MapMarker): string {
 
 function iconFor(marker: MapMarker): L.DivIcon {
   const style = STYLES[marker.kind];
+  const font = marker.kind === 'courier' ? 16 : 12;
 
   return L.divIcon({
     className: '',
     html:
       `<div style="width:${style.size}px;height:${style.size}px;background:${style.bg};` +
       `color:${style.fg};border-radius:999px;display:grid;place-items:center;` +
-      `font:600 12px/1 var(--font-instrument-sans,sans-serif);` +
-      `box-shadow:0 0 0 2px #fff,0 2px 6px rgba(0,0,0,.25)">${glyphFor(marker)}</div>`,
+      `font:600 ${font}px/1 var(--font-instrument-sans,system-ui,sans-serif);` +
+      // Anel branco + sombra: separa o marcador do mapa em qualquer fundo.
+      `box-shadow:0 0 0 2.5px ${style.ring},0 2px 8px rgba(0,0,0,.3)">${glyphFor(marker)}</div>`,
     iconSize: [style.size, style.size],
     iconAnchor: [style.size / 2, style.size / 2],
+    popupAnchor: [0, -style.size / 2],
   });
 }

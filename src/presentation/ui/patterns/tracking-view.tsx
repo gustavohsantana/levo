@@ -18,7 +18,7 @@ const POLL_MS = 10_000;
 /**
  * A página que o cliente final abre.
  *
- * Uma pergunta só: "está chegando?". Sem menu, sem login, sem marca do Girô
+ * Uma pergunta só: "está chegando?". Sem menu, sem login, sem marca do Levô
  * competindo com a do estabelecimento — quem pediu a pizza tem relação com a
  * pizzaria, não conosco.
  *

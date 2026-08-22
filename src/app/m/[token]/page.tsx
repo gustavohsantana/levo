@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { getDriverRoute } from '@/presentation/driver-queries';
 import { CourierApp } from '@/presentation/ui/patterns/courier-app';
 
-export const metadata: Metadata = { title: 'Minha rota · Girô' };
+export const metadata: Metadata = { title: 'Minha rota · Levô' };
 export const dynamic = 'force-dynamic';
 
 export const viewport: Viewport = {
