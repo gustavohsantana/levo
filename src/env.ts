@@ -35,7 +35,18 @@ const schema = z.object({
 });
 
 function load() {
-  const parsed = schema.safeParse(process.env);
+  /**
+   * Painel de deploy grava campo não preenchido como string vazia, não como
+   * ausente — e `""` não é `undefined`, então `.default()` não entra e um
+   * `.url()` estoura no boot. A Vercel monta um campo para cada variável do
+   * .env.example, então salvar a tela como veio derrubaria a aplicação com
+   * "Invalid URL" numa variável que era opcional.
+   */
+  const source = Object.fromEntries(
+    Object.entries(process.env).filter(([, value]) => value !== ''),
+  );
+
+  const parsed = schema.safeParse(source);
 
   if (!parsed.success) {
     const problems = parsed.error.issues
