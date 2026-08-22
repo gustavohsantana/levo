@@ -1,0 +1,209 @@
+// Schema do Girô.
+//
+// Duas decisões que parecem exageradas com um cliente só, e que seriam caras
+// demais para retrofitar depois:
+//
+//  1. `establishmentId` em toda tabela desde o primeiro dia — migrar dado de
+//     produção para multi-tenant é a pior tarde de trabalho que existe;
+//  2. `@@unique([establishmentId, source, externalId])` em Order — é a garantia
+//     de idempotência contra a reentrega de eventos do iFood.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum OrderSourceKind {
+  MANUAL
+  WEBHOOK
+  IFOOD
+  AIQFOME
+}
+
+enum OrderStatus {
+  NEW
+  IN_ROUTE
+  DELIVERED
+  FAILED
+}
+
+enum RouteStatus {
+  PLANNED
+  IN_PROGRESS
+  FINISHED
+}
+
+enum StopStatus {
+  PENDING
+  DELIVERED
+  FAILED
+}
+
+model Establishment {
+  id        String   @id @default(uuid())
+  name      String
+  address   String
+  lat       Float
+  lng       Float
+  createdAt DateTime @default(now())
+
+  users    User[]
+  couriers Courier[]
+  orders   Order[]
+  routes   Route[]
+  events   DomainEventLog[]
+}
+
+model User {
+  id              String   @id @default(uuid())
+  establishmentId String
+  email           String   @unique
+  name            String
+  passwordHash    String
+  createdAt       DateTime @default(now())
+
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+
+  @@index([establishmentId])
+}
+
+model Courier {
+  id              String   @id @default(uuid())
+  establishmentId String
+  name            String
+  phone           String
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+  routes        Route[]
+
+  @@index([establishmentId, active])
+}
+
+model Order {
+  id              String          @id @default(uuid())
+  establishmentId String
+  source          OrderSourceKind
+  externalId      String?
+  customerName    String
+  customerPhone   String?
+  address         String
+  reference       String?
+  lat             Float?
+  lng             Float?
+  amountCents     Int             @default(0)
+  notes           String?
+  status          OrderStatus     @default(NEW)
+  trackingToken   String          @unique
+  routeId         String?
+  createdAt       DateTime        @default(now())
+  deliveredAt     DateTime?
+
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+  stop          RouteStop?
+
+  // ⭐ A idempotência da importação, garantida pelo banco.
+  //
+  // No Postgres, NULLs são distintos entre si num índice único — então vários
+  // pedidos manuais (todos com externalId nulo) convivem sem conflito, e ainda
+  // assim o mesmo pedido do iFood nunca entra duas vezes.
+  @@unique([establishmentId, source, externalId])
+  @@index([establishmentId, status, createdAt])
+  @@index([establishmentId, createdAt])
+}
+
+model Route {
+  id                      String      @id @default(uuid())
+  establishmentId         String
+  courierId               String
+  status                  RouteStatus @default(PLANNED)
+  accessToken             String      @unique
+  geometry                String?
+  distanceMeters          Int         @default(0)
+  durationSeconds         Int         @default(0)
+  // O "antes" da comparação: a rota na ordem em que os pedidos chegaram.
+  baselineDurationSeconds Int         @default(0)
+  createdAt               DateTime    @default(now())
+  startedAt               DateTime?
+  finishedAt              DateTime?
+
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+  courier       Courier       @relation(fields: [courierId], references: [id])
+  stops         RouteStop[]
+  pings         CourierPing[]
+
+  @@index([establishmentId, status, createdAt])
+  @@index([courierId, status])
+}
+
+model RouteStop {
+  id                String     @id @default(uuid())
+  routeId           String
+  orderId           String     @unique
+  position          Int
+  status            StopStatus @default(PENDING)
+  etaSeconds        Int        @default(0)
+  legDistanceMeters Int        @default(0)
+  resolvedAt        DateTime?
+  failureReason     String?
+
+  route Route @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([routeId, position])
+  @@index([routeId, status])
+}
+
+// Posição do motoboy, ~a cada 15s durante a rota.
+//
+// De longe a tabela mais escrita do sistema: 100 clientes × 5 motoboys × 4
+// pings/min é o primeiro gargalo real de escala. Por isso nasce com política de
+// retenção (`purgeFinishedBefore`) — que serve à LGPD e à escala com a mesma
+// medida.
+model CourierPing {
+  id         String   @id @default(uuid())
+  routeId    String
+  lat        Float
+  lng        Float
+  recordedAt DateTime
+
+  route Route @relation(fields: [routeId], references: [id], onDelete: Cascade)
+
+  @@index([routeId, recordedAt])
+}
+
+// Log append-only de fatos do domínio.
+//
+// Um mecanismo, três retornos: métricas do piloto, auditoria e, quando
+// escalar, a base para processamento assíncrono (padrão outbox).
+model DomainEventLog {
+  id              String   @id @default(uuid())
+  establishmentId String
+  name            String
+  aggregateId     String
+  payload         Json
+  occurredAt      DateTime
+
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+
+  @@index([establishmentId, name, occurredAt])
+  @@index([establishmentId, occurredAt])
+}
+
+// Cache de geocodificação.
+//
+// Deliberadamente **sem** establishmentId: a relação endereço → coordenada é
+// fato geográfico público, não dado de cliente. Compartilhar entre
+// estabelecimentos multiplica a taxa de acerto e é o que mantém o consumo
+// dentro da faixa gratuita do provedor.
+model GeocodeCache {
+  cacheKey  String   @id
+  lat       Float
+  lng       Float
+  createdAt DateTime @default(now())
+}
