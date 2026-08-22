@@ -1,6 +1,10 @@
 /**
  * Custo da rota na ordem em que os pedidos chegaram — o "antes" da comparação.
  *
+ * Mora no core, e não na infraestrutura, porque é regra de negócio: define o
+ * que o produto promete medir. O `dependency-cruiser` pegou esta no lugar
+ * errado — que é exatamente para isso que ele existe.
+ *
  * É o que aconteceria sem o Girô: o dono imprime os pedidos na ordem em que
  * caíram e o motoboy sai seguindo o maço. A diferença entre isso e a rota
  * otimizada é o número que o piloto precisa provar, então é calculado com a

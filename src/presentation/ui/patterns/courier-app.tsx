@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Check,
@@ -35,7 +35,13 @@ const PING_INTERVAL_MS = 15_000;
 export function CourierApp({ token, route }: { token: string; route: DriverRouteView }) {
   const router = useRouter();
   const [pendingSync, setPendingSync] = useState(0);
-  const [online, setOnline] = useState(true);
+  /**
+   * Conexão é estado que vive fora do React — o navegador é dono dele.
+   * `useSyncExternalStore` é a API feita para exatamente isso: assina a fonte
+   * externa sem espelhar o valor num estado local que pode ficar defasado, e
+   * sem risco de divergir entre servidor e cliente na hidratação.
+   */
+  const online = useSyncExternalStore(subscribeToConnection, () => navigator.onLine, () => true);
   /** Paradas confirmadas localmente e ainda não refletidas pelo servidor. */
   // `undefined` explícito: sem ele o TypeScript assume que todo id existe no
   // mapa e considera o fallback para o status do servidor código morto.
@@ -64,25 +70,16 @@ export function CourierApp({ token, route }: { token: string; route: DriverRoute
   }, [router]);
 
   useEffect(() => {
-    setOnline(navigator.onLine);
-    void peek().then((queue) => setPendingSync(queue.length));
-
-    const goOnline = () => {
-      setOnline(true);
-      void sync();
-    };
-    const goOffline = () => setOnline(false);
-
-    window.addEventListener('online', goOnline);
-    window.addEventListener('offline', goOffline);
-    const timer = setInterval(sync, 20_000);
+    // `online` nas dependências de propósito: quando o sinal volta, o efeito
+    // roda de novo e a fila esvazia na hora, sem esperar o próximo ciclo.
+    const periodic = setInterval(sync, 20_000);
+    const immediate = setTimeout(sync, 0);
 
     return () => {
-      window.removeEventListener('online', goOnline);
-      window.removeEventListener('offline', goOffline);
-      clearInterval(timer);
+      clearInterval(periodic);
+      clearTimeout(immediate);
     };
-  }, [sync]);
+  }, [sync, online]);
 
   // ── GPS ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -210,6 +207,15 @@ export function CourierApp({ token, route }: { token: string; route: DriverRoute
       ) : null}
     </Shell>
   );
+}
+
+function subscribeToConnection(onChange: () => void): () => void {
+  window.addEventListener('online', onChange);
+  window.addEventListener('offline', onChange);
+  return () => {
+    window.removeEventListener('online', onChange);
+    window.removeEventListener('offline', onChange);
+  };
 }
 
 /** O tema escuro é do container, não do documento: só esta tela é escura. */

@@ -181,3 +181,35 @@
   color: var(--ink-faint) !important;
   font-size: 10px !important;
 }
+
+/*
+ * Impressão — o plano B do sábado à noite.
+ *
+ * Se o sistema cair no pico, o dono imprime a rota e o motoboy sai com o papel
+ * na ordem otimizada. Tinta é cara e cozinha é apressada: fundo branco, texto
+ * preto, nada de cor chapada, e some tudo que não é a lista de paradas.
+ */
+@media print {
+  body {
+    background: #fff;
+    color: #000;
+  }
+
+  header[class*='sticky'],
+  .print\:hidden {
+    display: none !important;
+  }
+
+  ol {
+    break-inside: avoid;
+  }
+
+  li {
+    break-inside: avoid;
+    padding-block: 10px !important;
+  }
+
+  a[href]::after {
+    content: '';
+  }
+}

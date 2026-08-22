@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { TwoOptOptimizer } from '@/infrastructure/routing/two-opt-optimizer';
-import { baselineDuration } from '@/infrastructure/routing/baseline';
+
 import { countCrossings, euclideanMatrix, type Point } from '../helpers/geometry';
-import { ValidationError } from '@/core';
+import { baselineDuration, ValidationError } from '@/core';
 
 const optimizer = new TwoOptOptimizer();
 

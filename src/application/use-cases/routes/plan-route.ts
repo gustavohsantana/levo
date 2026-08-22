@@ -12,8 +12,8 @@ import {
   RouteTooLargeError,
   type RoutingService,
   type UnitOfWork,
+  baselineDuration,
 } from '@/core';
-import { baselineDuration } from '@/infrastructure/routing/baseline';
 
 interface Input {
   courierId: string;

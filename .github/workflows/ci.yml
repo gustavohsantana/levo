@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DATABASE_URL: postgresql://giro:giro@localhost:5432/giro
+  AUTH_SECRET: ci-secret-com-no-minimo-32-caracteres-aqui
+  PUBLIC_BASE_URL: http://localhost:3000
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: giro
+          POSTGRES_PASSWORD: giro
+          POSTGRES_DB: giro
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U giro"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tipos
+        run: npm run typecheck
+
+      # A regra de dependência vira build quebrado, não recomendação de code
+      # review. É o que impede o domínio de virar refém do framework com o
+      # tempo.
+      - name: Regra de dependência
+        run: npm run arch
+
+      - name: Testes unitários
+        run: npm test
+
+      - name: Migrations
+        run: npx prisma migrate deploy
+
+      - name: Testes de integração
+        run: npm run test:integration
+
+      - name: Build
+        run: npm run build

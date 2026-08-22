@@ -73,20 +73,39 @@ async function main() {
   });
 
   const now = Date.now();
-  await prisma.order.createMany({
-    data: ORDERS.map((order, index) => ({
+  const orderRows = ORDERS.map((order, index) => ({
+    id: randomUUID(),
+    establishmentId: establishment.id,
+    source: 'MANUAL' as const,
+    customerName: order.customerName,
+    customerPhone: order.phone,
+    address: order.address,
+    lat: order.lat,
+    lng: order.lng,
+    amountCents: order.amount,
+    notes: order.notes,
+    trackingToken: randomUUID().replace(/-/g, '').slice(0, 22),
+    // Espalhados nos últimos 40 minutos, na ordem em que "chegaram".
+    createdAt: new Date(now - (ORDERS.length - index) * 5 * 60_000),
+  }));
+
+  await prisma.order.createMany({ data: orderRows });
+
+  /**
+   * Os eventos correspondentes.
+   *
+   * O seed escreve direto no banco, sem passar pelo domínio — então precisa
+   * registrar os eventos na mão. Sem isto, `/admin/piloto` mostraria "1 pedido"
+   * enquanto o painel mostra 9, e um demo que se contradiz derruba a confiança
+   * em tudo que ele afirma.
+   */
+  await prisma.domainEventLog.createMany({
+    data: orderRows.map((order) => ({
       establishmentId: establishment.id,
-      source: 'MANUAL' as const,
-      customerName: order.customerName,
-      customerPhone: order.phone,
-      address: order.address,
-      lat: order.lat,
-      lng: order.lng,
-      amountCents: order.amount,
-      notes: order.notes,
-      trackingToken: randomUUID().replace(/-/g, '').slice(0, 22),
-      // Espalhados nos últimos 40 minutos, na ordem em que "chegaram".
-      createdAt: new Date(now - (ORDERS.length - index) * 5 * 60_000),
+      name: 'order.created',
+      aggregateId: order.id,
+      payload: { source: 'MANUAL', hasCoordinates: true, seed: true },
+      occurredAt: order.createdAt,
     })),
   });
 

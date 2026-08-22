@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useState } from 'react';
+import { useState, useTransition } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useRouter } from 'next/navigation';
 import { LoaderCircle, X } from 'lucide-react';
@@ -10,17 +10,38 @@ import { Button, Field, Input, Textarea } from '../primitives';
 export function NewOrderDialog({ trigger }: { trigger: React.ReactNode }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [state, action, pending] = useActionState(createOrderAction, null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, submit] = useTransition();
 
-  useEffect(() => {
-    if (state?.ok) {
-      setOpen(false);
-      router.refresh();
-    }
-  }, [state, router]);
+  /**
+   * Sem `useEffect` observando o resultado: a ação já devolve se deu certo,
+   * então fechar o diálogo é consequência direta da submissão. Reagir a uma
+   * mudança de estado que nós mesmos causamos é dar uma volta que só
+   * acrescenta um render a mais e um caminho a mais para dar errado.
+   */
+  function handleSubmit(formData: FormData) {
+    setError(null);
+
+    submit(async () => {
+      const result = await createOrderAction(null, formData);
+
+      if (result.ok) {
+        setOpen(false);
+        router.refresh();
+      } else {
+        setError(result.error);
+      }
+    });
+  }
 
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
+    <Dialog.Root
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setError(null);
+      }}
+    >
       <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
 
       <Dialog.Portal>
@@ -40,7 +61,7 @@ export function NewOrderDialog({ trigger }: { trigger: React.ReactNode }) {
             </Dialog.Close>
           </div>
 
-          <form action={action} className="flex flex-col gap-3.5">
+          <form action={handleSubmit} className="flex flex-col gap-3.5">
             <Field label="Cliente">
               <Input name="customerName" required autoFocus placeholder="Nome de quem recebe" />
             </Field>
@@ -70,9 +91,9 @@ export function NewOrderDialog({ trigger }: { trigger: React.ReactNode }) {
               <Textarea name="notes" rows={2} placeholder="Sem cebola, troco para R$ 100…" />
             </Field>
 
-            {state && !state.ok ? (
+            {error ? (
               <p role="alert" className="rounded-md bg-danger-soft px-3 py-2 text-xs text-danger">
-                {state.error}
+                {error}
               </p>
             ) : null}
 

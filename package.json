@@ -15,7 +15,9 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "worker": "tsx worker/poller.ts",
+    "arch": "depcruise src worker --config .dependency-cruiser.cjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",

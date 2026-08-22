@@ -1,36 +1,201 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Girô
 
-## Getting Started
+Gestão de rotas para estabelecimentos que entregam com **motoboy próprio**.
 
-First, run the development server:
+Restaurantes pequenos recebem pedidos por iFood e aiqfome, mas entregam com a
+moto da casa. Hoje isso é gerido no papel: o dono anota os endereços, entrega um
+maço para o motoboy, e ele decide a ordem de cabeça. O Girô recebe os pedidos,
+**calcula a melhor ordem das entregas**, põe a rota no celular do motoboy, mostra
+a posição dele ao vivo para o dono e gera um **link de WhatsApp** para o cliente
+acompanhar em tempo real.
+
+---
+
+## Começar
 
 ```bash
+cp .env.example .env
+docker compose up -d postgres
+npm install
+npm run db:migrate
+npm run db:seed
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Entre em <http://localhost:3000> com **ze@pizzaria.com.br** / **pizzaria123**.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Roteirizador
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+O cálculo de rota precisa de um servidor OSRM. Duas opções:
 
-## Learn More
+```bash
+# Produção e piloto — OSRM de verdade, com o mapa da região do cliente
+./infra/osrm-prepare.sh https://download.geofabrik.de/south-america/brazil/sul-latest.osm.pbf
+docker compose --profile osrm up -d osrm
 
-To learn more about Next.js, take a look at the following resources:
+# Desenvolvimento sem Docker — rotas em linha reta, NÃO serve para o piloto
+node infra/osrm-stub.mjs
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+> Não aponte para `router.project-osrm.org` num negócio de verdade. A política de
+> uso do servidor público proíbe uso comercial sistemático, e um *rate limit* no
+> sábado à noite custa o cliente.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## As três telas
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Não são a mesma aplicação, e não se parecem de propósito.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| | Painel do dono | App do motoboy | Rastreio do cliente |
+|---|---|---|---|
+| Rota | `/dashboard` | `/m/<token>` | `/t/<token>` |
+| Contexto | balcão, correria | uma mão, sol na tela, luva | sofá, 20 segundos |
+| Densidade | alta | uma decisão por vez | uma informação só |
+| Tema | claro | **escuro** — roda de noite | do sistema |
+| Acesso | e-mail e senha | link, sem senha | link, sem senha |
+
+Motoboy e cliente entram por **link com token de 128 bits**, não por login. Senha
+não sobrevive a esse público: é esquecida, anotada num papel ou dividida entre
+três pessoas. O link entra no WhatsApp, que é onde eles já estão.
+
+---
+
+## Arquitetura
+
+```
+core  ←  application  ←  infrastructure
+                     ←  presentation
+```
+
+`core` não importa nada — nem Prisma, nem Next, nem Zod. É TypeScript puro.
+
+**Isso é verificado, não combinado.** `npm run arch` roda no CI e quebra o build
+se alguém importar infraestrutura dentro do domínio. Arquitetura que não é
+checada por ferramenta vira decoração em três meses.
+
+### Por que a separação se paga aqui
+
+O iFood exige polling **a cada 30 segundos**. O cron da Vercel tem granularidade
+mínima de 1 minuto — o poller não pode viver dentro do Next.js. Precisa ser
+processo separado (`worker/poller.ts`).
+
+Com o domínio isolado, esse worker importa o mesmo `ImportOrderFromSource` que o
+webhook usa: mesma regra, mesma idempotência, dois runtimes, zero duplicação.
+
+### Onde fica o quê
+
+```
+src/
+  core/            entidades, value objects, eventos, erros, ports
+  application/     casos de uso e schemas Zod
+  infrastructure/  Prisma, OSRM, geocodificador, adapters, WhatsApp
+  presentation/    design system, queries, server actions
+  app/             rotas Next.js
+worker/            poller do iFood/aiqfome
+infra/             docker-compose, OSRM, stub de desenvolvimento
+```
+
+### O que mata repetição
+
+| Problema | Solução |
+|---|---|
+| `try/catch` em toda rota | **um** `error-mapper` traduz `DomainError` → HTTP |
+| Validação duplicada | schemas Zod compartilhados entre cliente e servidor |
+| Container de DI | fábricas simples em `composition-root.ts` |
+| Cache espalhado | `CachedGeocoder` é decorator — o caso de uso nem sabe |
+| Escrita parcial | `UnitOfWork` sobre `$transaction` |
+| Filtro de tenant esquecido | repositórios já nascem com o escopo; extensão do Prisma barra o resto |
+| API REST para o próprio frontend | Server Components chamam o caso de uso direto |
+
+---
+
+## Comandos
+
+| Comando | O que faz |
+|---|---|
+| `npm run dev` | servidor de desenvolvimento |
+| `npm test` | unitários — memória, sem banco, ~2s |
+| `npm run test:integration` | integração contra Postgres real |
+| `npm run arch` | **prova a regra de dependência** |
+| `npm run typecheck` | tipos |
+| `npm run worker` | poller das plataformas |
+| `npm run db:seed` | dados de demonstração |
+
+---
+
+## Integrações
+
+**Nem iFood nem aiqfome liberam API sem credenciamento.** Ambos exigem conta com
+CNPJ e homologação de parceiro — semanas de processo.
+
+Por isso a integração **não é o caminho crítico**. Existem três portas de
+entrada, e o produto é vendável antes de qualquer homologação sair:
+
+1. **Manual** — formulário no painel. É o que funciona no dia 1.
+2. **Webhook genérico** — `POST /api/webhooks/orders`, autenticado por HMAC.
+   Conecta hoje qualquer PDV, Zapier ou script.
+3. **Adapters** — iFood e aiqfome implementam a mesma port `OrderSource`.
+   Escritos contra a documentação, com o mapeamento testado, **desligados por
+   feature flag** até sair o credenciamento.
+
+```bash
+BODY='[{"externalId":"PDV-1","customerName":"Maria Silva",
+        "address":"Rua Trajano Reis, 300 - São Francisco, Curitiba",
+        "amountCents":8990}]'
+
+curl -X POST http://localhost:3000/api/webhooks/orders \
+  -H "content-type: application/json" \
+  -H "x-giro-establishment: 11111111-1111-1111-1111-111111111111" \
+  -H "x-giro-signature: $(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" -hex | cut -d' ' -f2)" \
+  -d "$BODY"
+```
+
+Reenviar o mesmo lote é inofensivo: a importação é idempotente por
+`(estabelecimento, origem, id externo)`, garantida por constraint no banco. Isso
+não é zelo excessivo — o polling do iFood reentrega evento por projeto, e pedido
+duplicado põe **entrega fantasma no baú do motoboy**.
+
+---
+
+## Rodar o piloto de graça
+
+| Peça | Grátis | Limite |
+|---|---|---|
+| Servidor (app + worker + OSRM + Postgres) | Oracle Cloud Always Free | ARM até 4 vCPU / 24 GB, permanente |
+| Geocodificação | LocationIQ | 5.000/dia |
+| Tiles do mapa | OpenStreetMap | uso leve |
+| WhatsApp | links `wa.me` | sempre grátis |
+| Erros | Sentry | 5.000 eventos/mês |
+| CI | GitHub Actions | 2.000 min/mês |
+
+Total: **R$ 0**. Único gasto opcional é domínio `.com.br` (~R$40/ano) — vale a
+pena, porque o link de rastreio vai por WhatsApp e um endereço estranho parece
+golpe.
+
+---
+
+## Decisões que parecem exageradas com um cliente só
+
+E que seriam caras demais para consertar depois.
+
+- **`establishmentId` em toda tabela.** Migrar dado de produção para
+  multi-tenant é a pior tarde de trabalho que existe. Row-Level Security entra
+  no segundo cliente; o schema já nasce compatível.
+- **Idempotência desde o primeiro commit.** Ver acima.
+- **Log append-only de eventos de domínio.** Um mecanismo, três retornos:
+  métricas do piloto (`/admin/piloto`), auditoria, e a base para processamento
+  assíncrono quando escalar.
+- **Retenção do trajeto do motoboy.** É a tabela mais escrita do sistema e o
+  primeiro gargalo real de escala. A mesma medida atende à LGPD.
+- **Botão de imprimir a rota.** Se o sistema cair no pico, o dono não pode parar
+  de vender. O papel volta — agora com a ordem certa. É a diferença entre um
+  susto e um cliente perdido.
+- **Fila offline no app do motoboy.** A internet dele cai. Sem isso ele vê um
+  erro vermelho, volta para o papel, e o produto morre em campo mesmo
+  funcionando no escritório.
+
+## O que ainda não existe
+
+Pagamento, app nativo, múltiplas lojas por conta, janelas de entrega, atribuição
+automática de motoboy e relatórios financeiros.
