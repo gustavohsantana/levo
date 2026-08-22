@@ -43,6 +43,58 @@ node infra/osrm-stub.mjs
 
 ---
 
+## Pôr no ar (Vercel + Neon)
+
+Para demonstração. O piloto de verdade pede OSRM próprio — ver *Roteirizador*
+acima e a ressalva no fim desta seção.
+
+**1. Banco.** Crie um projeto em [neon.tech](https://neon.tech) (free). Guarde as
+duas strings de conexão que ele mostra: a **pooled** (com `-pooler` no host) e a
+**direta**.
+
+**2. Migrations e seed, uma vez só, da sua máquina.** Use a string **direta** —
+a pooled não segura o lock de migration:
+
+```bash
+DATABASE_URL="<string-direta-do-neon>" npm run db:deploy
+DATABASE_URL="<string-direta-do-neon>" npm run db:seed
+```
+
+O seed cria a Pizzaria do Zé com 8 pedidos e o login de demonstração. Sem ele
+não há como entrar.
+
+**3. Vercel.** Importe o repositório e configure as variáveis de ambiente:
+
+| Variável | Valor |
+|---|---|
+| `DATABASE_URL` | string **pooled** do Neon (serverless abre muita conexão) |
+| `AUTH_SECRET` | `openssl rand -base64 32` |
+| `PUBLIC_BASE_URL` | a URL que a Vercel te der, com `https://` |
+| `OSRM_BASE_URL` | `https://router.project-osrm.org` |
+| `GEOCODER_USER_AGENT` | `levo-demo (seu@email)` — o Nominatim exige contato |
+| `WEBHOOK_SECRET` | só se for testar o webhook |
+
+`PUBLIC_BASE_URL` errado não quebra o build: quebra o link de rastreio que vai
+por WhatsApp, que é justamente o que você quer mostrar.
+
+**4. Deploy.** O `build` roda `prisma generate` antes do `next build` — sem
+isso a Vercel falha quando restaura `node_modules` do cache e pula o
+`postinstall`.
+
+### O que não vai junto
+
+- **O worker do iFood/aiqfome não roda na Vercel.** É processo separado, por
+  design (ver *Por que a separação se paga aqui*). As integrações já nascem
+  desligadas por feature flag, então a demonstração não sente falta.
+- **`router.project-osrm.org` não serve para o piloto.** A política de uso
+  proíbe uso comercial sistemático. Trocar é mudar `OSRM_BASE_URL` — nada no
+  código muda.
+- **O Nominatim público faz 1 req/s.** Serve para cadastrar um pedido na
+  demonstração, não para uma carga real. `GEOCODER_API_KEY` do LocationIQ dá
+  5.000/dia de graça.
+
+---
+
 ## As três telas
 
 Não são a mesma aplicação, e não se parecem de propósito.
