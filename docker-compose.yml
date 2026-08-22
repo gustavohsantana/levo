@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: levo-postgres
+    environment:
+      POSTGRES_USER: levo
+      POSTGRES_PASSWORD: levo
+      POSTGRES_DB: levo
+    ports:
+      - '5432:5432'
+    volumes:
+      - levo-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U levo']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Roteirizador próprio.
+  #
+  # Rode `./infra/osrm-prepare.sh` uma vez antes de subir: ele baixa o extract
+  # da sua região e faz o pré-processamento. Depois disso a roteirização é
+  # local, instantânea, sem rate limit e sem depender de servidor de terceiro —
+  # que é o que torna o piloto viável de graça e dentro dos termos de uso.
+  osrm:
+    image: osrm/osrm-backend:latest
+    container_name: levo-osrm
+    command: osrm-routed --algorithm mld /data/region.osrm
+    ports:
+      - '5000:5000'
+    volumes:
+      - ./infra/osrm-data:/data
+    profiles: ['osrm']
+    restart: unless-stopped
+
+volumes:
+  levo-pgdata:

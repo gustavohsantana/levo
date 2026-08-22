@@ -1,0 +1,293 @@
+import type {
+  OrderStatus as OrderStatusEnum,
+  Prisma,
+  RouteStatus as RouteStatusEnum,
+} from '@/generated/prisma/client';
+import {
+  Coordinates,
+  type Courier,
+  type CourierPingRepository,
+  type CourierRepository,
+  type DomainEvent,
+  type Establishment,
+  type EstablishmentRepository,
+  type EventStore,
+  type GeocodeCacheRepository,
+  NotFoundError,
+  type Order,
+  type OrderRepository,
+  type OrderSourceKind,
+  type Repositories,
+  type Route,
+  type RouteRepository,
+} from '@/core';
+import { CourierMapper, EstablishmentMapper, OrderMapper, RouteMapper } from './mappers';
+
+type Tx = Prisma.TransactionClient;
+
+/** Rota que ainda não terminou: planejada ou em andamento. */
+const ACTIVE_ROUTE_STATUSES: RouteStatusEnum[] = ['PLANNED', 'IN_PROGRESS'];
+
+/** Pedido ainda sem rota. */
+const PENDING_ORDER: OrderStatusEnum = 'NEW';
+
+/**
+ * Repositórios Prisma.
+ *
+ * Cada um recebe o `establishmentId` no construtor e **nenhum método aceita
+ * esse id como parâmetro**. Não existe, na superfície pública destas classes,
+ * uma forma de pedir dado de outro estabelecimento — o escopo não depende de
+ * alguém lembrar de passá-lo.
+ */
+
+abstract class TenantScoped {
+  constructor(
+    protected readonly tx: Tx,
+    protected readonly establishmentId: string,
+  ) {}
+
+  /** Todo `where` do repositório passa por aqui. */
+  protected scoped<T extends object>(where: T) {
+    return { ...where, establishmentId: this.establishmentId };
+  }
+}
+
+export class PrismaOrderRepository extends TenantScoped implements OrderRepository {
+  async save(order: Order): Promise<void> {
+    const data = OrderMapper.toPersistence(order);
+    await this.tx.order.upsert({ where: { id: order.id }, create: data, update: data });
+  }
+
+  async saveMany(orders: Order[]): Promise<void> {
+    // Sequencial de propósito: são poucas dezenas por rota, e já estamos dentro
+    // de uma transação. Paralelizar aqui só disputaria conexões do pool.
+    for (const order of orders) await this.save(order);
+  }
+
+  async findById(id: string): Promise<Order | null> {
+    const row = await this.tx.order.findFirst({ where: this.scoped({ id }) });
+    return row ? OrderMapper.toDomain(row) : null;
+  }
+
+  async findManyByIds(ids: string[]): Promise<Order[]> {
+    const rows = await this.tx.order.findMany({ where: this.scoped({ id: { in: ids } }) });
+    return rows.map(OrderMapper.toDomain);
+  }
+
+  async findBySourceRef(source: OrderSourceKind, externalId: string): Promise<Order | null> {
+    const row = await this.tx.order.findFirst({ where: this.scoped({ source, externalId }) });
+    return row ? OrderMapper.toDomain(row) : null;
+  }
+
+  async findByTrackingToken(token: string): Promise<Order | null> {
+    // Único caso legitimamente sem escopo de tenant: o token *é* a credencial,
+    // e quem abre o link não sabe de que estabelecimento é o pedido.
+    const row = await this.tx.order.findUnique({ where: { trackingToken: token } });
+    return row ? OrderMapper.toDomain(row) : null;
+  }
+
+  async listPending(): Promise<Order[]> {
+    const rows = await this.tx.order.findMany({
+      where: this.scoped({ status: PENDING_ORDER }),
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map(OrderMapper.toDomain);
+  }
+
+  async listOfDay(day: Date): Promise<Order[]> {
+    const rows = await this.tx.order.findMany({
+      where: this.scoped({ createdAt: dayRange(day) }),
+      orderBy: { createdAt: 'desc' },
+    });
+    return rows.map(OrderMapper.toDomain);
+  }
+}
+
+export class PrismaRouteRepository extends TenantScoped implements RouteRepository {
+  async save(route: Route): Promise<void> {
+    const data = RouteMapper.toPersistence(route);
+    await this.tx.route.upsert({ where: { id: route.id }, create: data, update: data });
+
+    for (const stop of route.stops) {
+      const stopData = RouteMapper.stopToPersistence(stop, route.id);
+      await this.tx.routeStop.upsert({
+        where: { id: stop.id },
+        create: stopData,
+        update: stopData,
+      });
+    }
+  }
+
+  async findById(id: string): Promise<Route | null> {
+    const row = await this.tx.route.findFirst({
+      where: this.scoped({ id }),
+      include: { stops: true },
+    });
+    return row ? RouteMapper.toDomain(row) : null;
+  }
+
+  async listActive(): Promise<Route[]> {
+    const rows = await this.tx.route.findMany({
+      where: this.scoped({ status: { in: ACTIVE_ROUTE_STATUSES } }),
+      include: { stops: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    return rows.map(RouteMapper.toDomain);
+  }
+
+  async listOfDay(day: Date): Promise<Route[]> {
+    const rows = await this.tx.route.findMany({
+      where: this.scoped({ createdAt: dayRange(day) }),
+      include: { stops: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    return rows.map(RouteMapper.toDomain);
+  }
+
+  async hasActiveRouteFor(courierId: string): Promise<boolean> {
+    const count = await this.tx.route.count({
+      where: this.scoped({ courierId, status: { in: ACTIVE_ROUTE_STATUSES } }),
+    });
+    return count > 0;
+  }
+
+  /** Usado pelo link sem senha do motoboy — o token é a credencial. */
+  async findByAccessToken(token: string): Promise<Route | null> {
+    const row = await this.tx.route.findUnique({
+      where: { accessToken: token },
+      include: { stops: true },
+    });
+    return row ? RouteMapper.toDomain(row) : null;
+  }
+}
+
+export class PrismaCourierRepository extends TenantScoped implements CourierRepository {
+  async save(courier: Courier): Promise<void> {
+    const data = CourierMapper.toPersistence(courier);
+    await this.tx.courier.upsert({ where: { id: courier.id }, create: data, update: data });
+  }
+
+  async findById(id: string): Promise<Courier | null> {
+    const row = await this.tx.courier.findFirst({ where: this.scoped({ id }) });
+    return row ? CourierMapper.toDomain(row) : null;
+  }
+
+  async listActive(): Promise<Courier[]> {
+    const rows = await this.tx.courier.findMany({
+      where: this.scoped({ active: true }),
+      orderBy: { name: 'asc' },
+    });
+    return rows.map(CourierMapper.toDomain);
+  }
+
+  async list(): Promise<Courier[]> {
+    const rows = await this.tx.courier.findMany({
+      where: this.scoped({}),
+      orderBy: [{ active: 'desc' }, { name: 'asc' }],
+    });
+    return rows.map(CourierMapper.toDomain);
+  }
+}
+
+export class PrismaEstablishmentRepository extends TenantScoped implements EstablishmentRepository {
+  async current(): Promise<Establishment> {
+    const row = await this.tx.establishment.findUnique({ where: { id: this.establishmentId } });
+    if (!row) throw new NotFoundError('Estabelecimento', this.establishmentId);
+    return EstablishmentMapper.toDomain(row);
+  }
+}
+
+export class PrismaCourierPingRepository implements CourierPingRepository {
+  constructor(private readonly tx: Tx) {}
+
+  async record(routeId: string, coordinates: Coordinates, at: Date): Promise<void> {
+    await this.tx.courierPing.create({
+      data: { routeId, lat: coordinates.lat, lng: coordinates.lng, recordedAt: at },
+    });
+  }
+
+  async lastPing(routeId: string) {
+    const row = await this.tx.courierPing.findFirst({
+      where: { routeId },
+      orderBy: { recordedAt: 'desc' },
+    });
+    return row ? { coordinates: Coordinates.create(row.lat, row.lng), at: row.recordedAt } : null;
+  }
+
+  async trail(routeId: string, limit: number) {
+    const rows = await this.tx.courierPing.findMany({
+      where: { routeId },
+      orderBy: { recordedAt: 'desc' },
+      take: limit,
+    });
+    return rows
+      .reverse()
+      .map((row) => ({ coordinates: Coordinates.create(row.lat, row.lng), at: row.recordedAt }));
+  }
+
+  /**
+   * Retenção do trajeto.
+   *
+   * Serve a duas coisas com a mesma medida: LGPD (localização é dado pessoal e
+   * não tem por que ficar guardada) e escala (esta é a tabela mais escrita do
+   * sistema, e a primeira a incomodar quando houver 100 clientes).
+   */
+  async purgeFinishedBefore(cutoff: Date): Promise<number> {
+    const { count } = await this.tx.courierPing.deleteMany({
+      where: { recordedAt: { lt: cutoff }, route: { status: 'FINISHED' } },
+    });
+    return count;
+  }
+}
+
+export class PrismaEventStore implements EventStore {
+  constructor(private readonly tx: Tx) {}
+
+  async append(events: DomainEvent[]): Promise<void> {
+    if (events.length === 0) return;
+
+    await this.tx.domainEventLog.createMany({
+      data: events.map((event) => ({
+        establishmentId: event.establishmentId,
+        name: event.name,
+        aggregateId: event.aggregateId,
+        payload: event.payload as Prisma.InputJsonValue,
+        occurredAt: event.occurredAt,
+      })),
+    });
+  }
+}
+
+export class PrismaGeocodeCacheRepository implements GeocodeCacheRepository {
+  constructor(private readonly tx: Tx) {}
+
+  async get(cacheKey: string): Promise<Coordinates | null> {
+    const row = await this.tx.geocodeCache.findUnique({ where: { cacheKey } });
+    return row ? Coordinates.create(row.lat, row.lng) : null;
+  }
+
+  async set(cacheKey: string, coordinates: Coordinates): Promise<void> {
+    const data = { cacheKey, lat: coordinates.lat, lng: coordinates.lng };
+    await this.tx.geocodeCache.upsert({ where: { cacheKey }, create: data, update: data });
+  }
+}
+
+export function buildRepositories(tx: Tx, establishmentId: string): Repositories {
+  return {
+    orders: new PrismaOrderRepository(tx, establishmentId),
+    routes: new PrismaRouteRepository(tx, establishmentId),
+    couriers: new PrismaCourierRepository(tx, establishmentId),
+    establishments: new PrismaEstablishmentRepository(tx, establishmentId),
+    pings: new PrismaCourierPingRepository(tx),
+    events: new PrismaEventStore(tx),
+    geocodeCache: new PrismaGeocodeCacheRepository(tx),
+  };
+}
+
+function dayRange(day: Date) {
+  const start = new Date(day);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return { gte: start, lt: end };
+}
