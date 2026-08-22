@@ -220,3 +220,12 @@ automática de motoboy e relatórios financeiros.
   exige CNPJ e homologação. O mapeamento tem teste; o transporte, não.
 - **O GPS do navegador para com a tela bloqueada.** O motoboy precisa manter o
   app aberto. Resolver de verdade exige app nativo ou Capacitor.
+- **`npm audit` acusa 3 vulnerabilidades altas, e o conserto automático é pior
+  que a doença.** A cadeia é `prisma → @prisma/config → deepmerge-ts`
+  (exaustão de pilha ao mesclar grafos recursivos). O `prisma` é
+  devDependency: isso roda na CLI e no build, lendo o `prisma.config.ts` que
+  nós mesmos escrevemos — não há entrada de terceiro nesse caminho, e nada
+  disso vai para o runtime. O `npm audit fix --force` propõe **prisma
+  6.12.0**, um downgrade de major que quebra o `prisma.config.ts`, cujo
+  import `prisma/config` só existe no 7. Não rode. Sai sozinho quando o
+  Prisma atualizar o `deepmerge-ts` para >= 8.
