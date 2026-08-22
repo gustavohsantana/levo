@@ -49,3 +49,9 @@ next-env.d.ts
 .env*.local
 /prisma/*.db
 /infra/osrm-data/
+
+# Saída do prisma generate. Não é versionada porque todo caminho de build já a
+# recria: o CI via postinstall do `npm ci`, o Dockerfile com `npx prisma
+# generate` explícito (ele instala com --ignore-scripts). Versionar só rendia
+# 48 mil linhas de ruído no diff a cada mudança de schema ou de versão.
+/src/generated/
