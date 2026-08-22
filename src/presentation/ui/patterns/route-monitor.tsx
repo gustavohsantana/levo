@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { Check, Printer, TriangleAlert } from 'lucide-react';
@@ -20,14 +20,21 @@ const REFRESH_MS = 10_000;
 export function RouteMonitor({
   route,
   establishment,
-  initialTrail,
+  trail,
 }: {
   route: RouteView;
   establishment: { name: string; coordinates: { lat: number; lng: number } };
-  initialTrail: Array<{ lat: number; lng: number; at: string }>;
+  /**
+   * Vem do servidor a cada revalidação e é usado direto.
+   *
+   * Estava guardado num `useState`, que só lê o valor inicial: o `router
+   * .refresh()` de 10 em 10 segundos trazia posições novas e a tela continuava
+   * desenhando a primeira. O motoboy nunca saía do lugar no mapa do dono — que
+   * é a única razão desta tela existir.
+   */
+  trail: Array<{ lat: number; lng: number; at: string }>;
 }) {
   const router = useRouter();
-  const [trail] = useState(initialTrail);
 
   // Sondagem simples: revalida a página inteira. É barato porque o Next só
   // reenvia o que mudou, e evita manter uma segunda cópia do estado no cliente

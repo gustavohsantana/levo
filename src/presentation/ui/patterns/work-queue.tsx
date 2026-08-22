@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   Inbox,
   LoaderCircle,
+  MapPin,
   MapPinOff,
   Plus,
   Route as RouteIcon,
@@ -15,6 +16,7 @@ import type { OrderView } from '@/presentation/queries';
 import { Button, EmptyState, Select } from '../primitives';
 import { OrderRow } from './order-row';
 import { NewOrderDialog } from './new-order-dialog';
+import { PinPickerDialog } from './pin-picker-dialog';
 
 interface Courier {
   id: string;
@@ -179,12 +181,25 @@ export function WorkQueue({
                   : `${unlocated.length} pedidos sem localização no mapa`}
               </p>
               <p className="mt-1 text-xs text-ink-muted">
-                Não entram em rota até o endereço ser localizado. Abra o pedido para ajustar o pino.
+                Não entram em rota até o endereço ser localizado no mapa.
               </p>
-              <ul className="mt-2 space-y-1">
+              <ul className="mt-2 space-y-1.5">
                 {unlocated.map((order) => (
-                  <li key={order.id} className="text-xs text-ink-muted">
-                    <span className="font-medium text-ink">{order.customerName}</span> — {order.address}
+                  <li key={order.id} className="flex items-center gap-2 text-xs text-ink-muted">
+                    <span className="min-w-0 flex-1 truncate">
+                      <span className="font-medium text-ink">{order.customerName}</span> —{' '}
+                      {order.address}
+                    </span>
+                    <PinPickerDialog
+                      order={order}
+                      origin={establishment.coordinates}
+                      trigger={
+                        <Button size="sm" variant="outline" className="shrink-0">
+                          <MapPin />
+                          Marcar no mapa
+                        </Button>
+                      }
+                    />
                   </li>
                 ))}
               </ul>
@@ -240,11 +255,6 @@ export function WorkQueue({
           Nenhum motoboy livre no momento — todos estão em rota ou inativos.
         </p>
       ) : null}
-
-      <span className="sr-only">
-        Estabelecimento {establishment.name} em {establishment.coordinates.lat},{' '}
-        {establishment.coordinates.lng}
-      </span>
     </section>
   );
 }

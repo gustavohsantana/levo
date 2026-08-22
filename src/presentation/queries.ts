@@ -82,16 +82,38 @@ export async function getDashboard() {
   const { session, container } = await currentContainer();
 
   return container.read(async (repos) => {
+    /**
+     * Sequencial, não `Promise.all`.
+     *
+     * Estas consultas rodam dentro de uma transação interativa do Prisma, e
+     * disparar várias em paralelo sobre o mesmo cliente de transação é um
+     * comportamento que a própria documentação desaconselha — o ganho aparente
+     * não existe (o banco serializa a transação de qualquer jeito) e o risco de
+     * erro sob carga, sim.
+     */
     const establishment = await repos.establishments.current();
-    const [pending, todayOrders, activeRoutes, couriers, todayRoutes] = await Promise.all([
-      repos.orders.listPending(),
-      repos.orders.listOfDay(new Date()),
-      repos.routes.listActive(),
-      repos.couriers.list(),
-      repos.routes.listOfDay(new Date()),
-    ]);
+    const pending = await repos.orders.listPending();
+    const todayOrders = await repos.orders.listOfDay(new Date());
+    const activeRoutes = await repos.routes.listActive();
+    const couriers = await repos.couriers.list();
+    const todayRoutes = await repos.routes.listOfDay(new Date());
 
-    const orderById = new Map(todayOrders.map((order) => [order.id, order]));
+    /**
+     * Uma rota que virou a meia-noite ainda está na rua, mas seus pedidos são
+     * de ontem e não aparecem em `listOfDay`. Sem buscá-los explicitamente, o
+     * painel mostraria "—" no lugar do nome de cada cliente justamente na rota
+     * que o dono mais precisa acompanhar.
+     */
+    const routeOrderIds = activeRoutes.flatMap((route) =>
+      route.stops.map((stop) => stop.orderId),
+    );
+    const knownIds = new Set(todayOrders.map((order) => order.id));
+    const missing = routeOrderIds.filter((id) => !knownIds.has(id));
+    const extraOrders = missing.length > 0 ? await repos.orders.findManyByIds(missing) : [];
+
+    const orderById = new Map(
+      [...todayOrders, ...extraOrders].map((order) => [order.id, order]),
+    );
 
     return {
       session,
@@ -180,6 +202,9 @@ export async function getRoute(routeId: string) {
     const establishment = await repos.establishments.current();
     const orders = await repos.orders.findManyByIds(route.stops.map((stop) => stop.orderId));
     const couriers = await repos.couriers.list();
+    // 200 posições a ~15s cobrem ~50 minutos de trajeto — o suficiente para
+    // desenhar a rota percorrida sem carregar o histórico inteiro a cada
+    // atualização de 10 segundos.
     const trail = await repos.pings.trail(route.id, 200);
 
     return {

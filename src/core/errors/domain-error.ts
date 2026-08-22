@@ -33,7 +33,9 @@ export class NotFoundError extends DomainError {
 }
 
 export class ConflictError extends DomainError {
-  readonly code = 'CONFLICT';
+  /** Filhas sobrescrevem com um código específico quando o cliente precisa
+   *  reagir de forma diferente a dois conflitos distintos. */
+  readonly code: string = 'CONFLICT';
   readonly httpStatus = 409;
 }
 

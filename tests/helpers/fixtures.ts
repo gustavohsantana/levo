@@ -28,9 +28,17 @@ export function newDatabase(): InMemoryDatabase {
     'courier-1',
     new Courier('courier-1', 'est-1', 'Jefferson', PhoneNumber.create('41999990001'), true),
   );
+  // Inativo de propósito: testa a recusa de despachar para quem não está
+  // trabalhando.
   db.couriers.set(
     'courier-2',
     new Courier('courier-2', 'est-1', 'Rodrigo', PhoneNumber.create('41999990002'), false),
+  );
+  // Segundo motoboy ativo: necessário para testar disputa por PEDIDO sem
+  // esbarrar antes na disputa por MOTOBOY.
+  db.couriers.set(
+    'courier-3',
+    new Courier('courier-3', 'est-1', 'Wesley', PhoneNumber.create('41999990003'), true),
   );
   return db;
 }

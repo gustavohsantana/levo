@@ -1,6 +1,11 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
-import { ForbiddenError, type ExternalOrder, type OrderSource } from '@/core';
+import {
+  ForbiddenError,
+  ValidationError,
+  type ExternalOrder,
+  type OrderSource,
+} from '@/core';
 import { webhookOrderSchema } from '@/application/dto/schemas';
 import { containerFor } from '@/composition-root';
 import { env } from '@/env';
@@ -17,22 +22,50 @@ import { toErrorResponse } from '@/presentation/http/error-mapper';
  *
  * Autenticado por HMAC-SHA256 do corpo cru, no cabeçalho `x-giro-signature`.
  */
+const MAX_BATCH = 100;
+
 export async function POST(request: Request) {
   try {
     const secret = env().WEBHOOK_SECRET;
     if (!secret) throw new ForbiddenError('Webhook não configurado');
 
     const raw = await request.text();
-    verifySignature(raw, request.headers.get('x-giro-signature'), secret);
 
     const establishmentId = request.headers.get('x-giro-establishment');
     if (!establishmentId) throw new ForbiddenError('Estabelecimento não informado');
+
+    /**
+     * A assinatura cobre o estabelecimento **junto** com o corpo.
+     *
+     * Assinando só o corpo, quem tem a chave de um estabelecimento poderia
+     * reenviar o mesmo lote trocando o cabeçalho e injetar pedidos na conta de
+     * outro. Com um cliente só isso é teórico; com dois, é uma porta aberta —
+     * e o dia de fechá-la é antes de existir o segundo, não depois.
+     */
+    verifySignature(`${establishmentId}.${raw}`, request.headers.get('x-giro-signature'), secret);
 
     const prisma = getPrismaClient(env().DATABASE_URL);
     const exists = await prisma.establishment.findUnique({ where: { id: establishmentId } });
     if (!exists) throw new ForbiddenError('Estabelecimento não encontrado');
 
-    const parsed = webhookOrderSchema.array().safeParse(normalizeBody(raw));
+    const body = normalizeBody(raw);
+
+    /**
+     * Teto do lote.
+     *
+     * Cada pedido novo pode custar uma chamada de geocodificação, serializada a
+     * 1 por segundo. Um lote de mil pedidos seguraria a requisição por quase
+     * vinte minutos e ocuparia o processo inteiro — sem malícia nenhuma, só um
+     * ERP fazendo carga inicial.
+     */
+    if (Array.isArray(body) && body.length > MAX_BATCH) {
+      throw new ValidationError(
+        `Lote de ${body.length} pedidos excede o máximo de ${MAX_BATCH}. Envie em partes.`,
+        { max: MAX_BATCH },
+      );
+    }
+
+    const parsed = webhookOrderSchema.array().safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
         { error: 'Payload inválido', issues: parsed.error.issues },
@@ -80,7 +113,17 @@ class WebhookSource implements OrderSource {
 
 /** Aceita tanto um pedido solto quanto um lote. */
 function normalizeBody(raw: string): unknown {
-  const parsed = JSON.parse(raw);
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    // Sem isto, um corpo malformado sobe como exceção crua e vira 500 — o que
+    // faz quem integra procurar defeito no nosso servidor em vez de no próprio
+    // payload.
+    throw new ValidationError('Corpo da requisição não é um JSON válido');
+  }
+
   return Array.isArray(parsed) ? parsed : [parsed];
 }
 

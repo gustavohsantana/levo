@@ -15,7 +15,7 @@ import type { DriverRouteView, DriverStopView } from '@/presentation/driver-quer
 import { Button } from '../primitives';
 import { cn } from '../cn';
 import { currency, phoneDisplay } from '../format';
-import { enqueue, flush, peek } from '../offline-queue';
+import { enqueue, flush } from '../offline-queue';
 
 const PING_INTERVAL_MS = 15_000;
 
@@ -35,6 +35,8 @@ const PING_INTERVAL_MS = 15_000;
 export function CourierApp({ token, route }: { token: string; route: DriverRouteView }) {
   const router = useRouter();
   const [pendingSync, setPendingSync] = useState(0);
+  /** Motivo pelo qual a fila não anda — mostrado ao motoboy, não engolido. */
+  const [blocked, setBlocked] = useState<string | null>(null);
   /**
    * Conexão é estado que vive fora do React — o navegador é dono dele.
    * `useSyncExternalStore` é a API feita para exatamente isso: assina a fonte
@@ -64,9 +66,10 @@ export function CourierApp({ token, route }: { token: string; route: DriverRoute
 
   // ── Sincronização da fila offline ──────────────────────────────────────
   const sync = useCallback(async () => {
-    const sent = await flush();
-    setPendingSync((await peek()).length);
-    if (sent > 0) router.refresh();
+    const result = await flush();
+    setPendingSync(result.pending);
+    setBlocked(result.pending > 0 ? result.blocked : null);
+    if (result.sent > 0) router.refresh();
   }, [router]);
 
   useEffect(() => {
@@ -80,6 +83,14 @@ export function CourierApp({ token, route }: { token: string; route: DriverRoute
       clearTimeout(immediate);
     };
   }, [sync, online]);
+
+  // Rota ainda não liberada: o motoboy fica nesta tela até o dono confirmar a
+  // saída, então ela precisa buscar a mudança sozinha.
+  useEffect(() => {
+    if (route.status !== 'PLANNED') return;
+    const timer = setInterval(() => router.refresh(), 15_000);
+    return () => clearInterval(timer);
+  }, [route.status, router]);
 
   // ── GPS ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -139,6 +150,33 @@ export function CourierApp({ token, route }: { token: string; route: DriverRoute
     await sync();
   }
 
+  /**
+   * A rota existe mas o dono ainda não clicou em "saiu para entrega".
+   *
+   * Antes desta tela, o botão "Entreguei" aparecia normalmente, o servidor
+   * respondia 409 e a fila descartava a marcação: o motoboy via a entrega como
+   * concluída e nada tinha sido gravado. Agora o estado é explícito.
+   */
+  if (route.status === 'PLANNED') {
+    return (
+      <Shell>
+        <div className="grid flex-1 place-items-center px-6 text-center">
+          <div className="space-y-3">
+            <span className="mx-auto grid size-14 place-items-center rounded-full bg-raised text-ink-muted">
+              <Package className="size-7" aria-hidden />
+            </span>
+            <p className="text-xl font-semibold text-ink">Rota pronta, aguardando liberação</p>
+            <p className="mx-auto max-w-xs text-sm text-ink-muted">
+              São <span className="numeric">{stops.length}</span> entregas. O{' '}
+              {route.establishmentName} precisa confirmar a saída para você começar.
+            </p>
+            <p className="text-xs text-ink-faint">Esta tela se atualiza sozinha.</p>
+          </div>
+        </div>
+      </Shell>
+    );
+  }
+
   if (route.status === 'FINISHED' || pending.length === 0) {
     return (
       <Shell>
@@ -176,12 +214,24 @@ export function CourierApp({ token, route }: { token: string; route: DriverRoute
           desiste do app.
         */}
         {!online || pendingSync > 0 ? (
-          <span className="flex items-center gap-1.5 rounded-sm bg-warning-soft px-2 py-1 text-xs text-warning">
+          <span
+            className="flex items-center gap-1.5 rounded-sm bg-warning-soft px-2 py-1 text-xs text-warning"
+            title={blocked ?? undefined}
+          >
             <CloudOff className="size-3.5" aria-hidden />
             {pendingSync > 0 ? `${pendingSync} p/ enviar` : 'Sem conexão'}
           </span>
         ) : null}
       </header>
+
+      {/* O motivo do bloqueio fica visível, não só no title do ícone. */}
+      {blocked && pendingSync > 0 ? (
+        <p className="border-b bg-warning-soft px-4 py-2 text-xs text-warning">
+          <span className="numeric">{pendingSync}</span>{' '}
+          {pendingSync === 1 ? 'entrega guardada' : 'entregas guardadas'} no celular — {blocked}.
+          Tentando de novo automaticamente.
+        </p>
+      ) : null}
 
       {current ? <CurrentStop stop={current} onResolve={resolveStop} /> : null}
 

@@ -192,9 +192,24 @@ describe('rastreio público', () => {
     const route = await routeWithThreeStops();
     const order = db.orders.get(route.stops[0].orderId)!;
 
-    await tracking.execute(order.trackingToken.value);
-    await tracking.execute(order.trackingToken.value);
+    await tracking.execute(order.trackingToken.value, true);
 
-    expect(db.eventsNamed('order.tracking_opened')).toHaveLength(2);
+    expect(db.eventsNamed('order.tracking_opened')).toHaveLength(1);
+  });
+
+  it('⭐ a sondagem de 10s não conta como abertura', async () => {
+    // A página se atualiza sozinha a cada 10 segundos. Se cada atualização
+    // contasse, um cliente acompanhando por 20 minutos valeria 120 "aberturas"
+    // e a métrica passaria a medir tempo de tela, não interesse — levando à
+    // conclusão errada sobre manter ou cortar o rastreio.
+    const route = await routeWithThreeStops();
+    const order = db.orders.get(route.stops[0].orderId)!;
+
+    await tracking.execute(order.trackingToken.value, true); // carga da página
+    for (let poll = 0; poll < 120; poll++) {
+      await tracking.execute(order.trackingToken.value); // sondagens
+    }
+
+    expect(db.eventsNamed('order.tracking_opened')).toHaveLength(1);
   });
 });

@@ -27,11 +27,17 @@ export function RouteMap({
   geometry,
   trail,
   className,
+  onPick,
+  center,
 }: {
   markers: MapMarker[];
   geometry?: string | null;
   trail?: Array<{ lat: number; lng: number }>;
   className?: string;
+  /** Quando informado, clicar no mapa escolhe uma coordenada. */
+  onPick?: (coordinates: { lat: number; lng: number }) => void;
+  /** Enquadramento inicial quando ainda não há marcador nenhum. */
+  center?: { lat: number; lng: number };
 }) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
@@ -39,10 +45,22 @@ export function RouteMap({
 
   const path = useMemo(() => (geometry ? decodePolyline(geometry) : null), [geometry]);
 
+  // `onPick` guardado em ref para o handler de clique não precisar ser
+  // reassinado a cada render — o mapa é criado uma vez só. A atualização vai
+  // num efeito porque escrever em ref durante o render deixa o valor
+  // inconsistente entre a renderização e o que ficou na tela.
+  const pick = useRef(onPick);
+  useEffect(() => {
+    pick.current = onPick;
+  }, [onPick]);
+
   useEffect(() => {
     if (!container.current || map.current) return;
 
     map.current = L.map(container.current, { zoomControl: false, attributionControl: true });
+    map.current.on('click', (event: L.LeafletMouseEvent) => {
+      pick.current?.({ lat: event.latlng.lat, lng: event.latlng.lng });
+    });
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap',
@@ -85,10 +103,19 @@ export function RouteMap({
 
     if (bounds.length > 0) {
       map.current.fitBounds(L.latLngBounds(bounds), { padding: [36, 36], maxZoom: 16 });
+    } else if (center) {
+      map.current.setView([center.lat, center.lng], 14);
     }
-  }, [markers, path, trail]);
+  }, [markers, path, trail, center]);
 
-  return <div ref={container} className={className} role="application" aria-label="Mapa da rota" />;
+  return (
+    <div
+      ref={container}
+      className={className}
+      role="application"
+      aria-label={onPick ? 'Mapa para escolher o local da entrega' : 'Mapa da rota'}
+    />
+  );
 }
 
 const STYLES: Record<MapMarker['kind'], { bg: string; fg: string; size: number }> = {

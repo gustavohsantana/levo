@@ -19,12 +19,23 @@ export class RouteAlreadyStartedError extends ConflictError {
 }
 
 export class RouteNotActiveError extends ConflictError {
+  /**
+   * Código próprio porque a fila offline do motoboy precisa distinguir dois
+   * tipos de 409: este é TEMPORÁRIO — o dono ainda não liberou a saída — e a
+   * marcação deve continuar na fila. Descartá-la faria o motoboy ver "entregue"
+   * numa entrega que o servidor nunca registrou.
+   */
+  readonly code = 'ROUTE_NOT_ACTIVE';
+
   constructor(routeId: string, status: string) {
     super(`Rota não está em andamento (${status})`, { routeId, status });
   }
 }
 
 export class StopAlreadyResolvedError extends ConflictError {
+  /** Definitivo: reenviar não muda nada, a fila pode descartar. */
+  readonly code = 'STOP_ALREADY_RESOLVED';
+
   constructor(stopId: string) {
     super('Parada já foi finalizada', { stopId });
   }

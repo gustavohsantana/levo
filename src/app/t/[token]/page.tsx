@@ -12,7 +12,9 @@ export const dynamic = 'force-dynamic';
 
 export default async function TrackingPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const snapshot = await getTrackingSnapshot(token);
+  // `true`: carregar a página É a abertura do link. A sondagem que vem
+  // depois não conta — ver GetTrackingSnapshot.
+  const snapshot = await getTrackingSnapshot(token, true);
 
   if (!snapshot) notFound();
 

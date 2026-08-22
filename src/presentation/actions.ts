@@ -6,6 +6,7 @@ import { containerFor } from '@/composition-root';
 import { createOrderSchema, credentialsSchema, planRouteSchema } from '@/application/dto/schemas';
 import { createSession, destroySession, requireSession } from './http/session';
 import { toFormError } from './http/error-mapper';
+import { checkRateLimit, clearRateLimit } from './http/rate-limit';
 
 /**
  * Server Actions: as mutações das telas do dono.
@@ -28,8 +29,29 @@ export async function loginAction(_prev: unknown, formData: FormData): Promise<A
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos' };
   }
 
+  /**
+   * Trava de força bruta.
+   *
+   * Sem isto, um script tenta senhas na velocidade que o servidor aguentar — e
+   * o público deste produto usa senha de negócio pequeno, não gerada por
+   * gerenciador. A chave é o e-mail: limitar por IP sozinho não protege quem
+   * está sendo alvo, e limitar por e-mail impede que a conta seja martelada de
+   * várias origens.
+   */
+  const limitKey = `login:${parsed.data.email}`;
+  const limit = checkRateLimit(limitKey, { max: 10, windowMs: 15 * 60_000 });
+
+  if (!limit.allowed) {
+    const minutos = Math.ceil(limit.retryAfterSeconds / 60);
+    return {
+      ok: false,
+      error: `Muitas tentativas. Tente de novo em ${minutos} ${minutos === 1 ? 'minuto' : 'minutos'}.`,
+    };
+  }
+
   try {
     await createSession(parsed.data.email, parsed.data.password);
+    clearRateLimit(limitKey);
   } catch (cause) {
     return { ok: false, error: toFormError(cause) };
   }

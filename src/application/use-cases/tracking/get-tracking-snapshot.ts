@@ -32,15 +32,26 @@ export class GetTrackingSnapshot {
     private readonly clock: Clock,
   ) {}
 
-  async execute(trackingToken: string): Promise<TrackingSnapshot> {
+  /**
+   * @param recordOpen  registra o evento de abertura do link.
+   *
+   * Só a CARGA DA PÁGINA conta como abertura. A página se atualiza a cada 10
+   * segundos, então gravar em toda chamada faria um cliente que acompanha a
+   * entrega por 20 minutos valer 120 "aberturas" — e a métrica de adoção do
+   * rastreio, que existe para decidir se essa funcionalidade fica ou sai,
+   * passaria a medir tempo de tela em vez de interesse.
+   */
+  async execute(trackingToken: string, recordOpen = false): Promise<TrackingSnapshot> {
     return this.uow.run(async (repos) => {
       const order = await repos.orders.findByTrackingToken(trackingToken);
       if (!order) throw new NotFoundError('Pedido', trackingToken);
 
       const establishment = await repos.establishments.current();
 
-      order.recordTrackingOpened(this.clock.now());
-      await repos.events.append(order.pullEvents());
+      if (recordOpen) {
+        order.recordTrackingOpened(this.clock.now());
+        await repos.events.append(order.pullEvents());
+      }
 
       const base = {
         establishmentName: establishment.name,

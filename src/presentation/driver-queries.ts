@@ -102,7 +102,7 @@ export async function resolveRouteContext(accessToken: string) {
   return { routeId: route.id, container: containerFor(establishmentId) };
 }
 
-export async function getTrackingSnapshot(trackingToken: string) {
+export async function getTrackingSnapshot(trackingToken: string, recordOpen = false) {
   const prisma = getPrismaClient(env().DATABASE_URL);
   const order = await prisma.order.findUnique({
     where: { trackingToken },
@@ -110,5 +110,5 @@ export async function getTrackingSnapshot(trackingToken: string) {
   });
   if (!order) return null;
 
-  return containerFor(order.establishmentId).useCases.tracking.execute(trackingToken);
+  return containerFor(order.establishmentId).useCases.tracking.execute(trackingToken, recordOpen);
 }

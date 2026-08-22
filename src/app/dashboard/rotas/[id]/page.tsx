@@ -27,7 +27,7 @@ export default async function RoutePage({ params }: { params: Promise<{ id: stri
       <RouteMonitor
         route={data.route}
         establishment={data.establishment}
-        initialTrail={data.trail}
+        trail={data.trail}
       />
     </div>
   );

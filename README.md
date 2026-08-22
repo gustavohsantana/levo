@@ -140,14 +140,20 @@ entrada, e o produto é vendável antes de qualquer homologação sair:
    feature flag** até sair o credenciamento.
 
 ```bash
+EST=11111111-1111-1111-1111-111111111111
 BODY='[{"externalId":"PDV-1","customerName":"Maria Silva",
         "address":"Rua Trajano Reis, 300 - São Francisco, Curitiba",
         "amountCents":8990}]'
 
+# A assinatura cobre o estabelecimento junto com o corpo: sem isso, quem tem a
+# chave de um estabelecimento poderia injetar pedidos na conta de outro.
+SIG=$(printf '%s.%s' "$EST" "$BODY" \
+  | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" -hex | cut -d' ' -f2)
+
 curl -X POST http://localhost:3000/api/webhooks/orders \
   -H "content-type: application/json" \
-  -H "x-giro-establishment: 11111111-1111-1111-1111-111111111111" \
-  -H "x-giro-signature: $(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" -hex | cut -d' ' -f2)" \
+  -H "x-giro-establishment: $EST" \
+  -H "x-giro-signature: $SIG" \
   -d "$BODY"
 ```
 
@@ -199,3 +205,18 @@ E que seriam caras demais para consertar depois.
 
 Pagamento, app nativo, múltiplas lojas por conta, janelas de entrega, atribuição
 automática de motoboy e relatórios financeiros.
+
+### Limites conhecidos
+
+- **A trava de força bruta do login conta em memória do processo.** Na
+  implantação recomendada (uma VM só) funciona. Em serverless com várias
+  instâncias, o limite efetivo é multiplicado pelo número delas. Migra para
+  Redis junto com as filas, no segundo cliente integrado.
+- **Row-Level Security ainda não está ligado.** O escopo de estabelecimento é
+  garantido pelo desenho dos repositórios e por uma extensão do Prisma que
+  barra consulta sem filtro. A garantia dura vem com RLS — gatilho: segundo
+  cliente.
+- **Os adapters de iFood e aiqfome nunca falaram com a API real**, porque isso
+  exige CNPJ e homologação. O mapeamento tem teste; o transporte, não.
+- **O GPS do navegador para com a tela bloqueada.** O motoboy precisa manter o
+  app aberto. Resolver de verdade exige app nativo ou Capacitor.

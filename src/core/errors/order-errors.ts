@@ -7,6 +7,8 @@ export class OrderNotGeocodedError extends ConflictError {
 }
 
 export class OrderAlreadyRoutedError extends ConflictError {
+  readonly code = 'ORDER_ALREADY_ROUTED';
+
   constructor(orderId: string) {
     super('Pedido já está em uma rota', { orderId });
   }

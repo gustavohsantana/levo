@@ -16,6 +16,17 @@ const eslintConfig = defineConfig([
     // encheria o relatório com ruído que ninguém vai (nem deve) corrigir.
     "src/generated/**",
   ]),
+  {
+    rules: {
+      // Prefixo `_` marca parâmetro deliberadamente ignorado — comum em mock
+      // que precisa declarar a assinatura para o TypeScript inspecionar as
+      // chamadas, sem usar os argumentos.
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;

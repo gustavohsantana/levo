@@ -11,6 +11,7 @@ import {
   Coordinates,
   CourierUnavailableError,
   NotFoundError,
+  OrderAlreadyRoutedError,
   OrderNotGeocodedError,
   RouteTooLargeError,
 } from '@/core';
@@ -162,5 +163,49 @@ describe('PlanRoute', () => {
     // O pedido válido continua disponível para a próxima tentativa.
     expect(db.orders.get(ids[0])!.status).toBe('NEW');
     expect(db.routes.size).toBe(0);
+  });
+});
+
+describe('PlanRoute sob concorrência', () => {
+  it('⭐ não coloca o mesmo pedido em duas rotas', async () => {
+    // O dono clica duas vezes, ou duas abas estão abertas. Entre a leitura e a
+    // gravação há duas chamadas de rede ao roteirizador — segundos de janela.
+    const ids = seedOrders(NORTE, SUL, LESTE);
+
+    const primeira = planRoute.execute({ courierId: 'courier-1', orderIds: ids });
+    const segunda = planRoute.execute({ courierId: 'courier-1', orderIds: ids });
+
+    const resultados = await Promise.allSettled([primeira, segunda]);
+    const sucessos = resultados.filter((r) => r.status === 'fulfilled');
+
+    expect(sucessos).toHaveLength(1);
+    expect(db.routes.size).toBe(1);
+
+    // E cada pedido aponta para a única rota que existe.
+    const rota = [...db.routes.values()][0];
+    for (const id of ids) expect(db.orders.get(id)!.routeId).toBe(rota.id);
+  });
+
+  it('não dá duas rotas ao mesmo motoboy ao mesmo tempo', async () => {
+    const primeiros = seedOrders(NORTE, SUL);
+    const segundos = seedOrders(LESTE, OESTE);
+
+    const resultados = await Promise.allSettled([
+      planRoute.execute({ courierId: 'courier-1', orderIds: primeiros }),
+      planRoute.execute({ courierId: 'courier-1', orderIds: segundos }),
+    ]);
+
+    expect(resultados.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+  });
+
+  it('avisa corretamente quando o pedido já está em rota', async () => {
+    const ids = seedOrders(NORTE, SUL);
+    await planRoute.execute({ courierId: 'courier-1', orderIds: ids });
+
+    // Antes este caminho reclamava de "pedido sem coordenadas", que manda o
+    // dono procurar um problema que não existe.
+    await expect(
+      planRoute.execute({ courierId: 'courier-3', orderIds: ids }),
+    ).rejects.toThrow(OrderAlreadyRoutedError);
   });
 });

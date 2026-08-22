@@ -5,6 +5,7 @@ import {
   EmptyRouteError,
   type IdGenerator,
   NotFoundError,
+  OrderAlreadyRoutedError,
   OrderNotGeocodedError,
   Route,
   RouteStop,
@@ -58,7 +59,7 @@ export class PlanRoute {
         const order = byId.get(id);
         if (!order) throw new NotFoundError('Pedido', id);
         if (!order.isGeocoded) throw new OrderNotGeocodedError(id);
-        if (!order.canBeRouted) throw new OrderNotGeocodedError(id);
+        if (order.status !== 'NEW') throw new OrderAlreadyRoutedError(id);
         return order;
       });
 
@@ -94,12 +95,40 @@ export class PlanRoute {
 
     // ── 3. Persistir tudo de uma vez ──────────────────────────────────────
     return this.uow.run(async (repos) => {
+      /**
+       * Revalidação dentro da transação de escrita.
+       *
+       * Entre a leitura do passo 1 e este momento houve duas chamadas de rede
+       * ao roteirizador — segundos em que outra aba, ou o próprio dono clicando
+       * duas vezes, pode ter despachado os mesmos pedidos. Sem esta recarga, os
+       * dois planejamentos passariam pela validação e o pedido entraria em duas
+       * rotas: uma entrega fantasma no baú de um motoboy e um cliente que nunca
+       * recebe.
+       *
+       * As entidades relidas aqui SUBSTITUEM as do passo 1, senão gravaríamos
+       * de volta o estado velho por cima do novo.
+       */
+      const fresh = await repos.orders.findManyByIds(sequence.map((order) => order.id));
+      const freshById = new Map(fresh.map((order) => [order.id, order]));
+
+      const confirmed = sequence.map((stale) => {
+        const order = freshById.get(stale.id);
+        if (!order) throw new NotFoundError('Pedido', stale.id);
+        if (order.status !== 'NEW') throw new OrderAlreadyRoutedError(order.id);
+        return order;
+      });
+
+      // O mesmo vale para o motoboy: ele pode ter recebido outra rota nesse meio.
+      if (await repos.routes.hasActiveRouteFor(input.courierId)) {
+        throw new CourierUnavailableError(input.courierId);
+      }
+
       const routeId = this.ids.next();
       const now = this.clock.now();
 
       // ETA acumulado perna a perna: `legs[k]` é o trecho até a parada k+1.
       let elapsed = 0;
-      const stops = sequence.map((order, index) => {
+      const stops = confirmed.map((order, index) => {
         const leg = path.legs[index];
         elapsed += leg?.durationSeconds ?? 0;
         return RouteStop.create({
@@ -124,13 +153,13 @@ export class PlanRoute {
         now,
       });
 
-      for (const order of sequence) order.assignToRoute(routeId, now);
+      for (const order of confirmed) order.assignToRoute(routeId, now);
 
       await repos.routes.save(route);
-      await repos.orders.saveMany(sequence);
+      await repos.orders.saveMany(confirmed);
       await repos.events.append([
         ...route.pullEvents(),
-        ...sequence.flatMap((order) => order.pullEvents()),
+        ...confirmed.flatMap((order) => order.pullEvents()),
       ]);
 
       return route;
