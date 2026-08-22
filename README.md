@@ -81,6 +81,29 @@ por WhatsApp, que é justamente o que você quer mostrar.
 isso a Vercel falha quando restaura `node_modules` do cache e pula o
 `postinstall`.
 
+### Se o deploy falhar
+
+Três coisas que quebram o deploy na Vercel e cujo sintoma não aponta para a
+causa:
+
+- **`Error: ENOENT: ... .next/next-server.js.nft.json`**, depois de tudo
+  compilar. É o `output: 'standalone'` do `next.config.ts` brigando com o
+  `modifyConfig` que a Vercel aplica durante o build. Já está resolvido: o
+  standalone só vale fora da Vercel. Se voltar, olhe essa linha primeiro — o
+  build passa pelo TypeScript e pelas páginas estáticas antes de morrer, então
+  parece que deu certo.
+- **`Configuração inválida: OSRM_BASE_URL: Invalid URL`** no boot. A Vercel
+  monta um campo para cada variável do `.env.example`, e salvar a tela como ela
+  vem grava string vazia em todas — que não é o mesmo que ausente. Já está
+  resolvido: `src/env.ts` descarta as vazias antes de validar, com teste em
+  `tests/infrastructure/env.test.ts`. Pode deixar em branco o que não usa.
+- **`The deployment was blocked because the commit email ... could not be
+  matched to a GitHub account`.** O e-mail do autor do commit precisa estar
+  verificado na conta do GitHub. Ou adicione o e-mail em *Settings → Emails*
+  (vincula os commits antigos retroativamente), ou use o endereço sem-resposta
+  do GitHub — `<id>+<usuário>@users.noreply.github.com` — que casa sempre e não
+  expõe o e-mail pessoal.
+
 ### O que não vai junto
 
 - **O worker do iFood/aiqfome não roda na Vercel.** É processo separado, por
