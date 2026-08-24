@@ -62,10 +62,30 @@ export interface ExternalOrder {
  * está falando com ele. Trocar de plataforma é registrar outra implementação
  * no composition root.
  */
+/**
+ * Mudança de estado de um pedido NA PLATAFORMA de origem.
+ *
+ * O pedido não vive só aqui dentro: ele é cancelado pelo cliente, concluído
+ * pelo próprio marketplace, despachado por outro sistema. Ignorar isso deixa o
+ * Levô com uma versão desatualizada do mundo — e o motoboy sai para entregar
+ * pedido que já não existe.
+ */
+export interface ExternalStatusChange {
+  externalId: string;
+  status: 'CONCLUDED' | 'CANCELLED' | 'DISPATCHED';
+}
+
 export interface OrderSource {
   readonly kind: OrderSourceKind;
   fetchPending(): Promise<ExternalOrder[]>;
   acknowledge(externalIds: string[]): Promise<void>;
+  /**
+   * Mudanças de estado vistas na última leitura.
+   *
+   * Opcional porque nem toda origem tem noção de estado: o webhook genérico
+   * recebe pedido e nunca mais fala sobre ele.
+   */
+  statusChanges?(): ExternalStatusChange[];
 }
 
 export interface Clock {

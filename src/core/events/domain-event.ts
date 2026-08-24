@@ -23,6 +23,8 @@ export const OrderEvents = {
   Routed: 'order.routed',
   Delivered: 'order.delivered',
   Failed: 'order.failed',
+  /** Cancelado na plataforma de origem — iFood, aiqfome. */
+  CancelledExternally: 'order.cancelled_externally',
   TrackingOpened: 'order.tracking_opened',
 } as const;
 

@@ -29,6 +29,9 @@ enum OrderStatus {
   IN_ROUTE
   DELIVERED
   FAILED
+  // Cancelado na plataforma de origem, não pelo Levô. Estado terminal: o
+  // pedido não entra em rota, e sai de qualquer rota em que já esteja.
+  CANCELLED
 }
 
 enum RouteStatus {

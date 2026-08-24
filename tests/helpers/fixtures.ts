@@ -4,6 +4,7 @@ import {
   Courier,
   Establishment,
   type ExternalOrder,
+  type ExternalStatusChange,
   type Geocoder,
   Money,
   Order,
@@ -110,11 +111,17 @@ export class FailingGeocoder implements Geocoder {
 
 export class FakeOrderSource implements OrderSource {
   readonly kind = 'IFOOD' as const;
+  /** Mudanças de estado que o polling trouxe nesta leitura. */
+  changes: ExternalStatusChange[] = [];
   acknowledged: string[] = [];
   /** Quantas vezes o acknowledgment foi chamado, inclusive com lista vazia. */
   acknowledgeCalls = 0;
 
-  constructor(private pending: ExternalOrder[]) {}
+  constructor(public pending: ExternalOrder[]) {}
+
+  statusChanges(): ExternalStatusChange[] {
+    return this.changes;
+  }
 
   async fetchPending(): Promise<ExternalOrder[]> {
     return this.pending;

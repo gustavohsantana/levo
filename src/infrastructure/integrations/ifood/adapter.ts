@@ -1,6 +1,7 @@
 import {
   ExternalServiceError,
   type ExternalOrder,
+  type ExternalStatusChange,
   type Logger,
   type OrderSource,
 } from '@/core';
@@ -20,6 +21,11 @@ interface Options {
   logger?: Logger;
 }
 
+export interface CancellationReason {
+  cancelCodeId: string;
+  description: string;
+}
+
 interface PollingEvent {
   id: string;
   code: string;
@@ -36,6 +42,16 @@ interface PollingEvent {
  */
 const PLACED_CODES = new Set(['PLC', 'CFM', 'PLACED', 'CONFIRMED']);
 
+/** Códigos que mudam o estado de um pedido que já está aqui dentro. */
+const STATUS_CODES = new Map<string, ExternalStatusChange['status']>([
+  ['CON', 'CONCLUDED'],
+  ['CONCLUDED', 'CONCLUDED'],
+  ['CAN', 'CANCELLED'],
+  ['CANCELLED', 'CANCELLED'],
+  ['DSP', 'DISPATCHED'],
+  ['DISPATCHED', 'DISPATCHED'],
+]);
+
 /** `CAN` é o cancelamento efetivado; `CAR`, o pedido de cancelamento. */
 const CANCELLED_CODES = new Set(['CAN', 'CAR', 'CANCELLED', 'CANCELLATION_REQUESTED']);
 
@@ -51,6 +67,20 @@ const CANCELLED_CODES = new Set(['CAN', 'CAR', 'CANCELLED', 'CANCELLATION_REQUES
  *
  * A autenticação **não** mora aqui: ver `auth.ts` para o fluxo distribuído e
  * `credential-store.ts` para a guarda e a renovação do token de cada lojista.
+ *
+ * ### O estado do pedido só existe nos eventos
+ *
+ * Verificado contra a API: `GET /orders/{id}` devolve o CONTEÚDO do pedido —
+ * cliente, itens, endereço, valores — e nenhum campo de estado. Um pedido
+ * concluído e um cancelado retornam payloads idênticos. Não existem
+ * `/orders/{id}/status` nem `/orders/{id}/events` (ambos 404).
+ *
+ * Ou seja: o estado é a sequência de eventos consumidos, e evento perdido é
+ * informação perdida para sempre, sem reconciliação possível. Daí duas regras
+ * que não podem ser afrouxadas por conveniência:
+ *
+ *  1. o acknowledgment vem DEPOIS de persistir, nunca antes;
+ *  2. evento de mudança de estado é processado, não descartado.
  *
  * Pontos que a documentação fixa e que o desenho respeita:
  *  • polling em `GET /events:polling` a cada 30s (não menos, sob risco de
@@ -73,6 +103,8 @@ export class IfoodOrderSource implements OrderSource {
    * cada ciclo relê o mesmo lixo.
    */
   private extraEventIds: string[] = [];
+  /** Mudanças de estado da última leitura, entregues por `statusChanges()`. */
+  private changes: ExternalStatusChange[] = [];
 
   constructor(private readonly options: Options) {
     this.baseUrl = (options.baseUrl ?? 'https://merchant-api.ifood.com.br').replace(/\/$/, '');
@@ -123,12 +155,75 @@ export class IfoodOrderSource implements OrderSource {
       }
     }
 
-    // Tudo o que não era pedido novo também precisa sair da fila.
+    /*
+     * Evento que não é pedido novo pode ainda ser notícia sobre um pedido que
+     * já temos: concluído, cancelado, despachado. Antes tudo isso ia direto
+     * para o balde do acknowledgment e se perdia — o painel seguia mostrando
+     * como pendente um pedido cancelado horas antes.
+     */
+    this.changes = [];
     for (const event of events) {
-      if (!relevant.includes(event)) this.extraEventIds.push(event.id);
+      if (relevant.includes(event)) continue;
+
+      this.extraEventIds.push(event.id);
+
+      const status = STATUS_CODES.get(event.code);
+      if (status) this.changes.push({ externalId: event.orderId, status });
     }
 
     return orders;
+  }
+
+  /**
+   * Comandos de status do pedido.
+   *
+   * Escrever de volta é o que separa "ler pedidos" de "operar pedidos", e o
+   * iFood exige os três na homologação do módulo Order. Ficam aqui, no adapter,
+   * porque são detalhe de protocolo: quem decide QUANDO acioná-los é o caso de
+   * uso, não a integração.
+   *
+   * Nenhum deles devolve corpo — todos respondem 202 com resposta vazia.
+   */
+  async confirm(orderId: string): Promise<void> {
+    await this.request('POST', `/order/v1.0/orders/${orderId}/confirm`);
+  }
+
+  /** O pedido saiu para entrega. No Levô, é o dono liberando a rota. */
+  async dispatch(orderId: string): Promise<void> {
+    await this.request('POST', `/order/v1.0/orders/${orderId}/dispatch`);
+  }
+
+  /**
+   * Motivos de cancelamento aceitos PARA AQUELE PEDIDO.
+   *
+   * A lista não é fixa: depende do estado do pedido e de quem está pedindo o
+   * cancelamento. Por isso é consultada, nunca decorada — um código inventado é
+   * recusado, e o motivo certo é o que decide se o lojista leva a multa.
+   */
+  async cancellationReasons(orderId: string): Promise<CancellationReason[]> {
+    const reasons = await this.request<CancellationReason[]>(
+      'GET',
+      `/order/v1.0/orders/${orderId}/cancellationReasons`,
+    );
+    return Array.isArray(reasons) ? reasons : [];
+  }
+
+  /**
+   * Pedir cancelamento não é cancelar: quem decide é o iFood, e a resposta vem
+   * depois, como evento.
+   *
+   * O código precisa vir de `cancellationReasons` — daí ele ser parâmetro
+   * obrigatório, e não um valor padrão escondido aqui dentro.
+   */
+  async requestCancellation(orderId: string, reason: string, code: string): Promise<void> {
+    await this.request('POST', `/order/v1.0/orders/${orderId}/requestCancellation`, {
+      reason,
+      cancellationCode: code,
+    });
+  }
+
+  statusChanges(): ExternalStatusChange[] {
+    return this.changes;
   }
 
   async acknowledge(externalIds: string[]): Promise<void> {

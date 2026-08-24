@@ -16,6 +16,8 @@ export interface ImportResult {
   imported: number;
   duplicates: number;
   failed: number;
+  /** Pedidos que mudaram de estado na plataforma (cancelados, concluídos). */
+  updated: number;
 }
 
 /**
@@ -37,7 +39,7 @@ export class ImportOrderFromSource {
 
   async execute(source: OrderSource): Promise<ImportResult> {
     const pending = await source.fetchPending();
-    const result: ImportResult = { imported: 0, duplicates: 0, failed: 0 };
+    const result: ImportResult = { imported: 0, duplicates: 0, failed: 0, updated: 0 };
     const acknowledged: string[] = [];
 
     for (const external of pending) {
@@ -66,9 +68,54 @@ export class ImportOrderFromSource {
      * deixava tudo sem reconhecimento, e o mesmo lixo voltava a cada 30
      * segundos até expirar 8 horas depois. Cada adapter decide o que enviar.
      */
+    /*
+     * O pedido não vive só aqui: ele é cancelado pelo cliente e concluído pelo
+     * próprio marketplace, sem passar por nós. Aplicar essas mudanças é o que
+     * impede o painel de mostrar como pendente um pedido cancelado — e o
+     * motoboy de sair com uma parada que já não existe.
+     */
+    result.updated = await this.applyStatusChanges(source);
+
     await source.acknowledge(acknowledged);
 
     return result;
+  }
+
+  private async applyStatusChanges(source: OrderSource): Promise<number> {
+    const changes = source.statusChanges?.() ?? [];
+    if (changes.length === 0) return 0;
+
+    let applied = 0;
+
+    for (const change of changes) {
+      // DISPATCHED não muda nada aqui: quem despacha é o Levô, e o pedido já
+      // está em rota quando o evento volta.
+      if (change.status === 'DISPATCHED') continue;
+
+      try {
+        const aplicado = await this.uow.run(async (repos) => {
+          const order = await repos.orders.findBySourceRef(source.kind, change.externalId);
+          if (!order) return false;
+
+          if (change.status === 'CANCELLED') order.markCancelledExternally(this.clock.now());
+          else order.markConcludedExternally(this.clock.now());
+
+          await repos.orders.save(order);
+          return true;
+        });
+
+        if (aplicado) applied++;
+      } catch (cause) {
+        // Uma mudança que não aplica não pode derrubar o ciclo: o pedido pode
+        // ter sido apagado, ou estar num estado que a entidade recusa.
+        this.logger?.error(
+          { externalId: change.externalId, status: change.status, cause: String(cause) },
+          'import.status_change_failed',
+        );
+      }
+    }
+
+    return applied;
   }
 
   private async importOne(

@@ -100,7 +100,7 @@ async function tick(): Promise<void> {
     for (const source of sources) {
       try {
         const result = await container.useCases.importOrders.execute(source);
-        if (result.imported > 0 || result.failed > 0) {
+        if (result.imported > 0 || result.failed > 0 || result.updated > 0) {
           logger.info({ establishmentId: establishment.id, source: source.kind, ...result }, 'import.ciclo');
         }
       } catch (cause) {

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { Coordinates } from '@/core';
 import { ImportOrderFromSource } from '@/application/use-cases/orders/import-order-from-source';
 import {
   FixedClock,
@@ -35,7 +36,7 @@ describe('ImportOrderFromSource', () => {
 
     const result = await importOrders.execute(source);
 
-    expect(result).toEqual({ imported: 2, duplicates: 0, failed: 0 });
+    expect(result).toEqual({ imported: 2, duplicates: 0, failed: 0, updated: 0 });
     expect(db.orders.size).toBe(2);
     expect(source.acknowledged).toEqual(['IF-1', 'IF-2']);
   });
@@ -49,7 +50,7 @@ describe('ImportOrderFromSource', () => {
     source.redeliver();
     const second = await importOrders.execute(source);
 
-    expect(second).toEqual({ imported: 0, duplicates: 2, failed: 0 });
+    expect(second).toEqual({ imported: 0, duplicates: 2, failed: 0, updated: 0 });
     expect(db.orders.size).toBe(2);
   });
 
@@ -117,8 +118,89 @@ describe('ImportOrderFromSource — acknowledgment', () => {
 
     const result = await importOrders.execute(source);
 
-    expect(result).toEqual({ imported: 0, duplicates: 0, failed: 0 });
+    expect(result).toEqual({ imported: 0, duplicates: 0, failed: 0, updated: 0 });
     expect(source.acknowledgeCalls).toBe(1);
     expect(source.acknowledged).toEqual([]);
+  });
+});
+
+describe('ImportOrderFromSource — mudanças de estado na plataforma', () => {
+  /**
+   * O pedido não vive só dentro do Levô: o cliente cancela e o marketplace
+   * conclui sem passar por aqui. Antes esses eventos eram reconhecidos e
+   * descartados, e o painel seguia mostrando como pendente um pedido cancelado
+   * horas antes — com o motoboy indo entregar algo que já não existia.
+   */
+  it('marca como cancelado o pedido cancelado na plataforma', async () => {
+    const source = new FakeOrderSource([externalOrder('IF-1')]);
+    await importOrders.execute(source);
+
+    source.pending = [];
+    source.changes = [{ externalId: 'IF-1', status: 'CANCELLED' }];
+
+    const result = await importOrders.execute(source);
+
+    expect(result.updated).toBe(1);
+    const order = [...db.orders.values()].find((o) => o.externalId === 'IF-1')!;
+    expect(order.status).toBe('CANCELLED');
+  });
+
+  it('marca como entregue o pedido concluído na plataforma', async () => {
+    const source = new FakeOrderSource([externalOrder('IF-2')]);
+    await importOrders.execute(source);
+
+    source.pending = [];
+    source.changes = [{ externalId: 'IF-2', status: 'CONCLUDED' }];
+
+    await importOrders.execute(source);
+
+    const order = [...db.orders.values()].find((o) => o.externalId === 'IF-2')!;
+    expect(order.status).toBe('DELIVERED');
+  });
+
+  it('tira o pedido cancelado da rota em que estava', async () => {
+    const source = new FakeOrderSource([externalOrder('IF-3')]);
+    await importOrders.execute(source);
+
+    const order = [...db.orders.values()].find((o) => o.externalId === 'IF-3')!;
+    order.locateAt(Coordinates.create(-22.23, -45.93));
+    order.assignToRoute('rota-1');
+    db.orders.set(order.id, order);
+
+    source.pending = [];
+    source.changes = [{ externalId: 'IF-3', status: 'CANCELLED' }];
+    await importOrders.execute(source);
+
+    const depois = [...db.orders.values()].find((o) => o.externalId === 'IF-3')!;
+    expect(depois.status).toBe('CANCELLED');
+    // Some da rota: o motoboy não pode sair com uma parada que não existe mais.
+    expect(depois.routeId).toBeNull();
+  });
+
+  it('ignora mudança de pedido que não conhece, sem quebrar o ciclo', async () => {
+    const source = new FakeOrderSource([]);
+    source.changes = [{ externalId: 'nunca-importado', status: 'CANCELLED' }];
+
+    const result = await importOrders.execute(source);
+
+    expect(result.updated).toBe(0);
+  });
+
+  it('não regride um pedido já entregue', async () => {
+    // Cancelamento que chega depois da entrega feita não desfaz a entrega.
+    const source = new FakeOrderSource([externalOrder('IF-4')]);
+    await importOrders.execute(source);
+
+    const order = [...db.orders.values()].find((o) => o.externalId === 'IF-4')!;
+    order.locateAt(Coordinates.create(-22.23, -45.93));
+    order.assignToRoute('rota-1');
+    order.markDelivered();
+    db.orders.set(order.id, order);
+
+    source.pending = [];
+    source.changes = [{ externalId: 'IF-4', status: 'CANCELLED' }];
+    await importOrders.execute(source);
+
+    expect([...db.orders.values()].find((o) => o.externalId === 'IF-4')!.status).toBe('DELIVERED');
   });
 });

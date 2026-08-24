@@ -14,6 +14,8 @@ export const OrderStatus = {
   InRoute: 'IN_ROUTE',
   Delivered: 'DELIVERED',
   Failed: 'FAILED',
+  /** Cancelado na plataforma de origem, fora do Levô. Estado terminal. */
+  Cancelled: 'CANCELLED',
 } as const;
 export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
 
@@ -146,6 +148,38 @@ export class Order extends AggregateRoot {
     this.ensureInRoute();
     this.props.status = OrderStatus.Failed;
     this.record(OrderEvents.Failed, this.props.establishmentId, { reason }, now);
+  }
+
+  /**
+   * Cancelado na plataforma de origem — pelo cliente ou pela própria loja, fora
+   * do Levô.
+   *
+   * Diferente das outras transições, esta aceita QUALQUER estado de partida e
+   * não valida nada: o fato já aconteceu lá fora, e recusá-lo aqui só produziria
+   * um painel que discorda da realidade. Um pedido já entregue é o único que
+   * não regride — entrega feita não se desfaz por cancelamento tardio.
+   */
+  markCancelledExternally(now = new Date()): void {
+    if (this.props.status === OrderStatus.Delivered) return;
+
+    this.props.status = OrderStatus.Cancelled;
+    this.props.routeId = null;
+    this.record(OrderEvents.CancelledExternally, this.props.establishmentId, {}, now);
+  }
+
+  /**
+   * Concluído na plataforma de origem.
+   *
+   * Vale como entrega: o marketplace só conclui o pedido depois que ele chegou
+   * ao cliente. Quando o motoboy já marcou aqui, não faz nada — quem chegou
+   * primeiro venceu, e o horário do toque é o mais confiável.
+   */
+  markConcludedExternally(now = new Date()): void {
+    if (this.props.status === OrderStatus.Delivered) return;
+
+    this.props.status = OrderStatus.Delivered;
+    this.props.deliveredAt = now;
+    this.record(OrderEvents.Delivered, this.props.establishmentId, { externo: true }, now);
   }
 
   /** O cliente abriu o link de rastreio — métrica de adoção do piloto. */
