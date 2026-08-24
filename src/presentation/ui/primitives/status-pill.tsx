@@ -1,7 +1,7 @@
-import { Check, CircleDashed, Navigation, TriangleAlert } from 'lucide-react';
+import { Ban, Check, CircleDashed, Navigation, TriangleAlert } from 'lucide-react';
 import { cn } from '../cn';
 
-type Kind = 'NEW' | 'IN_ROUTE' | 'DELIVERED' | 'FAILED';
+type Kind = 'NEW' | 'IN_ROUTE' | 'DELIVERED' | 'FAILED' | 'CANCELLED';
 
 /**
  * Status de pedido.
@@ -36,6 +36,16 @@ const STYLES: Record<Kind, { label: string; className: string; Icon: typeof Chec
     label: 'Não entregue',
     className: 'bg-danger-soft text-danger',
     Icon: TriangleAlert,
+  },
+  /*
+   * Cancelado recua como "entregue", e por motivo parecido: já está resolvido.
+   * Não é vermelho porque não é falha da operação — o cliente desistiu ou a
+   * loja cancelou na plataforma, e não há nada a fazer a respeito.
+   */
+  CANCELLED: {
+    label: 'Cancelado',
+    className: 'bg-transparent text-ink-faint line-through decoration-ink-faint/40',
+    Icon: Ban,
   },
 };
 

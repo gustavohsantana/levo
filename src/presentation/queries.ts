@@ -21,7 +21,7 @@ export interface OrderView {
   reference: string | null;
   amountCents: number;
   notes: string | null;
-  status: 'NEW' | 'IN_ROUTE' | 'DELIVERED' | 'FAILED';
+  status: 'NEW' | 'IN_ROUTE' | 'DELIVERED' | 'FAILED' | 'CANCELLED';
   isGeocoded: boolean;
   coordinates: { lat: number; lng: number } | null;
   createdAt: string;
