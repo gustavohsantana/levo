@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!--
+    Favicon: a marca em tinta escura sobre o lima, não o contrário.
+
+    Aba de navegador não tem contexto — o traço sozinho, sem fundo, some tanto
+    no tema claro quanto no escuro. O bloco de cor resolve os dois de uma vez, e
+    o lima é o que identifica o Levô à distância numa fileira de abas.
+
+    Cores em hex fixo de propósito: aqui não existe cascata de CSS para herdar.
+  -->
+  <rect width="32" height="32" rx="7" fill="#95cc33"/>
+  <path d="M11 8.5v13.5a3.2 3.2 0 0 0 3.2 3.2h7.3" fill="none" stroke="#1a2a00" stroke-width="3.2" stroke-linecap="round"/>
+  <circle cx="21.5" cy="25.2" r="3.5" fill="#1a2a00"/>
+</svg>
