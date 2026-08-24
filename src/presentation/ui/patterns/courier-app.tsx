@@ -9,12 +9,14 @@ import {
   Navigation,
   Package,
   Phone,
+  Route as RouteIcon,
   TriangleAlert,
 } from 'lucide-react';
 import type { DriverRouteView, DriverStopView } from '@/presentation/driver-queries';
 import { Button } from '../primitives';
 import { cn } from '../cn';
 import { currency, phoneDisplay } from '../format';
+import { googleMapsRouteUrl } from '../maps-link';
 import { enqueue, flush } from '../offline-queue';
 
 const PING_INTERVAL_MS = 15_000;
@@ -63,6 +65,10 @@ export function CourierApp({ token, route }: { token: string; route: DriverRoute
   const pending = stops.filter((stop) => stop.status === 'PENDING');
   const current = pending[0] ?? null;
   const done = stops.length - pending.length;
+  // Só o que falta entregar, na ordem que o OSRM definiu. Recalcular a cada
+  // render é de graça no tamanho de uma rota, e memoizar aqui só criaria a
+  // ilusão de cache: `pending` é um array novo toda vez.
+  const mapsRoute = googleMapsRouteUrl(pending);
 
   // ── Sincronização da fila offline ──────────────────────────────────────
   const sync = useCallback(async () => {
@@ -237,9 +243,31 @@ export function CourierApp({ token, route }: { token: string; route: DriverRoute
 
       {pending.length > 1 ? (
         <section className="border-t px-4 py-4">
-          <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-faint">
-            Depois desta
-          </h2>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <h2 className="text-xs font-medium uppercase tracking-wide text-ink-faint">
+              Depois desta
+            </h2>
+
+            {/*
+              Consulta, não navegação: serve para entender o trajeto de uma vez
+              — no farol, antes de sair. A navegação de verdade continua sendo o
+              "Navegar" da parada em foco, que é o que mantém o motoboy voltando
+              ao app para confirmar cada entrega.
+            */}
+            {mapsRoute ? (
+              <a
+                href={mapsRoute.url}
+                target="_blank"
+                rel="noreferrer"
+                // O padding negativo compensa o visual: a área de toque fica
+                // confortável para polegar sem o link virar um botão.
+                className="-my-2 flex items-center gap-1.5 px-1 py-2 text-xs font-medium text-accent"
+              >
+                <RouteIcon className="size-3.5" aria-hidden />
+                Ver no Maps
+              </a>
+            ) : null}
+          </div>
           <ol className="space-y-1.5">
             {pending.slice(1).map((stop) => (
               <li key={stop.id} className="flex items-start gap-2.5 text-sm">
@@ -253,6 +281,19 @@ export function CourierApp({ token, route }: { token: string; route: DriverRoute
               </li>
             ))}
           </ol>
+
+          {/*
+            O limite é do Google, não da rota: o planejamento aceita 15 paradas
+            e o link comporta 10. Dizer isso na tela evita o motoboy achar que
+            entregou tudo porque o Maps acabou.
+          */}
+          {mapsRoute && mapsRoute.omitted > 0 ? (
+            <p className="mt-3 text-xs text-ink-faint">
+              O Maps cabe <span className="numeric">{mapsRoute.included}</span> paradas por link
+              — as <span className="numeric">{mapsRoute.omitted}</span> últimas continuam só
+              aqui.
+            </p>
+          ) : null}
         </section>
       ) : null}
     </Shell>
