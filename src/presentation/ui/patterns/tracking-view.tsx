@@ -85,8 +85,14 @@ export function TrackingView({
 
       <Timeline status={snapshot.status} />
 
+      {/*
+        "há 2 min" é calculado contra o relógio de quem renderiza, e servidor e
+        navegador nunca marcam o mesmo instante. `suppressHydrationWarning` é a
+        saída que o próprio React indica para conteúdo dependente de tempo: o
+        valor do cliente prevalece, sem acusar divergência.
+      */}
       {snapshot.courierPosition ? (
-        <p className="px-5 pb-8 text-xs text-ink-faint">
+        <p className="px-5 pb-8 text-xs text-ink-faint" suppressHydrationWarning>
           Posição atualizada {timeAgo(snapshot.courierPosition.at)}.
         </p>
       ) : (

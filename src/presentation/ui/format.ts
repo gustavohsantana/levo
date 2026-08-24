@@ -24,8 +24,28 @@ export function currency(cents: number): string {
   return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+/**
+ * Fuso da operação, fixo.
+ *
+ * Sem ele, o horário sai diferente no servidor e no navegador: a Vercel roda em
+ * UTC e o dono está em UTC-3. O React acusa isso como divergência de hidratação
+ * (erro #418), e o efeito visível é pior que o aviso no console — o pedido das
+ * 18:42 aparece como 21:42 no primeiro render, num painel em que a hora do
+ * pedido é justamente o que diz se a entrega está atrasada.
+ *
+ * Fixar em São Paulo, e não no fuso do navegador, é o que faz dono, motoboy e
+ * cliente verem o mesmo horário. Um estabelecimento em outro fuso (Acre,
+ * Fernando de Noronha) exigiria guardar o fuso junto do estabelecimento — o
+ * gatilho para isso é o primeiro cliente fora do horário de Brasília.
+ */
+const FUSO = 'America/Sao_Paulo';
+
 export function clockTime(date: Date | string): string {
-  return new Date(date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return new Date(date).toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: FUSO,
+  });
 }
 
 /** "há 3 min" — para o dono saber se a posição do motoboy está fresca. */
