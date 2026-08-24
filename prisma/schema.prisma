@@ -245,3 +245,27 @@ model IntegrationCredential {
   // Reautorizar substitui a credencial anterior em vez de acumular lixo.
   @@unique([establishmentId, provider])
 }
+
+// Evento recebido por webhook, guardado antes de ser processado.
+//
+// O iFood espera 2xx em poucos segundos e reenvia o que não confirmar. Buscar o
+// pedido, geocodificar e gravar leva mais que isso — então o webhook só anota, e
+// o processamento acontece depois. É o padrão de fila: recebimento rápido,
+// trabalho lento em separado.
+//
+// `externalEventId` é único porque reentrega é normal, não exceção: o mesmo
+// evento chega duas vezes quando a confirmação se perde no caminho.
+model IntegrationEvent {
+  id              String              @id @default(uuid())
+  provider        IntegrationProvider
+  externalEventId String
+  code            String
+  externalOrderId String
+  merchantId      String?
+  payload         Json
+  receivedAt      DateTime            @default(now())
+  processedAt     DateTime?
+
+  @@unique([provider, externalEventId])
+  @@index([processedAt, receivedAt])
+}
