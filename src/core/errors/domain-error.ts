@@ -23,12 +23,23 @@ export class ValidationError extends DomainError {
   readonly httpStatus = 422;
 }
 
+/**
+ * Recursos de gênero feminino.
+ *
+ * Existe para a mensagem concordar: "Parada não encontrado" é o tipo de detalhe
+ * que faz o produto parecer malfeito justamente na hora em que algo já deu
+ * errado. A lista é curta porque o domínio é pequeno — se crescer a ponto de
+ * incomodar, o caminho é o chamador passar a frase pronta.
+ */
+const RECURSOS_FEMININOS = new Set(['Parada', 'Rota']);
+
 export class NotFoundError extends DomainError {
   readonly code = 'NOT_FOUND';
   readonly httpStatus = 404;
 
   constructor(resource: string, id: string) {
-    super(`${resource} não encontrado`, { resource, id });
+    const encontrado = RECURSOS_FEMININOS.has(resource) ? 'encontrada' : 'encontrado';
+    super(`${resource} não ${encontrado}`, { resource, id });
   }
 }
 
@@ -70,5 +81,21 @@ export class ExternalServiceError extends DomainError {
 
   constructor(service: string, message: string, details?: Record<string, unknown>) {
     super(`${service}: ${message}`, { service, ...details });
+  }
+}
+
+/**
+ * Falta configuração para a operação pedida.
+ *
+ * O oposto de `ExternalServiceError`: aqui o terceiro não tem culpa nenhuma —
+ * faltou credencial ou variável deste lado. Retentar não resolve, e a mensagem
+ * precisa nomear o que preencher, porque quem lê é quem opera o deploy.
+ */
+export class ConfigurationError extends DomainError {
+  readonly code = 'CONFIGURATION_ERROR';
+  readonly httpStatus = 503;
+
+  constructor(message: string, details?: Record<string, unknown>) {
+    super(message, details);
   }
 }
