@@ -7,8 +7,15 @@ import {
 
 interface Options {
   baseUrl?: string;
-  clientId: string;
-  clientSecret: string;
+  /**
+   * Devolve um token válido a cada chamada.
+   *
+   * O adapter não guarda credencial nem sabe renovar: no modelo distribuído o
+   * token é **de um lojista**, vive no banco e expira em 6 horas. Quem cuida
+   * disso é o `CredentialStore`; aqui só interessa ter um token que funcione
+   * agora.
+   */
+  accessToken: () => Promise<string>;
   merchantId: string;
   logger?: Logger;
 }
@@ -21,16 +28,29 @@ interface PollingEvent {
 }
 
 /**
+ * Códigos do polling, na forma abreviada que o iFood realmente envia.
+ *
+ * `PLC` é o pedido novo e `CFM` o confirmado pela loja — os dois interessam,
+ * porque o Levô entra depois da aceitação e a integração pode ser ligada com
+ * pedidos já confirmados na fila.
+ */
+const PLACED_CODES = new Set(['PLC', 'CFM', 'PLACED', 'CONFIRMED']);
+
+/** `CAN` é o cancelamento efetivado; `CAR`, o pedido de cancelamento. */
+const CANCELLED_CODES = new Set(['CAN', 'CAR', 'CANCELLED', 'CANCELLATION_REQUESTED']);
+
+/**
  * Adapter do iFood.
  *
- * ⚠️  **Escrito contra a documentação, ainda não homologado.**
+ * ⚠️  **Autorização validada contra o ambiente real; pedidos ainda não.**
  *
- * O acesso à API exige conta profissional com CNPJ e aprovação no processo de
- * homologação do Módulo de Pedidos — não existe caminho de sandbox aberto que
- * permita validar isto de ponta a ponta antes do credenciamento. O código está
- * aqui, tipado e testado no mapeamento, para que ligar seja questão de
- * preencher credenciais e conferir contra o ambiente real. Fica desligado por
+ * O fluxo de autorização distribuído foi confirmado de ponta a ponta com uma
+ * loja de teste. O consumo de pedidos continua escrito contra a documentação —
+ * a homologação do Módulo de Pedidos é que fecha essa parte. Fica desligado por
  * `IFOOD_ENABLED` até lá.
+ *
+ * A autenticação **não** mora aqui: ver `auth.ts` para o fluxo distribuído e
+ * `credential-store.ts` para a guarda e a renovação do token de cada lojista.
  *
  * Pontos que a documentação fixa e que o desenho respeita:
  *  • polling em `GET /events:polling` a cada 30s (não menos, sob risco de
@@ -42,9 +62,17 @@ export class IfoodOrderSource implements OrderSource {
   readonly kind = 'IFOOD' as const;
 
   private readonly baseUrl: string;
-  private token: { value: string; expiresAt: number } | null = null;
   /** Guardado entre `fetchPending` e `acknowledge`: id do pedido → id do evento. */
   private eventIdByOrder = new Map<string, string>();
+  /**
+   * Eventos que não viram pedido — cancelamento, mudança de status, tudo o que
+   * não interessa à roteirização.
+   *
+   * Precisam de acknowledgment do mesmo jeito: evento não reconhecido volta em
+   * todo polling e só some depois de 8 horas. Sem isto, a fila cresce sozinha e
+   * cada ciclo relê o mesmo lixo.
+   */
+  private extraEventIds: string[] = [];
 
   constructor(private readonly options: Options) {
     this.baseUrl = (options.baseUrl ?? 'https://merchant-api.ifood.com.br').replace(/\/$/, '');
@@ -54,11 +82,34 @@ export class IfoodOrderSource implements OrderSource {
     const events = await this.request<PollingEvent[]>('GET', '/events/v1.0/events:polling');
     if (!Array.isArray(events) || events.length === 0) return [];
 
-    // Só interessam pedidos confirmados como despachados para entrega própria.
-    const relevant = events.filter((event) => event.code === 'PLACED' || event.code === 'CONFIRMED');
+    /*
+     * O polling devolve o código ABREVIADO — `PLC`, não `PLACED`.
+     *
+     * Confirmado contra o ambiente real: filtrar pelo nome por extenso, como
+     * estava, descarta todos os eventos e o worker fica em silêncio, sem erro
+     * nenhum, parecendo que a loja não tem pedido. Os nomes longos ficam aceitos
+     * também porque a documentação os usa ao descrever o fluxo.
+     */
+    const relevant = events.filter((event) => PLACED_CODES.has(event.code));
+
+    /*
+     * Pedido cancelado não vira entrega.
+     *
+     * O cancelamento chega como evento próprio, no MESMO lote do `PLC` quando o
+     * cliente desiste rápido. Sem esta verificação o motoboy sairia com uma
+     * parada que já não existe — e o dono só descobriria na porta do cliente.
+     */
+    const cancelled = new Set(
+      events.filter((event) => CANCELLED_CODES.has(event.code)).map((event) => event.orderId),
+    );
 
     const orders: ExternalOrder[] = [];
     for (const event of relevant) {
+      if (cancelled.has(event.orderId)) {
+        this.extraEventIds.push(event.id);
+        this.options.logger?.info({ orderId: event.orderId }, 'ifood.pedido_cancelado_ignorado');
+        continue;
+      }
       this.eventIdByOrder.set(event.orderId, event.id);
       try {
         orders.push(await this.fetchOrder(event.orderId, event.createdAt));
@@ -72,19 +123,33 @@ export class IfoodOrderSource implements OrderSource {
       }
     }
 
+    // Tudo o que não era pedido novo também precisa sair da fila.
+    for (const event of events) {
+      if (!relevant.includes(event)) this.extraEventIds.push(event.id);
+    }
+
     return orders;
   }
 
   async acknowledge(externalIds: string[]): Promise<void> {
-    const events = externalIds
+    const importedEventIds = externalIds
       .map((orderId) => this.eventIdByOrder.get(orderId))
-      .filter((id): id is string => !!id)
-      .map((id) => ({ id }));
+      .filter((id): id is string => !!id);
 
-    if (events.length === 0) return;
+    // Os irrelevantes vão junto: o que fica sem acknowledgment volta no próximo
+    // ciclo. O que NÃO entra aqui é o evento de pedido que falhou ao ser lido —
+    // esse fica na fila de propósito, para uma nova tentativa.
+    const ids = [...importedEventIds, ...this.extraEventIds];
+    if (ids.length === 0) return;
 
-    await this.request('POST', '/events/v1.0/events/acknowledgment', events);
+    await this.request(
+      'POST',
+      '/events/v1.0/events/acknowledgment',
+      ids.map((id) => ({ id })),
+    );
+
     for (const orderId of externalIds) this.eventIdByOrder.delete(orderId);
+    this.extraEventIds = [];
   }
 
   private async fetchOrder(orderId: string, placedAt: string): Promise<ExternalOrder> {
@@ -92,38 +157,8 @@ export class IfoodOrderSource implements OrderSource {
     return mapIfoodOrder(payload, orderId, placedAt);
   }
 
-  /** OAuth2 client credentials, com o token reaproveitado até faltar 1 min. */
-  private async authorize(): Promise<string> {
-    if (this.token && this.token.expiresAt > Date.now() + 60_000) return this.token.value;
-
-    const body = new URLSearchParams({
-      grantType: 'client_credentials',
-      clientId: this.options.clientId,
-      clientSecret: this.options.clientSecret,
-    });
-
-    const response = await fetch(`${this.baseUrl}/authentication/v1.0/oauth/token`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body,
-      signal: AbortSignal.timeout(15_000),
-    });
-
-    if (!response.ok) {
-      throw new ExternalServiceError('iFood', `autenticação falhou (HTTP ${response.status})`);
-    }
-
-    const payload = (await response.json()) as { accessToken: string; expiresIn: number };
-    this.token = {
-      value: payload.accessToken,
-      expiresAt: Date.now() + payload.expiresIn * 1000,
-    };
-
-    return this.token.value;
-  }
-
   private async request<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
-    const token = await this.authorize();
+    const token = await this.options.accessToken();
 
     const response = await fetch(`${this.baseUrl}${path}`, {
       method,
@@ -143,7 +178,16 @@ export class IfoodOrderSource implements OrderSource {
       throw new ExternalServiceError('iFood', `HTTP ${response.status}`, { path });
     }
 
-    return (await response.json()) as T;
+    /*
+     * Nem toda resposta de sucesso traz corpo: o acknowledgment devolve 202
+     * vazio. Chamar `.json()` nesse caso estoura com "Unexpected end of JSON
+     * input" — um erro que não menciona iFood, nem acknowledgment, nem HTTP, e
+     * que derrubava o ciclo inteiro DEPOIS de o pedido já ter sido importado.
+     */
+    const texto = await response.text();
+    if (!texto) return undefined as T;
+
+    return JSON.parse(texto) as T;
   }
 }
 

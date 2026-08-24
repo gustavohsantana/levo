@@ -28,6 +28,15 @@ const schema = z.object({
   AIQFOME_API_KEY: z.string().optional(),
   AIQFOME_MERCHANT_ID: z.string().optional(),
 
+  // Consentimento OAuth do aiqfome. Os endereços são configuráveis porque quem
+  // os fixa é o credenciamento (API V2 / ID Magalu); o `redirect_uri` não entra
+  // aqui de propósito — sai do PUBLIC_BASE_URL, para não divergir do cadastro.
+  AIQFOME_CLIENT_ID: z.string().optional(),
+  AIQFOME_CLIENT_SECRET: z.string().optional(),
+  AIQFOME_AUTH_URL: z.string().url().optional(),
+  AIQFOME_TOKEN_URL: z.string().url().optional(),
+  AIQFOME_SCOPE: z.string().optional(),
+
   WEBHOOK_SECRET: z.string().optional(),
 
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),

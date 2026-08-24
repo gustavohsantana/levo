@@ -5,7 +5,14 @@ import { PrismaClient } from '@/generated/prisma/client';
  * Modelos que pertencem a um estabelecimento. Consultar qualquer um deles sem
  * filtrar por `establishmentId` é vazamento entre clientes.
  */
-const TENANT_SCOPED = new Set(['User', 'Courier', 'Order', 'Route', 'DomainEventLog']);
+const TENANT_SCOPED = new Set([
+  'User',
+  'Courier',
+  'Order',
+  'Route',
+  'DomainEventLog',
+  'IntegrationCredential',
+]);
 
 const READ_OPERATIONS = new Set([
   'findMany',

@@ -4,6 +4,8 @@ import { env } from '../src/env';
 import { createLogger } from '../src/infrastructure/observability/logger';
 import { getPrismaClient } from '../src/infrastructure/persistence/prisma/client';
 import { IfoodOrderSource } from '../src/infrastructure/integrations/ifood/adapter';
+import { IfoodAuth } from '../src/infrastructure/integrations/ifood/auth';
+import { CredentialStore } from '../src/infrastructure/integrations/credential-store';
 import { AiqfomeOrderSource } from '../src/infrastructure/integrations/aiqfome/adapter';
 import type { OrderSource } from '../src/core';
 
@@ -35,17 +37,38 @@ async function sourcesFor(establishmentId: string): Promise<OrderSource[]> {
   const sources: OrderSource[] = [];
 
   if (config.ifoodEnabled) {
-    if (!config.IFOOD_CLIENT_ID || !config.IFOOD_CLIENT_SECRET || !config.IFOOD_MERCHANT_ID) {
+    if (!config.IFOOD_CLIENT_ID || !config.IFOOD_CLIENT_SECRET) {
       logger.error({ establishmentId }, 'ifood.credenciais_ausentes');
     } else {
-      sources.push(
-        new IfoodOrderSource({
-          clientId: config.IFOOD_CLIENT_ID,
-          clientSecret: config.IFOOD_CLIENT_SECRET,
-          merchantId: config.IFOOD_MERCHANT_ID,
-          logger,
-        }),
-      );
+      const auth = new IfoodAuth({
+        clientId: config.IFOOD_CLIENT_ID,
+        clientSecret: config.IFOOD_CLIENT_SECRET,
+      });
+      const store = new CredentialStore(getPrismaClient(config.DATABASE_URL), config.AUTH_SECRET);
+
+      /*
+       * A credencial é do lojista, não do parceiro: quem não autorizou fica de
+       * fora desta rodada, com o motivo no log, sem derrubar os outros
+       * estabelecimentos que estão funcionando.
+       */
+      const credential = await store.read(establishmentId, 'IFOOD');
+
+      if (!credential) {
+        logger.warn({ establishmentId }, 'ifood.sem_autorizacao');
+      } else if (!credential.merchantId) {
+        logger.warn({ establishmentId }, 'ifood.sem_loja_vinculada');
+      } else {
+        sources.push(
+          new IfoodOrderSource({
+            merchantId: credential.merchantId,
+            accessToken: () =>
+              store.accessTokenFor(establishmentId, 'IFOOD', (refreshToken) =>
+                auth.refresh(refreshToken),
+              ),
+            logger,
+          }),
+        );
+      }
     }
   }
 

@@ -56,6 +56,7 @@ model Establishment {
   orders   Order[]
   routes   Route[]
   events   DomainEventLog[]
+  credentials IntegrationCredential[]
 }
 
 model User {
@@ -206,4 +207,38 @@ model GeocodeCache {
   lat       Float
   lng       Float
   createdAt DateTime @default(now())
+}
+
+enum IntegrationProvider {
+  IFOOD
+  AIQFOME
+}
+
+// Credencial de integração obtida por OAuth, uma por estabelecimento e provedor.
+//
+// Existe porque o aiqfome autoriza por *authorization code*: quem consente é o
+// lojista, no navegador dele, e o que volta é um token com prazo de validade —
+// diferente de uma chave estática, que caberia numa variável de ambiente. Com
+// dois estabelecimentos, cada um traz o seu.
+//
+// Os tokens são gravados **cifrados** (ver `token-cipher`). Um vazamento de
+// dump de banco não pode virar acesso à conta do lojista no marketplace.
+model IntegrationCredential {
+  id              String              @id @default(uuid())
+  establishmentId String
+  provider        IntegrationProvider
+  accessToken     String
+  refreshToken    String?
+  scope           String?
+  // A loja que o lojista autorizou. Vem da própria autorização, não de
+  // variável de ambiente: com dois estabelecimentos, cada um tem a sua.
+  merchantId      String?
+  expiresAt       DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+
+  // Reautorizar substitui a credencial anterior em vez de acumular lixo.
+  @@unique([establishmentId, provider])
 }
