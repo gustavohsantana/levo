@@ -57,7 +57,16 @@ export class ImportOrderFromSource {
       }
     }
 
-    if (acknowledged.length > 0) await source.acknowledge(acknowledged);
+    /*
+     * Sempre, mesmo sem nada importado.
+     *
+     * A leva pode ter vindo só com evento que não vira pedido — cancelamento,
+     * mudança de status — e esses também precisam sair da fila da plataforma.
+     * Com a condição `length > 0` que havia aqui, um lote sem pedido novo
+     * deixava tudo sem reconhecimento, e o mesmo lixo voltava a cada 30
+     * segundos até expirar 8 horas depois. Cada adapter decide o que enviar.
+     */
+    await source.acknowledge(acknowledged);
 
     return result;
   }

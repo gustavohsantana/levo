@@ -111,6 +111,8 @@ export class FailingGeocoder implements Geocoder {
 export class FakeOrderSource implements OrderSource {
   readonly kind = 'IFOOD' as const;
   acknowledged: string[] = [];
+  /** Quantas vezes o acknowledgment foi chamado, inclusive com lista vazia. */
+  acknowledgeCalls = 0;
 
   constructor(private pending: ExternalOrder[]) {}
 
@@ -119,6 +121,7 @@ export class FakeOrderSource implements OrderSource {
   }
 
   async acknowledge(externalIds: string[]): Promise<void> {
+    this.acknowledgeCalls++;
     this.acknowledged.push(...externalIds);
   }
 

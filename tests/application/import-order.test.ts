@@ -104,3 +104,21 @@ describe('ImportOrderFromSource', () => {
     expect([...db.orders.values()][0].createdAt).toEqual(new Date('2026-08-22T22:00:00Z'));
   });
 });
+
+describe('ImportOrderFromSource — acknowledgment', () => {
+  it('chama o acknowledgment mesmo quando nada foi importado', async () => {
+    /*
+     * O adapter pode ter consumido eventos que não viram pedido — cancelamento,
+     * mudança de status — e precisa da chamada para tirá-los da fila. Pular o
+     * acknowledgment quando a leva vem sem pedido novo deixava esses eventos
+     * voltando a cada ciclo até expirarem horas depois.
+     */
+    const source = new FakeOrderSource([]);
+
+    const result = await importOrders.execute(source);
+
+    expect(result).toEqual({ imported: 0, duplicates: 0, failed: 0 });
+    expect(source.acknowledgeCalls).toBe(1);
+    expect(source.acknowledged).toEqual([]);
+  });
+});
