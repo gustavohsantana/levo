@@ -28,7 +28,15 @@ export default async function IntegracoesPage() {
    * Estourar aqui deixaria o dono com uma página quebrada e nenhuma pista do
    * que fazer, quando a saída é um clique.
    */
-  const ifood = await store.read(session.establishmentId, 'IFOOD').catch(() => null);
+  const ifood = await store.read(session.establishmentId, 'IFOOD').catch((cause) => {
+    // Engolir em silêncio esconde a causa justamente quando ela importa: sem
+    // isto, uma credencial ilegível é indistinguível de nunca ter conectado.
+    console.error('[integracoes] credencial ilegível', {
+      establishmentId: session.establishmentId,
+      cause: String(cause),
+    });
+    return null;
+  });
   const nomeDaLoja = ifood?.merchantId ? await buscarNome(ifood) : null;
 
   return (

@@ -156,3 +156,20 @@ describe('CredentialStore', () => {
     expect(criado.merchantId).toBe('loja-9');
   });
 });
+
+describe('CredentialStore — credencial ilegível', () => {
+  it('explica o que fazer quando o segredo não abre a credencial', async () => {
+    /*
+     * O erro cru do AES-GCM — "Unsupported state or unable to authenticate
+     * data" — não menciona chave, credencial nem AUTH_SECRET, e apareceu a cada
+     * 30 segundos no log do worker mandando quem investigava procurar no lugar
+     * errado.
+     */
+    const { client } = fakePrisma(storedRow());
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const store = new CredentialStore(client as any, 'outro-segredo-de-32-caracteres-ou-mais!');
+
+    await expect(store.read('est-1', 'IFOOD')).rejects.toThrow(/AUTH_SECRET/);
+    await expect(store.read('est-1', 'IFOOD')).rejects.toThrow(/Reconecte/);
+  });
+});

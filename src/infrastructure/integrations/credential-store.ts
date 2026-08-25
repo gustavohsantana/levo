@@ -60,13 +60,30 @@ export class CredentialStore {
 
     if (!row) return null;
 
-    return {
-      accessToken: decryptToken(row.accessToken, this.secret),
-      refreshToken: row.refreshToken ? decryptToken(row.refreshToken, this.secret) : null,
-      expiresAt: row.expiresAt,
-      merchantId: row.merchantId,
-      scope: row.scope,
-    };
+    try {
+      return {
+        accessToken: decryptToken(row.accessToken, this.secret),
+        refreshToken: row.refreshToken ? decryptToken(row.refreshToken, this.secret) : null,
+        expiresAt: row.expiresAt,
+        merchantId: row.merchantId,
+        scope: row.scope,
+      };
+    } catch {
+      /*
+       * "Unsupported state or unable to authenticate data" é o que o AES-GCM
+       * diz quando a chave não abre o que foi fechado — e não menciona chave,
+       * credencial nem AUTH_SECRET. Aparecendo a cada 30 segundos no log do
+       * worker, manda quem investiga procurar no lugar errado.
+       *
+       * A causa é sempre a mesma: o AUTH_SECRET mudou, ou difere entre os
+       * ambientes que leem esta credencial. A saída é reconectar a plataforma.
+       */
+      throw new ConfigurationError(
+        `${provider}: credencial ilegível — o AUTH_SECRET mudou ou difere entre ambientes. ` +
+          'Reconecte a plataforma em Integrações.',
+        { establishmentId, provider },
+      );
+    }
   }
 
   /**
