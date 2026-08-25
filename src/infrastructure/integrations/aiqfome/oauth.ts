@@ -44,8 +44,19 @@ interface TokenResponse {
   token_type?: string;
 }
 
-const DEFAULT_AUTHORIZATION_URL = 'https://id.magalu.com/oauth/authorize';
-const DEFAULT_TOKEN_URL = 'https://id.magalu.com/oauth/token';
+/*
+ * Endereços do provedor de identidade, lidos da descoberta OpenID publicada em
+ * https://id.magalu.com/.well-known/openid-configuration.
+ *
+ * O domínio que atende é `autoseg-idp.luizalabs.com`; `id.magalu.com` só serve
+ * o documento de descoberta. Escrever o palpite óbvio — /oauth/token no mesmo
+ * domínio — dá 404, e o erro não sugere em nenhum momento que o host é outro.
+ *
+ * Se mudarem, a descoberta continua sendo a fonte: consulte-a antes de editar
+ * estas constantes.
+ */
+const DEFAULT_AUTHORIZATION_URL = 'https://autoseg-idp.luizalabs.com/oauth/authorize';
+const DEFAULT_TOKEN_URL = 'https://autoseg-idp.luizalabs.com/oauth/token';
 
 export class AiqfomeOAuth {
   private readonly authorizationUrl: string;

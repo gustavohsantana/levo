@@ -20,7 +20,15 @@ export default async function IntegracoesPage() {
   const prisma = getPrismaClient(env().DATABASE_URL);
   const store = new CredentialStore(prisma, env().AUTH_SECRET);
 
-  const ifood = await store.read(session.establishmentId, 'IFOOD');
+  /*
+   * Credencial ilegível não pode derrubar a tela.
+   *
+   * Os tokens são cifrados com o AUTH_SECRET, e se ele mudar entre ambientes —
+   * ou for rotacionado — o decifrar falha. Isso é recuperável: basta reconectar.
+   * Estourar aqui deixaria o dono com uma página quebrada e nenhuma pista do
+   * que fazer, quando a saída é um clique.
+   */
+  const ifood = await store.read(session.establishmentId, 'IFOOD').catch(() => null);
   const nomeDaLoja = ifood?.merchantId ? await buscarNome(ifood) : null;
 
   return (

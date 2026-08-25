@@ -15,6 +15,13 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:
  * sessão, derivado para um uso distinto. Trocar o `AUTH_SECRET` invalida as
  * credenciais guardadas e exige reautorizar; é o comportamento correto, e o
  * mesmo que já acontece com as sessões.
+ *
+ * ⚠️  **O `AUTH_SECRET` precisa ser IDÊNTICO em todos os ambientes que leem
+ * estas credenciais** — site, worker e scripts. Ele não é apenas um segredo de
+ * sessão: é a chave da cifra. Ambientes com valores diferentes produzem
+ * "Unsupported state or unable to authenticate data" ao decifrar, uma mensagem
+ * que não menciona nem o segredo nem a credencial, e que já custou uma tela em
+ * produção aqui.
  */
 const ALGORITHM = 'aes-256-gcm';
 const IV_BYTES = 12;
