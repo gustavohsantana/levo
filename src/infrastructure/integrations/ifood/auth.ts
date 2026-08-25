@@ -13,13 +13,51 @@ import { ExternalServiceError } from '@/core';
  *   3. o app troca esse código, junto com o `verifier` do passo 1, por
  *      `accessToken` e `refreshToken`.
  *
- * O token dura 6 horas (`expiresIn: 21600`), então renovar pelo `refreshToken`
- * é parte do funcionamento normal, não caso de exceção — um turno de sábado
- * atravessa esse prazo.
+ * Renovar pelo `refreshToken` é parte do funcionamento normal, não caso de
+ * exceção — um turno de sábado atravessa a validade do token. Sobre qual é essa
+ * validade, veja `expiryOf`: o `expiresIn` da resposta não é confiável.
  *
  * Os nomes dos campos são os do iFood (camelCase), que não seguem o RFC 6749.
  */
 const DEFAULT_BASE_URL = 'https://merchant-api.ifood.com.br';
+
+/**
+ * Quando o token de fato morre.
+ *
+ * O iFood responde `expiresIn: 21600` — seis horas —, mas o `exp` de dentro do
+ * próprio JWT vence três horas antes, e é o `exp` que o servidor faz valer. Um
+ * token que pelo `expiresIn` ainda teria duas horas de vida responde
+ * `401 {"message": "token expired"}`.
+ *
+ * Confiar no `expiresIn` fazia o worker parar sozinho no meio do expediente: a
+ * renovação só era tentada perto do prazo declarado, quando o token real já
+ * tinha morrido havia horas — e aí os pedidos simplesmente não entravam, sem
+ * nada na tela que explicasse por quê.
+ *
+ * Entre os dois prazos vale o que vencer primeiro. Esticar a validade é o único
+ * erro caro aqui: renovar cedo demais custa uma chamada, renovar tarde demais
+ * custa pedidos.
+ */
+function expiryOf(accessToken: string, expiresIn: number): Date {
+  const declarado = new Date(Date.now() + expiresIn * 1000);
+
+  const corpo = accessToken.split('.')[1];
+  if (!corpo) return declarado;
+
+  try {
+    const claims = JSON.parse(Buffer.from(corpo, 'base64url').toString('utf8')) as {
+      exp?: unknown;
+    };
+
+    if (typeof claims.exp !== 'number' || !Number.isFinite(claims.exp)) return declarado;
+
+    const real = new Date(claims.exp * 1000);
+    return real < declarado ? real : declarado;
+  } catch {
+    // Token opaco ou corpo ilegível: o `expiresIn` é o que temos.
+    return declarado;
+  }
+}
 
 export interface IfoodUserCode {
   /** O que o lojista digita no portal. */
@@ -100,7 +138,7 @@ export class IfoodAuth {
     return {
       accessToken: payload.accessToken,
       refreshToken: payload.refreshToken ?? null,
-      expiresAt: new Date(Date.now() + payload.expiresIn * 1000),
+      expiresAt: expiryOf(payload.accessToken, payload.expiresIn),
     };
   }
 
