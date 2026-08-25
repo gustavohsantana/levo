@@ -3,23 +3,15 @@ import { ExternalServiceError } from '@/core';
 /**
  * Autenticação do aiqfome, contra o ID Magalu.
  *
- * **`clientCredentials` está verificado contra o ambiente real**; o par
- * authorize/exchange abaixo não. A credencial de parceiro emite token sozinha,
- * sem consentimento de lojista — modelo centralizado:
+ * O token é **por loja**. A documentação da API V2 é explícita: o lojista
+ * autoriza o aplicativo em cada loja dele, e cada uma tem seu próprio token.
+ * Por isso o caminho é `authorization_code`, e por isso a credencial acaba no
+ * `CredentialStore`, por estabelecimento — igual ao iFood.
  *
- *     POST /oauth/token  grant_type=client_credentials   → 200
- *     aud     https://aiqfome.com
- *     scope   aqf:menu:read aqf:order:create aqf:order:read aqf:store:read
- *     validade 7200 s, sem refresh_token
- *
- * Sem `refresh_token` na resposta: quando o token vence, pede-se outro. Não é
- * omissão da plataforma, é o que o modelo implica — não há sessão de usuário
- * para renovar.
- *
- * O `authorization_code` continua aqui porque o IdP o anuncia em
- * `grant_types_supported` e um dia pode ser o caminho para vincular loja a
- * loja. Enquanto o credenciamento não disser que é assim, **não é o caminho
- * principal** — quem importa pedido usa `clientCredentials`.
+ * Isso foi confirmado do jeito mais direto possível: um token de parceiro
+ * (`client_credentials`) atravessa o gateway sem problema e ainda assim leva
+ * `401 Unauthorized` em `/api/v2/store` e `/api/v2/orders`. Ele identifica o
+ * aplicativo; não representa loja nenhuma. Ver `clientCredentials`.
  */
 export interface AiqfomeOAuthOptions {
   clientId: string;
@@ -53,18 +45,22 @@ interface TokenResponse {
 }
 
 /*
- * Endereços do provedor de identidade, lidos da descoberta OpenID publicada em
- * https://id.magalu.com/.well-known/openid-configuration.
+ * Endereços do ID Magalu, como a documentação do aiqfome os publica.
  *
- * O domínio que atende é `autoseg-idp.luizalabs.com`; `id.magalu.com` só serve
- * o documento de descoberta. Escrever o palpite óbvio — /oauth/token no mesmo
- * domínio — dá 404, e o erro não sugere em nenhum momento que o host é outro.
- *
- * Se mudarem, a descoberta continua sendo a fonte: consulte-a antes de editar
- * estas constantes.
+ * A descoberta OpenID em https://id.magalu.com/.well-known/openid-configuration
+ * aponta para `autoseg-idp.luizalabs.com`, que também responde — mas o que o
+ * aiqfome documenta e suporta é `id.magalu.com`, verificado com POST 200 no
+ * endpoint de token. Entre os dois, vale o que eles dizem sustentar.
  */
-const DEFAULT_AUTHORIZATION_URL = 'https://autoseg-idp.luizalabs.com/oauth/authorize';
-const DEFAULT_TOKEN_URL = 'https://autoseg-idp.luizalabs.com/oauth/token';
+const DEFAULT_AUTHORIZATION_URL = 'https://id.magalu.com/login';
+const DEFAULT_TOKEN_URL = 'https://id.magalu.com/oauth/token';
+
+/*
+ * Os escopos que a credencial já carrega — lidos da resposta do próprio IdP,
+ * não escolhidos por nós. Pedir menos do que foi concedido só tiraria função do
+ * produto; pedir nome que não existe derruba a autorização com `invalid_scope`.
+ */
+const DEFAULT_SCOPE = 'aqf:menu:read aqf:order:create aqf:order:read aqf:store:read';
 
 export class AiqfomeOAuth {
   private readonly authorizationUrl: string;
@@ -75,7 +71,17 @@ export class AiqfomeOAuth {
     this.tokenUrl = options.tokenUrl ?? DEFAULT_TOKEN_URL;
   }
 
-  /** Para onde mandar o lojista consentir. */
+  /**
+   * Para onde mandar o lojista consentir.
+   *
+   * O endereço é `/login`, não `/oauth/authorize` — é o que o aiqfome documenta
+   * para o vínculo de lojas, e o que a tela deles espera.
+   *
+   * Antes disso o lojista precisa ter ligado a loja ao ID Magalu no painel do
+   * Geraldo, com **o mesmo e-mail**. Sem esse passo manual o consentimento
+   * completa e não encontra loja nenhuma — falha silenciosa, do tipo que só
+   * aparece quando o primeiro pedido não entra.
+   */
   buildAuthorizationUrl(state: string): string {
     const url = new URL(this.authorizationUrl);
 
@@ -83,29 +89,26 @@ export class AiqfomeOAuth {
     url.searchParams.set('client_id', this.options.clientId);
     url.searchParams.set('redirect_uri', this.options.redirectUri);
     url.searchParams.set('state', state);
+    // Deixa o lojista escolher com qual conta entrar; sem isto, quem tem mais
+    // de um tenant no Magalu autoriza pelo errado sem perceber.
+    url.searchParams.set('choose_tenants', 'true');
 
-    /*
-     * O escopo é declarado no cadastro do aplicativo, no portal do parceiro —
-     * o formulário tem caixas para "ver pedidos", "editar loja" e afins. Como
-     * os identificadores desses escopos não são públicos, mandar um palpite
-     * aqui derruba a autorização com `invalid_scope`, que é um erro bem menos
-     * óbvio de diagnosticar do que a ausência do parâmetro.
-     *
-     * Então: por padrão não enviamos nada e valem os escopos do cadastro.
-     * Quando o credenciamento sair com os nomes certos, `AIQFOME_SCOPE`
-     * assume, sem precisar de deploy de código.
-     */
-    if (this.options.scope) url.searchParams.set('scope', this.options.scope);
+    // `AIQFOME_SCOPE` assume se o cadastro do aplicativo mudar, sem deploy.
+    url.searchParams.set('scope', this.options.scope ?? DEFAULT_SCOPE);
 
     return url.toString();
   }
 
   /**
-   * Token de parceiro, sem lojista no meio.
+   * Token de parceiro — **não serve para ler pedidos**.
    *
-   * Os escopos não vão no pedido: vêm do cadastro do aplicativo, e o IdP os
-   * devolve na resposta. Mandar um palpite aqui só estreitaria o que já foi
-   * concedido.
+   * A API responde `401` a ele: identifica o aplicativo, não a loja. Fica aqui
+   * porque é a forma mais barata de checar se a credencial do parceiro está
+   * viva: se isto falha, `client_id`/`client_secret` estão errados e não
+   * adianta mandar o lojista consentir.
+   *
+   * Verificado contra o ambiente real: 200, escopos
+   * `aqf:menu:read aqf:order:create aqf:order:read aqf:store:read`, 7200 s.
    */
   async clientCredentials(): Promise<AiqfomeTokens> {
     return this.requestToken({ grant_type: 'client_credentials' });

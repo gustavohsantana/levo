@@ -35,11 +35,23 @@ describe('AiqfomeOAuth', () => {
       expect(url.searchParams.get('state')).toBe('estado-abc');
     });
 
-    it('não manda scope quando não há um configurado', () => {
-      // Palpite de escopo derruba a autorização com `invalid_scope`; sem o
-      // parâmetro, valem os escopos marcados no cadastro do aplicativo.
+    it('manda os escopos da credencial quando nenhum é configurado', () => {
+      // Não é palpite: são os escopos que o próprio IdP devolve para esta
+      // credencial. Omitir o parâmetro deixaria o consentimento sem permissão
+      // de ler pedido, que é a única coisa que o Levô precisa.
       const url = new URL(new AiqfomeOAuth(options).buildAuthorizationUrl('estado-abc'));
-      expect(url.searchParams.has('scope')).toBe(false);
+
+      expect(url.searchParams.get('scope')).toBe(
+        'aqf:menu:read aqf:order:create aqf:order:read aqf:store:read',
+      );
+    });
+
+    it('deixa o lojista escolher a conta', () => {
+      // Quem tem mais de um tenant no Magalu autorizaria pelo errado sem isto,
+      // e o sintoma seria uma loja conectada que nunca recebe pedido.
+      const url = new URL(new AiqfomeOAuth(options).buildAuthorizationUrl('estado-abc'));
+
+      expect(url.searchParams.get('choose_tenants')).toBe('true');
     });
 
     it('manda o scope quando configurado', () => {

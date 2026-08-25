@@ -1,7 +1,6 @@
 import { ConfigurationError } from '@/core';
 import { env } from '@/env';
-import { AiqfomeOAuth } from './oauth';
-import { AiqfomeTokenProvider } from './token-provider';
+import { AiqfomeOAuth, type AiqfomeTokens } from './oauth';
 
 /**
  * O `redirect_uri`, num lugar só.
@@ -39,15 +38,25 @@ export function aiqfomeOAuth(): AiqfomeOAuth {
 }
 
 /**
- * Um provedor por processo.
+ * O token de uma loja, renovado quando precisa.
  *
- * A credencial é do parceiro, não do lojista, então o token serve todos os
- * estabelecimentos — e um cache de módulo evita que cada tick do worker peça
- * um token novo para algo que dura duas horas.
+ * Mesma forma do iFood: quem guarda, cifra e renova é o `CredentialStore`. O
+ * aiqfome devolve `refresh_token` no consentimento, então renovar não obriga o
+ * lojista a autorizar de novo a cada duas horas.
  */
-let provider: AiqfomeTokenProvider | null = null;
-
-export function aiqfomeAccessToken(): () => Promise<string> {
-  provider ??= new AiqfomeTokenProvider(aiqfomeOAuth());
-  return () => provider!.accessToken();
+export function aiqfomeAccessTokenFor(
+  store: {
+    accessTokenFor: (
+      establishmentId: string,
+      provider: 'AIQFOME',
+      refresh: (refreshToken: string) => Promise<AiqfomeTokens>,
+    ) => Promise<string>;
+  },
+  establishmentId: string,
+): () => Promise<string> {
+  const oauth = aiqfomeOAuth();
+  return () =>
+    store.accessTokenFor(establishmentId, 'AIQFOME', (refreshToken) =>
+      oauth.refresh(refreshToken),
+    );
 }

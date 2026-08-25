@@ -8,52 +8,65 @@ import {
 interface Options {
   baseUrl?: string;
   /**
-   * Função, não valor: o token do aiqfome dura duas horas e é trocado por um
-   * novo, então um `string` fixo aqui envelheceria em silêncio no meio do
-   * expediente. Ver `AiqfomeTokenProvider`.
+   * Função, não valor: o token dura 7200 s e é renovado pelo `refresh_token`,
+   * então um `string` fixo aqui envelheceria em silêncio no meio do turno.
    */
   accessToken: () => Promise<string>;
-  merchantId: string;
+  /** `id` numérico da loja no aiqfome — o que vai em `filter[store_ids]`. */
+  storeId: string;
+  /** Identifica o parceiro nos logs deles; a plataforma pede no `User-Agent`. */
+  contact?: string;
   logger?: Logger;
 }
 
+/*
+ * Recortes do pedido da API V2, conferidos contra o exemplo publicado em
+ * developer.aiqfome.com/docs/api/v2/show-order. Só o que o Levô usa: o payload
+ * completo tem itens, cupons, avaliação e histórico de entrega da aiqentrega.
+ */
 interface AiqfomeOrder {
-  id: string | number;
-  cliente?: { nome?: string; telefone?: string };
-  entrega?: {
-    endereco?: string;
-    logradouro?: string;
-    numero?: string;
-    bairro?: string;
-    cidade?: string;
-    complemento?: string;
-    referencia?: string;
+  id: number;
+  created_at?: string;
+  is_pickup?: boolean;
+  order_observations?: string;
+  user?: {
+    name?: string;
+    surname?: string;
+    mobile_phone?: string;
+    phone_number?: string;
+    address?: AiqfomeAddress | string | null;
   };
-  valor_total?: number;
-  observacao?: string;
-  criado_em?: string;
+  payment_method?: { total?: string | number };
+  timeline?: { created_at?: string; timezone?: string };
+}
+
+interface AiqfomeAddress {
+  street?: string;
+  number?: string | number;
+  neighborhood?: string;
+  city?: string;
+  complement?: string;
+  reference?: string;
+  zip_code?: string;
 }
 
 /**
- * Adapter do aiqfome.
+ * Adapter do aiqfome, API V2.
  *
- * ⚠️  **A autenticação está verificada; os caminhos dos recursos não.**
+ * Os endereços vêm da documentação oficial e do gateway real:
  *
- * O que foi confirmado contra o ambiente real: o token de parceiro
- * (`client_credentials`, escopos `aqf:order:read` entre outros) e o gateway em
- * `merchant-api.aiqfome.com`, um Kong à frente de um serviço uvicorn. Sondando
- * o gateway, `/store/v1/store…` responde como aplicação; os demais prefixos
- * respondem "no Route matched", que é o gateway recusando antes de chegar lá.
+ *     GET  /api/v2/orders?filter[store_ids]=…   pedidos não lidos
+ *     POST /api/v2/orders/mark-as-read          { order_id }
  *
- * Os caminhos abaixo, esses continuam vindo da documentação pública e **não**
- * foram exercitados. Adivinhar rota em API de terceiro rende 404 indistinguível
- * de permissão faltando, então eles ficam configuráveis por `AIQFOME_BASE_URL`
- * e mudam quando o credenciamento sair — sem tocar no resto.
+ * O token é **por loja**: o lojista autoriza o aplicativo em cada loja dele, e
+ * cada uma tem o seu. Uma credencial de parceiro (`client_credentials`) passa
+ * pelo gateway e é recusada pela API com 401 — ela identifica o aplicativo, não
+ * a loja. Ver `AiqfomeOAuth`.
  *
- * Desligado por `AIQFOME_ENABLED`.
- *
- * O contrato de campos é mais fluido que o do iFood, então o mapeamento aceita
- * tanto o endereço já formatado quanto os campos separados — o que vier.
+ * ⚠️  O formato do endereço não está confirmado: no exemplo publicado o pedido
+ * é de retirada e `user.address` vem `null`. O mapeamento aceita tanto string
+ * pronta quanto campos separados, e um endereço vazio vira erro visível na
+ * importação em vez de uma parada sem rua.
  */
 export class AiqfomeOrderSource implements OrderSource {
   readonly kind = 'AIQFOME' as const;
@@ -61,49 +74,50 @@ export class AiqfomeOrderSource implements OrderSource {
   private readonly baseUrl: string;
 
   constructor(private readonly options: Options) {
-    this.baseUrl = (options.baseUrl ?? 'https://merchant-api.aiqfome.com').replace(/\/$/, '');
+    this.baseUrl = (options.baseUrl ?? 'https://plataforma.aiqfome.com').replace(/\/$/, '');
   }
 
   async fetchPending(): Promise<ExternalOrder[]> {
-    const token = await this.options.accessToken();
+    const url = new URL('/api/v2/orders', this.baseUrl);
+    url.searchParams.set('filter[store_ids]', this.options.storeId);
 
-    const response = await fetch(
-      `${this.baseUrl}/merchants/${this.options.merchantId}/orders?status=pendente`,
-      {
-        headers: {
-          authorization: `Bearer ${token}`,
-          accept: 'application/json',
-        },
-        signal: AbortSignal.timeout(20_000),
-      },
-    );
+    const response = await fetch(url, {
+      headers: await this.headers(),
+      signal: AbortSignal.timeout(20_000),
+    });
 
     if (response.status === 204) return [];
     if (!response.ok) {
-      throw new ExternalServiceError('aiqfome', `HTTP ${response.status}`);
+      const detail = await response.text().catch(() => '');
+      throw new ExternalServiceError(
+        'aiqfome',
+        `HTTP ${response.status}${detail ? ` — ${detail.slice(0, 200)}` : ''}`,
+      );
     }
 
-    const payload = (await response.json()) as { pedidos?: AiqfomeOrder[] } | AiqfomeOrder[];
-    const orders = Array.isArray(payload) ? payload : (payload.pedidos ?? []);
+    const payload = (await response.json()) as { data?: AiqfomeOrder[] };
+    const orders = payload.data ?? [];
 
-    return orders.map(mapAiqfomeOrder);
+    /*
+     * Pedido de retirada não tem entrega. Importá-lo colocaria no painel uma
+     * parada que ninguém vai fazer — e o motoboy descobriria isso na porta.
+     */
+    return orders.filter((order) => !order.is_pickup).map(mapAiqfomeOrder);
   }
 
   async acknowledge(externalIds: string[]): Promise<void> {
     if (externalIds.length === 0) return;
 
-    const token = await this.options.accessToken();
+    const headers = { ...(await this.headers()), 'content-type': 'application/json' };
 
     for (const externalId of externalIds) {
       try {
-        await fetch(
-          `${this.baseUrl}/merchants/${this.options.merchantId}/orders/${externalId}/ack`,
-          {
-            method: 'POST',
-            headers: { authorization: `Bearer ${token}` },
-            signal: AbortSignal.timeout(15_000),
-          },
-        );
+        await fetch(new URL('/api/v2/orders/mark-as-read', this.baseUrl), {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ order_id: Number(externalId) }),
+          signal: AbortSignal.timeout(15_000),
+        });
       } catch (cause) {
         // Falhar o ack só faz o pedido voltar no próximo ciclo, onde a
         // idempotência o descarta. Não vale derrubar a importação por isso.
@@ -111,29 +125,118 @@ export class AiqfomeOrderSource implements OrderSource {
       }
     }
   }
+
+  private async headers(): Promise<Record<string, string>> {
+    return {
+      authorization: `Bearer ${await this.options.accessToken()}`,
+      accept: 'application/json',
+      'user-agent': `Levo (${this.options.contact ?? 'contato@levoentregas.com.br'})`,
+    };
+  }
 }
 
 export function mapAiqfomeOrder(payload: AiqfomeOrder): ExternalOrder {
-  const delivery = payload.entrega;
+  const user = payload.user;
+  const endereco = user?.address;
 
-  const formatted =
-    delivery?.endereco ??
-    [
-      [delivery?.logradouro, delivery?.numero].filter(Boolean).join(', '),
-      delivery?.bairro,
-      delivery?.cidade,
-    ]
-      .filter(Boolean)
-      .join(' - ');
+  const nome = [user?.name, user?.surname].filter(Boolean).join(' ').trim();
 
   return {
     externalId: String(payload.id),
-    customerName: payload.cliente?.nome?.trim() || 'Cliente aiqfome',
-    customerPhone: payload.cliente?.telefone ?? null,
-    address: formatted,
-    reference: delivery?.complemento ?? delivery?.referencia ?? null,
-    amountCents: Math.round((payload.valor_total ?? 0) * 100),
-    notes: payload.observacao?.trim() || null,
-    placedAt: payload.criado_em ? new Date(payload.criado_em) : new Date(),
+    customerName: nome || 'Cliente aiqfome',
+    customerPhone: user?.mobile_phone ?? user?.phone_number ?? null,
+    address: formatAddress(endereco),
+    reference:
+      typeof endereco === 'object' && endereco
+        ? (endereco.complement ?? endereco.reference ?? null)
+        : null,
+    amountCents: toCents(payload.payment_method?.total),
+    notes: payload.order_observations?.trim() || null,
+    placedAt: parseDate(
+      payload.timeline?.created_at ?? payload.created_at,
+      payload.timeline?.timezone,
+    ),
   };
+}
+
+function formatAddress(endereco: AiqfomeAddress | string | null | undefined): string {
+  if (typeof endereco === 'string') return endereco;
+  if (!endereco) return '';
+
+  return [
+    [endereco.street, endereco.number].filter(Boolean).join(', '),
+    endereco.neighborhood,
+    endereco.city,
+  ]
+    .filter(Boolean)
+    .join(' - ');
+}
+
+/**
+ * O total vem como string — `"330.97"` — e virar centavos por multiplicação
+ * direta erra por um centavo em alguns valores, porque 330.97 não existe em
+ * binário. Arredondar depois de multiplicar resolve, e é dinheiro: não é o
+ * lugar de confiar na sorte do ponto flutuante.
+ */
+function toCents(total: string | number | undefined): number {
+  const valor = typeof total === 'string' ? Number.parseFloat(total) : (total ?? 0);
+  return Number.isFinite(valor) ? Math.round(valor * 100) : 0;
+}
+
+/**
+ * As datas vêm sem fuso — `"2023-06-15 15:43:03"` — e o fuso da loja vem à
+ * parte, em `timeline.timezone`. Deixar o `Date` adivinhar faz o servidor, que
+ * roda em UTC, ler esse horário como três horas mais cedo do que foi.
+ *
+ * Já pagamos por isso uma vez: pedido feito às 15:02 aparecia às 18:02 no
+ * painel, e ninguém desconfia de um relógio que mostra um horário plausível.
+ */
+function parseDate(texto: string | undefined, timeZone = 'America/Sao_Paulo'): Date {
+  if (!texto) return new Date();
+
+  const partes = texto.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/);
+  if (!partes) {
+    const solto = new Date(texto);
+    return Number.isNaN(solto.getTime()) ? new Date() : solto;
+  }
+
+  const [, ano, mes, dia, hora, minuto, segundo] = partes.map(Number) as unknown as number[];
+  const comoSeFosseUtc = Date.UTC(ano, mes - 1, dia, hora, minuto, segundo);
+
+  /*
+   * Descobre o deslocamento invertendo a conversão: formata o instante no fuso
+   * da loja e mede o quanto ele andou. Evita tabela de fusos e acompanha
+   * mudanças de horário de verão sem depender de biblioteca.
+   */
+  try {
+    const formatador = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hour12: false,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+
+    const campos = Object.fromEntries(
+      formatador.formatToParts(new Date(comoSeFosseUtc)).map((p) => [p.type, p.value]),
+    );
+
+    const devolta = Date.UTC(
+      Number(campos.year),
+      Number(campos.month) - 1,
+      Number(campos.day),
+      Number(campos.hour) % 24,
+      Number(campos.minute),
+      Number(campos.second),
+    );
+
+    return new Date(comoSeFosseUtc - (devolta - comoSeFosseUtc));
+  } catch {
+    // Fuso desconhecido: melhor o horário sem conversão do que estourar a
+    // importação inteira por causa de um campo.
+    return new Date(comoSeFosseUtc);
+  }
 }

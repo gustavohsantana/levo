@@ -97,42 +97,76 @@ describe('mapIfoodOrder', () => {
 });
 
 describe('mapAiqfomeOrder', () => {
-  it('mapeia os campos em português', () => {
-    const order = mapAiqfomeOrder({
-      id: 4711,
-      cliente: { nome: 'Carlos Prado', telefone: '41988887777' },
-      entrega: {
-        logradouro: 'Rua Itupava',
-        numero: '900',
-        bairro: 'Alto da Rua XV',
-        cidade: 'Curitiba',
-        complemento: 'Casa dos fundos',
+  /*
+   * Campos conferidos contra o exemplo publicado em
+   * developer.aiqfome.com/docs/api/v2/show-order.
+   */
+  const pedido = {
+    id: 68635798,
+    order_observations: '  sem cebola  ',
+    user: {
+      name: 'Vini001',
+      surname: 'Test',
+      mobile_phone: '(19) 9-9471-8672',
+      address: {
+        street: 'Rua das Palmeiras',
+        number: 120,
+        neighborhood: 'Centro',
+        city: 'Pouso Alegre',
+        complement: 'apto 42',
       },
-      valor_total: 74.5,
-      observacao: 'Deixar na portaria',
-      criado_em: '2026-08-22T22:10:00Z',
-    });
+    },
+    payment_method: { total: '330.97' },
+    timeline: { created_at: '2023-06-15 15:43:03', timezone: 'America/Sao_Paulo' },
+  };
 
-    expect(order.externalId).toBe('4711'); // id numérico vira texto
-    expect(order.address).toBe('Rua Itupava, 900 - Alto da Rua XV - Curitiba');
-    expect(order.reference).toBe('Casa dos fundos');
-    expect(order.amountCents).toBe(7450);
-    expect(order.notes).toBe('Deixar na portaria');
+  it('mapeia o pedido da API V2', () => {
+    const order = mapAiqfomeOrder(pedido);
+
+    expect(order.externalId).toBe('68635798');
+    expect(order.customerName).toBe('Vini001 Test');
+    expect(order.customerPhone).toBe('(19) 9-9471-8672');
+    expect(order.address).toBe('Rua das Palmeiras, 120 - Centro - Pouso Alegre');
+    expect(order.reference).toBe('apto 42');
+    expect(order.notes).toBe('sem cebola');
   });
 
-  it('prefere o endereço formatado quando disponível', () => {
+  it('converte o total em centavos sem erro de ponto flutuante', () => {
+    // 330.97 * 100 dá 33096.999... em binário: sem arredondar, some um centavo.
+    expect(mapAiqfomeOrder(pedido).amountCents).toBe(33_097);
+  });
+
+  it('lê a data no fuso da loja, não no do servidor', () => {
+    // O servidor roda em UTC. Sem converter, um pedido das 15:43 apareceria
+    // às 18:43 no painel — plausível o bastante para ninguém desconfiar.
+    expect(mapAiqfomeOrder(pedido).placedAt.toISOString()).toBe('2023-06-15T18:43:03.000Z');
+  });
+
+  it('respeita o fuso informado quando não é o de São Paulo', () => {
     const order = mapAiqfomeOrder({
-      id: '1',
-      entrega: { endereco: 'Av. Iguaçu, 2200 - Água Verde, Curitiba', logradouro: 'ignorado' },
+      ...pedido,
+      timeline: { created_at: '2023-06-15 15:43:03', timezone: 'America/Fortaleza' },
     });
 
-    expect(order.address).toBe('Av. Iguaçu, 2200 - Água Verde, Curitiba');
+    expect(order.placedAt.toISOString()).toBe('2023-06-15T18:43:03.000Z');
   });
 
-  it('sobrevive a payload mínimo', () => {
+  it('aceita endereço já formatado', () => {
+    const order = mapAiqfomeOrder({
+      ...pedido,
+      user: { ...pedido.user, address: 'Rua Um, 2 - Centro - Pouso Alegre' },
+    });
+
+    expect(order.address).toBe('Rua Um, 2 - Centro - Pouso Alegre');
+    expect(order.reference).toBeNull();
+  });
+
+  it('sobrevive a um pedido sem cliente nem endereço', () => {
     const order = mapAiqfomeOrder({ id: 9 });
 
     expect(order.customerName).toBe('Cliente aiqfome');
+    expect(order.customerPhone).toBeNull();
+    expect(order.address).toBe('');
     expect(order.amountCents).toBe(0);
     expect(order.placedAt).toBeInstanceOf(Date);
   });

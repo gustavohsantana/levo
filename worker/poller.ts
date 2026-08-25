@@ -7,7 +7,7 @@ import { IfoodOrderSource } from '../src/infrastructure/integrations/ifood/adapt
 import { IfoodAuth } from '../src/infrastructure/integrations/ifood/auth';
 import { CredentialStore } from '../src/infrastructure/integrations/credential-store';
 import { AiqfomeOrderSource } from '../src/infrastructure/integrations/aiqfome/adapter';
-import { aiqfomeAccessToken } from '../src/infrastructure/integrations/aiqfome/factory';
+import { aiqfomeAccessTokenFor } from '../src/infrastructure/integrations/aiqfome/factory';
 import type { OrderSource } from '../src/core';
 
 /**
@@ -74,17 +74,24 @@ async function sourcesFor(establishmentId: string): Promise<OrderSource[]> {
   }
 
   if (config.aiqfomeEnabled) {
-    // A credencial aqui é do parceiro, não do lojista: um `client_credentials`
-    // serve todas as lojas, e o que separa uma da outra é o merchantId.
-    if (!config.AIQFOME_CLIENT_ID || !config.AIQFOME_CLIENT_SECRET) {
-      logger.error({ establishmentId }, 'aiqfome.credenciais_ausentes');
-    } else if (!config.AIQFOME_MERCHANT_ID) {
-      logger.error({ establishmentId }, 'aiqfome.merchant_ausente');
+    /*
+     * A credencial é da loja, não do parceiro: cada lojista autoriza o
+     * aplicativo na loja dele e o token sai do `CredentialStore`. Sem
+     * consentimento não há o que buscar — e isso não é erro, é uma loja que
+     * ainda não conectou.
+     */
+    const store = new CredentialStore(getPrismaClient(config.DATABASE_URL), config.AUTH_SECRET);
+    const credencial = await store.read(establishmentId, 'AIQFOME');
+
+    if (!credencial) {
+      logger.warn({ establishmentId }, 'aiqfome.sem_consentimento');
+    } else if (!credencial.merchantId) {
+      logger.error({ establishmentId }, 'aiqfome.loja_nao_escolhida');
     } else {
       sources.push(
         new AiqfomeOrderSource({
-          accessToken: aiqfomeAccessToken(),
-          merchantId: config.AIQFOME_MERCHANT_ID,
+          accessToken: aiqfomeAccessTokenFor(store, establishmentId),
+          storeId: credencial.merchantId,
           baseUrl: config.AIQFOME_BASE_URL,
           logger,
         }),
