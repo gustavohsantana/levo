@@ -1,17 +1,25 @@
 import { ExternalServiceError } from '@/core';
 
 /**
- * Fluxo *authorization code* do aiqfome.
+ * Autenticação do aiqfome, contra o ID Magalu.
  *
- * ⚠️  **Escrito contra a documentação pública, ainda não homologado** — mesma
- * ressalva do adapter de pedidos. Os endereços de autorização e de token são
- * configuráveis por variável de ambiente justamente porque o credenciamento
- * (API V2 / ID Magalu) é quem fecha esses valores; quando o acesso sair, ligar
- * é conferir os nomes de campo contra o ambiente real, não reescrever o fluxo.
+ * **`clientCredentials` está verificado contra o ambiente real**; o par
+ * authorize/exchange abaixo não. A credencial de parceiro emite token sozinha,
+ * sem consentimento de lojista — modelo centralizado:
  *
- * Por que *authorization code* e não uma chave estática: quem autoriza é o
- * lojista, na conta dele, e o consentimento pode ser revogado. É o modelo que
- * a plataforma exige, e o que faz sentido para um produto multi-estabelecimento.
+ *     POST /oauth/token  grant_type=client_credentials   → 200
+ *     aud     https://aiqfome.com
+ *     scope   aqf:menu:read aqf:order:create aqf:order:read aqf:store:read
+ *     validade 7200 s, sem refresh_token
+ *
+ * Sem `refresh_token` na resposta: quando o token vence, pede-se outro. Não é
+ * omissão da plataforma, é o que o modelo implica — não há sessão de usuário
+ * para renovar.
+ *
+ * O `authorization_code` continua aqui porque o IdP o anuncia em
+ * `grant_types_supported` e um dia pode ser o caminho para vincular loja a
+ * loja. Enquanto o credenciamento não disser que é assim, **não é o caminho
+ * principal** — quem importa pedido usa `clientCredentials`.
  */
 export interface AiqfomeOAuthOptions {
   clientId: string;
@@ -90,6 +98,17 @@ export class AiqfomeOAuth {
     if (this.options.scope) url.searchParams.set('scope', this.options.scope);
 
     return url.toString();
+  }
+
+  /**
+   * Token de parceiro, sem lojista no meio.
+   *
+   * Os escopos não vão no pedido: vêm do cadastro do aplicativo, e o IdP os
+   * devolve na resposta. Mandar um palpite aqui só estreitaria o que já foi
+   * concedido.
+   */
+  async clientCredentials(): Promise<AiqfomeTokens> {
+    return this.requestToken({ grant_type: 'client_credentials' });
   }
 
   async exchangeCode(code: string): Promise<AiqfomeTokens> {

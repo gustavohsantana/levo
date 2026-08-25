@@ -50,6 +50,63 @@ describe('AiqfomeOAuth', () => {
     });
   });
 
+  describe('clientCredentials', () => {
+    /*
+     * Este é o fluxo verificado contra o ambiente real do aiqfome: a credencial
+     * de parceiro emite token sozinha, com os escopos `aqf:*` do cadastro, e a
+     * resposta não traz refresh_token.
+     */
+    it('pede token de parceiro sem lojista no meio', async () => {
+      const fetchMock = respondWith({
+        access_token: 'token-de-parceiro',
+        token_type: 'Bearer',
+        scope: 'aqf:menu:read aqf:order:create aqf:order:read aqf:store:read',
+        expires_in: 7200,
+      });
+
+      const tokens = await new AiqfomeOAuth(options).clientCredentials();
+
+      expect(tokens.accessToken).toBe('token-de-parceiro');
+      expect(tokens.scope).toBe('aqf:menu:read aqf:order:create aqf:order:read aqf:store:read');
+
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe(options.tokenUrl);
+      expect(String(init.body)).toBe('grant_type=client_credentials');
+    });
+
+    it('não manda escopo no pedido', async () => {
+      // Os escopos vêm do cadastro do aplicativo. Pedir um subconjunto por
+      // palpite só estreitaria o que já foi concedido.
+      const fetchMock = respondWith({ access_token: 'token', expires_in: 7200 });
+
+      await new AiqfomeOAuth({ ...options, scope: 'aqf:order:read' }).clientCredentials();
+
+      expect(String(fetchMock.mock.calls[0][1].body)).not.toContain('scope');
+    });
+
+    it('aceita a ausência de refresh_token', async () => {
+      // Modelo centralizado não tem sessão de usuário para renovar: quando o
+      // token vence, pede-se outro. `null` aqui é o normal, não uma falha.
+      respondWith({ access_token: 'token', expires_in: 7200 });
+
+      const tokens = await new AiqfomeOAuth(options).clientCredentials();
+
+      expect(tokens.refreshToken).toBeNull();
+      expect(tokens.expiresAt).toBeInstanceOf(Date);
+    });
+
+    it('propaga a recusa do IdP com o corpo do erro', async () => {
+      respondWith(
+        { error: 'invalid_client', error_description: 'failed_to_authenticate' },
+        { ok: false, status: 401 },
+      );
+
+      await expect(new AiqfomeOAuth(options).clientCredentials()).rejects.toThrow(
+        /failed_to_authenticate/,
+      );
+    });
+  });
+
   describe('exchangeCode', () => {
     it('troca o código por token e calcula o vencimento', async () => {
       const fetchMock = respondWith({

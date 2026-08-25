@@ -1,6 +1,7 @@
 import { ConfigurationError } from '@/core';
 import { env } from '@/env';
 import { AiqfomeOAuth } from './oauth';
+import { AiqfomeTokenProvider } from './token-provider';
 
 /**
  * O `redirect_uri`, num lugar só.
@@ -35,4 +36,18 @@ export function aiqfomeOAuth(): AiqfomeOAuth {
     tokenUrl: config.AIQFOME_TOKEN_URL,
     scope: config.AIQFOME_SCOPE,
   });
+}
+
+/**
+ * Um provedor por processo.
+ *
+ * A credencial é do parceiro, não do lojista, então o token serve todos os
+ * estabelecimentos — e um cache de módulo evita que cada tick do worker peça
+ * um token novo para algo que dura duas horas.
+ */
+let provider: AiqfomeTokenProvider | null = null;
+
+export function aiqfomeAccessToken(): () => Promise<string> {
+  provider ??= new AiqfomeTokenProvider(aiqfomeOAuth());
+  return () => provider!.accessToken();
 }

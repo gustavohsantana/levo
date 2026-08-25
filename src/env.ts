@@ -36,6 +36,7 @@ const schema = z.object({
   AIQFOME_AUTH_URL: z.string().url().optional(),
   AIQFOME_TOKEN_URL: z.string().url().optional(),
   AIQFOME_SCOPE: z.string().optional(),
+  AIQFOME_BASE_URL: z.string().url().optional(),
 
   WEBHOOK_SECRET: z.string().optional(),
 

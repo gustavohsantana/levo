@@ -7,6 +7,7 @@ import { IfoodOrderSource } from '../src/infrastructure/integrations/ifood/adapt
 import { IfoodAuth } from '../src/infrastructure/integrations/ifood/auth';
 import { CredentialStore } from '../src/infrastructure/integrations/credential-store';
 import { AiqfomeOrderSource } from '../src/infrastructure/integrations/aiqfome/adapter';
+import { aiqfomeAccessToken } from '../src/infrastructure/integrations/aiqfome/factory';
 import type { OrderSource } from '../src/core';
 
 /**
@@ -73,13 +74,18 @@ async function sourcesFor(establishmentId: string): Promise<OrderSource[]> {
   }
 
   if (config.aiqfomeEnabled) {
-    if (!config.AIQFOME_API_KEY || !config.AIQFOME_MERCHANT_ID) {
+    // A credencial aqui é do parceiro, não do lojista: um `client_credentials`
+    // serve todas as lojas, e o que separa uma da outra é o merchantId.
+    if (!config.AIQFOME_CLIENT_ID || !config.AIQFOME_CLIENT_SECRET) {
       logger.error({ establishmentId }, 'aiqfome.credenciais_ausentes');
+    } else if (!config.AIQFOME_MERCHANT_ID) {
+      logger.error({ establishmentId }, 'aiqfome.merchant_ausente');
     } else {
       sources.push(
         new AiqfomeOrderSource({
-          apiKey: config.AIQFOME_API_KEY,
+          accessToken: aiqfomeAccessToken(),
           merchantId: config.AIQFOME_MERCHANT_ID,
+          baseUrl: config.AIQFOME_BASE_URL,
           logger,
         }),
       );

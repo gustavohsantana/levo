@@ -7,7 +7,12 @@ import {
 
 interface Options {
   baseUrl?: string;
-  apiKey: string;
+  /**
+   * Função, não valor: o token do aiqfome dura duas horas e é trocado por um
+   * novo, então um `string` fixo aqui envelheceria em silêncio no meio do
+   * expediente. Ver `AiqfomeTokenProvider`.
+   */
+  accessToken: () => Promise<string>;
   merchantId: string;
   logger?: Logger;
 }
@@ -32,13 +37,23 @@ interface AiqfomeOrder {
 /**
  * Adapter do aiqfome.
  *
- * ⚠️  **Escrito contra a documentação pública, ainda não homologado.**
+ * ⚠️  **A autenticação está verificada; os caminhos dos recursos não.**
  *
- * Assim como o iFood, o acesso passa por credenciamento de parceiro
- * desenvolvedor (API V2 / ID Magalu). Desligado por `AIQFOME_ENABLED`.
+ * O que foi confirmado contra o ambiente real: o token de parceiro
+ * (`client_credentials`, escopos `aqf:order:read` entre outros) e o gateway em
+ * `merchant-api.aiqfome.com`, um Kong à frente de um serviço uvicorn. Sondando
+ * o gateway, `/store/v1/store…` responde como aplicação; os demais prefixos
+ * respondem "no Route matched", que é o gateway recusando antes de chegar lá.
+ *
+ * Os caminhos abaixo, esses continuam vindo da documentação pública e **não**
+ * foram exercitados. Adivinhar rota em API de terceiro rende 404 indistinguível
+ * de permissão faltando, então eles ficam configuráveis por `AIQFOME_BASE_URL`
+ * e mudam quando o credenciamento sair — sem tocar no resto.
+ *
+ * Desligado por `AIQFOME_ENABLED`.
  *
  * O contrato de campos é mais fluido que o do iFood, então o mapeamento aceita
- * tanto o endereço já formatado quanto os campos separados — o que for vier.
+ * tanto o endereço já formatado quanto os campos separados — o que vier.
  */
 export class AiqfomeOrderSource implements OrderSource {
   readonly kind = 'AIQFOME' as const;
@@ -46,15 +61,17 @@ export class AiqfomeOrderSource implements OrderSource {
   private readonly baseUrl: string;
 
   constructor(private readonly options: Options) {
-    this.baseUrl = (options.baseUrl ?? 'https://api.aiqfome.com/v2').replace(/\/$/, '');
+    this.baseUrl = (options.baseUrl ?? 'https://merchant-api.aiqfome.com').replace(/\/$/, '');
   }
 
   async fetchPending(): Promise<ExternalOrder[]> {
+    const token = await this.options.accessToken();
+
     const response = await fetch(
       `${this.baseUrl}/merchants/${this.options.merchantId}/orders?status=pendente`,
       {
         headers: {
-          authorization: `Bearer ${this.options.apiKey}`,
+          authorization: `Bearer ${token}`,
           accept: 'application/json',
         },
         signal: AbortSignal.timeout(20_000),
@@ -73,13 +90,17 @@ export class AiqfomeOrderSource implements OrderSource {
   }
 
   async acknowledge(externalIds: string[]): Promise<void> {
+    if (externalIds.length === 0) return;
+
+    const token = await this.options.accessToken();
+
     for (const externalId of externalIds) {
       try {
         await fetch(
           `${this.baseUrl}/merchants/${this.options.merchantId}/orders/${externalId}/ack`,
           {
             method: 'POST',
-            headers: { authorization: `Bearer ${this.options.apiKey}` },
+            headers: { authorization: `Bearer ${token}` },
             signal: AbortSignal.timeout(15_000),
           },
         );
