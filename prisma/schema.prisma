@@ -54,12 +54,13 @@ model Establishment {
   lng       Float
   createdAt DateTime @default(now())
 
-  users    User[]
-  couriers Courier[]
-  orders   Order[]
-  routes   Route[]
-  events   DomainEventLog[]
-  credentials IntegrationCredential[]
+  users               User[]
+  couriers            Courier[]
+  orders              Order[]
+  routes              Route[]
+  events              DomainEventLog[]
+  credentials         IntegrationCredential[]
+  marketplaceCommands MarketplaceCommand[]
 }
 
 model User {
@@ -146,15 +147,15 @@ model Route {
 }
 
 model RouteStop {
-  id                 String     @id @default(uuid())
-  routeId            String
-  orderId            String     @unique
-  position           Int
-  status             StopStatus @default(PENDING)
-  etaSeconds         Int        @default(0)
-  legDistanceMeters  Int        @default(0)
-  resolvedAt         DateTime?
-  failureReason      String?
+  id                String     @id @default(uuid())
+  routeId           String
+  orderId           String     @unique
+  position          Int
+  status            StopStatus @default(PENDING)
+  etaSeconds        Int        @default(0)
+  legDistanceMeters Int        @default(0)
+  resolvedAt        DateTime?
+  failureReason     String?
 
   route Route @relation(fields: [routeId], references: [id], onDelete: Cascade)
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -268,4 +269,41 @@ model IntegrationEvent {
 
   @@unique([provider, externalEventId])
   @@index([processedAt, receivedAt])
+}
+
+/// Caixa de saída dos avisos ao marketplace.
+///
+/// Quando o motoboy conclui a parada, o pedido precisa mudar de estado lá fora
+/// também — senão o lojista dá baixa duas vezes, no Levô e no aplicativo. Só
+/// que chamar a API de terceiro dentro da transação que grava a entrega junta
+/// dois problemas: a transação fica presa esperando rede alheia, e se a chamada
+/// falhar o aviso se perde sem deixar rastro.
+///
+/// Então a transação grava a intenção aqui, e o worker entrega depois. O aviso
+/// sobrevive a queda de rede, a plataforma fora do ar e a reinício do processo.
+model MarketplaceCommand {
+  id              String                 @id @default(uuid())
+  establishmentId String
+  provider        IntegrationProvider
+  externalOrderId String
+  command         MarketplaceCommandKind
+  createdAt       DateTime               @default(now())
+  /// Nulo enquanto pendente; preenchido quando a plataforma aceitou.
+  processedAt     DateTime?
+  attempts        Int                    @default(0)
+  lastError       String?
+
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+
+  /// Um aviso por pedido e tipo: reenviar "entregue" duas vezes não ajuda, e a
+  /// unicidade torna o enfileiramento idempotente sem lógica extra.
+  @@unique([provider, externalOrderId, command])
+  @@index([processedAt, createdAt])
+}
+
+enum MarketplaceCommandKind {
+  /// Saiu para entrega. No iFood vira `dispatch`.
+  DISPATCH
+  /// Entregue ao cliente. No aiqfome vira `mark-as-delivered`.
+  DELIVERED
 }

@@ -18,6 +18,8 @@ import {
   RouteStatus,
   type RouteRepository,
   type UnitOfWork,
+  type MarketplaceOutbox,
+  type MarketplaceCommandEntry,
 } from '@/core';
 
 /**
@@ -34,6 +36,8 @@ export class InMemoryDatabase {
   couriers = new Map<string, Courier>();
   pings = new Map<string, Array<{ coordinates: Coordinates; at: Date }>>();
   geocodeCache = new Map<string, Coordinates>();
+  /** Avisos enfileirados para o marketplace, por (provedor, pedido, comando). */
+  marketplace = new Map<string, MarketplaceCommandEntry>();
   events: DomainEvent[] = [];
 
   constructor(readonly establishment: Establishment) {}
@@ -150,6 +154,17 @@ function buildRepositories(db: InMemoryDatabase): Repositories {
     },
   };
 
+  const marketplace: MarketplaceOutbox = {
+    async enqueue(entries) {
+      for (const entrada of entries) {
+        // Espelha o índice único do banco: sem isto os testes não veriam a
+        // duplicata que a produção recusa.
+        const chave = `${entrada.provider}:${entrada.externalOrderId}:${entrada.command}`;
+        if (!db.marketplace.has(chave)) db.marketplace.set(chave, entrada);
+      }
+    },
+  };
+
   const geocodeCache: GeocodeCacheRepository = {
     async get(key) {
       return db.geocodeCache.get(key) ?? null;
@@ -159,7 +174,7 @@ function buildRepositories(db: InMemoryDatabase): Repositories {
     },
   };
 
-  return { orders, routes, couriers, establishments, pings, events, geocodeCache };
+  return { orders, routes, couriers, establishments, pings, events, marketplace, geocodeCache };
 }
 
 function sameDay(a: Date, b: Date): boolean {

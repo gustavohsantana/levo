@@ -168,6 +168,30 @@ export class AiqfomeOrderSource implements OrderSource {
     }
   }
 
+  /**
+   * Avisa a plataforma que o pedido chegou ao cliente.
+   *
+   * Não existe "saiu para entrega" aqui: em loja de cardápio o aiqfome vai de
+   * pronto direto para entregue — tentar `mark-as-in-separation` responde 409
+   * dizendo que só loja de catálogo separa. Por isso `dispatch` fica de fora.
+   */
+  async markDelivered(externalOrderId: string): Promise<void> {
+    const resposta = await fetch(new URL('/api/v2/orders/mark-as-delivered', this.baseUrl), {
+      method: 'POST',
+      headers: { ...(await this.headers()), 'content-type': 'application/json' },
+      body: JSON.stringify({ order_id: Number(externalOrderId) }),
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    if (!resposta.ok) {
+      const detalhe = await resposta.text().catch(() => '');
+      throw new ExternalServiceError(
+        'aiqfome',
+        `HTTP ${resposta.status}${detalhe ? ` — ${detalhe.slice(0, 200)}` : ''}`,
+      );
+    }
+  }
+
   private async headers(): Promise<Record<string, string>> {
     return {
       authorization: `Bearer ${await this.options.accessToken()}`,

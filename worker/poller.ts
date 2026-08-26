@@ -8,7 +8,7 @@ import { IfoodAuth } from '../src/infrastructure/integrations/ifood/auth';
 import { CredentialStore } from '../src/infrastructure/integrations/credential-store';
 import { AiqfomeOrderSource } from '../src/infrastructure/integrations/aiqfome/adapter';
 import { aiqfomeAccessTokenFor } from '../src/infrastructure/integrations/aiqfome/factory';
-import type { OrderSource } from '../src/core';
+import type { MarketplaceCommands, OrderSource } from '../src/core';
 
 /**
  * Worker de importação de pedidos.
@@ -102,6 +102,119 @@ async function sourcesFor(establishmentId: string): Promise<OrderSource[]> {
   return sources;
 }
 
+/**
+ * Quem sabe falar de volta com a plataforma, para um estabelecimento.
+ *
+ * Devolve `null` quando não há credencial: um estabelecimento que nunca
+ * conectou não tem para quem avisar, e isso não é falha.
+ */
+async function commandsFor(
+  establishmentId: string,
+  provider: 'IFOOD' | 'AIQFOME',
+): Promise<MarketplaceCommands | null> {
+  const store = new CredentialStore(getPrismaClient(config.DATABASE_URL), config.AUTH_SECRET);
+  const credencial = await store.read(establishmentId, provider);
+  if (!credencial?.merchantId) return null;
+
+  if (provider === 'IFOOD') {
+    if (!config.IFOOD_CLIENT_ID || !config.IFOOD_CLIENT_SECRET) return null;
+
+    const auth = new IfoodAuth({
+      clientId: config.IFOOD_CLIENT_ID,
+      clientSecret: config.IFOOD_CLIENT_SECRET,
+    });
+
+    return new IfoodOrderSource({
+      merchantId: credencial.merchantId,
+      accessToken: () =>
+        store.accessTokenFor(establishmentId, 'IFOOD', (rt) => auth.refresh(rt)),
+      logger,
+    });
+  }
+
+  if (!config.AIQFOME_CLIENT_ID || !config.AIQFOME_CLIENT_SECRET) return null;
+
+  return new AiqfomeOrderSource({
+    accessToken: aiqfomeAccessTokenFor(store, establishmentId),
+    storeId: credencial.merchantId,
+    baseUrl: config.AIQFOME_BASE_URL,
+    logger,
+  });
+}
+
+/** Quantas vezes insistir antes de desistir de um aviso. */
+const MAX_TENTATIVAS = 5;
+
+/**
+ * Esvazia a caixa de saída dos avisos ao marketplace.
+ *
+ * Cada aviso é independente: um que falha não impede os outros. E falhar não
+ * perde nada — a linha continua pendente e volta no próximo ciclo, com o erro
+ * registrado para quem for investigar.
+ *
+ * Depois de `MAX_TENTATIVAS`, para de tentar. Insistir para sempre num aviso
+ * que a plataforma rejeita por regra de negócio — pedido já cancelado, por
+ * exemplo — só gasta chamada e enche o log, escondendo os erros que importam.
+ */
+async function drenarAvisos(): Promise<void> {
+  const prisma = getPrismaClient(config.DATABASE_URL);
+
+  const pendentes = await prisma.marketplaceCommand.findMany({
+    where: { processedAt: null, attempts: { lt: MAX_TENTATIVAS } },
+    orderBy: { createdAt: 'asc' },
+    take: 50,
+  });
+
+  for (const aviso of pendentes) {
+    try {
+      const commands = await commandsFor(aviso.establishmentId, aviso.provider);
+      const executar =
+        aviso.command === 'DISPATCH' ? commands?.dispatch : commands?.markDelivered;
+
+      /*
+       * Plataforma sem comando equivalente não é pendência: o iFood conclui o
+       * pedido sozinho depois do dispatch, o aiqfome não despacha. Marcar como
+       * resolvido evita uma fila que nunca esvazia.
+       */
+      if (!commands || !executar) {
+        await prisma.marketplaceCommand.update({
+          where: { id: aviso.id },
+          data: { processedAt: new Date(), lastError: 'sem comando equivalente na plataforma' },
+        });
+        continue;
+      }
+
+      await executar.call(commands, aviso.externalOrderId);
+
+      await prisma.marketplaceCommand.update({
+        where: { id: aviso.id },
+        data: { processedAt: new Date(), attempts: { increment: 1 }, lastError: null },
+      });
+
+      logger.info(
+        { provider: aviso.provider, command: aviso.command, orderId: aviso.externalOrderId },
+        'marketplace.aviso_entregue',
+      );
+    } catch (cause) {
+      await prisma.marketplaceCommand.update({
+        where: { id: aviso.id },
+        data: { attempts: { increment: 1 }, lastError: String(cause).slice(0, 500) },
+      });
+
+      logger.error(
+        {
+          provider: aviso.provider,
+          command: aviso.command,
+          orderId: aviso.externalOrderId,
+          tentativa: aviso.attempts + 1,
+          cause: String(cause),
+        },
+        'marketplace.aviso_falhou',
+      );
+    }
+  }
+}
+
 async function tick(): Promise<void> {
   const prisma = getPrismaClient(config.DATABASE_URL);
   const establishments = await prisma.establishment.findMany({ select: { id: true } });
@@ -127,6 +240,9 @@ async function tick(): Promise<void> {
       }
     }
   }
+
+  // Depois de importar: o que entrou nesta rodada pode ter gerado aviso.
+  await drenarAvisos();
 }
 
 /** Roda uma vez por dia, junto com um dos ciclos. */

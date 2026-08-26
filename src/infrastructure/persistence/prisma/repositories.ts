@@ -20,6 +20,8 @@ import {
   type Repositories,
   type Route,
   type RouteRepository,
+  type MarketplaceOutbox,
+  type MarketplaceCommandEntry,
 } from '@/core';
 import { CourierMapper, EstablishmentMapper, OrderMapper, RouteMapper } from './mappers';
 
@@ -272,6 +274,25 @@ export class PrismaGeocodeCacheRepository implements GeocodeCacheRepository {
   }
 }
 
+/**
+ * Caixa de saída dos avisos ao marketplace.
+ *
+ * O `skipDuplicates` faz do enfileiramento uma operação idempotente: o índice
+ * único por (provedor, pedido, comando) recusa o segundo "entregue" do mesmo
+ * pedido sem erro. Isso importa porque o mesmo caso de uso pode rodar de novo
+ * — reenvio da fila offline do celular, por exemplo — e um aviso duplicado
+ * viraria uma chamada duplicada à API de terceiro.
+ */
+export class PrismaMarketplaceOutbox implements MarketplaceOutbox {
+  constructor(private readonly tx: Tx) {}
+
+  async enqueue(entries: MarketplaceCommandEntry[]): Promise<void> {
+    if (entries.length === 0) return;
+
+    await this.tx.marketplaceCommand.createMany({ data: entries, skipDuplicates: true });
+  }
+}
+
 export function buildRepositories(tx: Tx, establishmentId: string): Repositories {
   return {
     orders: new PrismaOrderRepository(tx, establishmentId),
@@ -280,6 +301,7 @@ export function buildRepositories(tx: Tx, establishmentId: string): Repositories
     establishments: new PrismaEstablishmentRepository(tx, establishmentId),
     pings: new PrismaCourierPingRepository(tx),
     events: new PrismaEventStore(tx),
+    marketplace: new PrismaMarketplaceOutbox(tx),
     geocodeCache: new PrismaGeocodeCacheRepository(tx),
   };
 }

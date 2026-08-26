@@ -1,4 +1,10 @@
-import { NotFoundError, type Clock, type UnitOfWork } from '@/core';
+import {
+  NotFoundError,
+  type Clock,
+  type MarketplaceCommandEntry,
+  type Order,
+  type UnitOfWork,
+} from '@/core';
 import type { CompleteStopInput } from '@/application/dto/schemas';
 
 export class CompleteStop {
@@ -29,9 +35,42 @@ export class CompleteStop {
       if (input.outcome === 'DELIVERED') order.markDelivered(at);
       else order.markFailed(input.reason ?? null, at);
 
+      /*
+       * O pedido também existe fora daqui. Sem avisar a plataforma, o lojista
+       * dá baixa duas vezes — uma no Levô, outra no aplicativo — e é o tipo de
+       * trabalho dobrado que faz um sistema ser abandonado.
+       *
+       * Vai para a caixa de saída, dentro desta transação: ou a entrega e o
+       * aviso valem juntos, ou nenhum dos dois. Entrega falha não avisa nada;
+       * quem decide o que fazer com ela é o dono, não o marketplace.
+       */
+      if (input.outcome === 'DELIVERED') {
+        await repos.marketplace.enqueue(avisoDeEntrega(route.establishmentId, order));
+      }
+
       await repos.routes.save(route);
       await repos.orders.save(order);
       await repos.events.append([...route.pullEvents(), ...order.pullEvents()]);
     });
   }
+}
+
+/**
+ * Só pedido vindo de marketplace tem para quem avisar.
+ *
+ * Pedido digitado à mão ou recebido por webhook genérico não tem contraparte
+ * lá fora — devolve lista vazia e o `enqueue` não faz nada.
+ */
+function avisoDeEntrega(establishmentId: string, order: Order): MarketplaceCommandEntry[] {
+  if (order.source !== 'IFOOD' && order.source !== 'AIQFOME') return [];
+  if (!order.externalId) return [];
+
+  return [
+    {
+      establishmentId,
+      provider: order.source,
+      externalOrderId: order.externalId,
+      command: 'DELIVERED',
+    },
+  ];
 }

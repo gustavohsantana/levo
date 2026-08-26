@@ -53,6 +53,34 @@ export interface EventStore {
   append(events: DomainEvent[]): Promise<void>;
 }
 
+/**
+ * Um aviso a mandar para o marketplace quando der.
+ *
+ * `DISPATCH` é "saiu para entrega"; `DELIVERED` é "chegou". Cada plataforma
+ * traduz do seu jeito, e algumas ignoram um dos dois — o iFood conclui o
+ * pedido sozinho depois do dispatch, o aiqfome quer o "entregue" explícito.
+ * Guardar o fato, e não a chamada, é o que permite isso.
+ */
+export interface MarketplaceCommandEntry {
+  establishmentId: string;
+  provider: 'IFOOD' | 'AIQFOME';
+  externalOrderId: string;
+  command: 'DISPATCH' | 'DELIVERED';
+}
+
+/**
+ * Caixa de saída dos avisos ao marketplace.
+ *
+ * O enfileiramento acontece na mesma transação que grava a entrega: ou as duas
+ * coisas valem, ou nenhuma. Chamar a API de terceiro ali dentro prenderia a
+ * transação em rede alheia e perderia o aviso em qualquer falha — e o sintoma
+ * seria o lojista dando baixa duas vezes, sem entender por quê.
+ */
+export interface MarketplaceOutbox {
+  /** Idempotente: reenfileirar o mesmo aviso não cria outro. */
+  enqueue(entries: MarketplaceCommandEntry[]): Promise<void>;
+}
+
 export interface GeocodeCacheRepository {
   get(cacheKey: string): Promise<Coordinates | null>;
   set(cacheKey: string, coordinates: Coordinates): Promise<void>;
@@ -66,6 +94,7 @@ export interface Repositories {
   establishments: EstablishmentRepository;
   pings: CourierPingRepository;
   events: EventStore;
+  marketplace: MarketplaceOutbox;
   geocodeCache: GeocodeCacheRepository;
 }
 

@@ -47,12 +47,19 @@ export function newDatabase(): InMemoryDatabase {
 export function makeOrder(
   id: string,
   coordinates: Coordinates | null,
-  overrides: Partial<{ name: string; phone: string | null; amount: number }> = {},
+  overrides: Partial<{
+    name: string;
+    phone: string | null;
+    amount: number;
+    source: 'MANUAL' | 'WEBHOOK' | 'IFOOD' | 'AIQFOME';
+    externalId: string | null;
+  }> = {},
 ): Order {
   return Order.create({
     id,
     establishmentId: 'est-1',
-    source: 'MANUAL',
+    source: overrides.source ?? 'MANUAL',
+    externalId: overrides.externalId ?? null,
     customerName: overrides.name ?? `Cliente ${id}`,
     customerPhone: overrides.phone === null ? null : PhoneNumber.create(overrides.phone ?? '41988887777'),
     address: Address.create(`Rua Exemplo, ${id} - Curitiba`),

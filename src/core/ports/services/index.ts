@@ -88,6 +88,24 @@ export interface OrderSource {
   statusChanges?(): ExternalStatusChange[];
 }
 
+/**
+ * O que dá para mandar de volta para a plataforma.
+ *
+ * Os dois métodos são opcionais porque as plataformas não têm o mesmo ciclo. O
+ * iFood entende "saiu para entrega" e conclui o pedido sozinho depois disso; o
+ * aiqfome quer o "entregue" explícito e não tem noção de despacho para loja de
+ * cardápio. Forçar as duas a implementar os dois obrigaria uma delas a mentir.
+ *
+ * Comando ausente não é erro: a caixa de saída marca como resolvido e segue.
+ */
+export interface MarketplaceCommands {
+  readonly kind: OrderSourceKind;
+  /** Saiu para entrega. */
+  dispatch?(externalOrderId: string): Promise<void>;
+  /** Entregue ao cliente. */
+  markDelivered?(externalOrderId: string): Promise<void>;
+}
+
 export interface Clock {
   now(): Date;
 }
