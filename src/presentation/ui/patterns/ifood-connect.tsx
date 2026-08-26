@@ -77,9 +77,17 @@ export function IfoodConnect({ conectado, lojaAtual }: Props) {
           <div className="min-w-0 flex-1">
             <h3 className="font-semibold text-ink">iFood conectado</h3>
             <p className="mt-1 text-sm text-ink-muted">
-              {lojaAtual?.nome ? (
+              {/*
+                O que decide a frase é o **id**, não o nome. O nome vem de
+                `/merchants/{id}`, que responde 403 quando a loja não concedeu o
+                módulo Merchant — e olhar para ele fazia a tela dizer "nenhuma
+                loja escolhida" com a loja gravada e funcionando. Mostrar o id
+                é feio; mentir sobre o estado da conexão é pior.
+              */}
+              {lojaAtual?.id ? (
                 <>
-                  Recebendo pedidos de <strong className="text-ink">{lojaAtual.nome}</strong>.
+                  Recebendo pedidos de{' '}
+                  <strong className="text-ink">{lojaAtual.nome ?? lojaAtual.id}</strong>.
                 </>
               ) : (
                 'Conta conectada, mas nenhuma loja escolhida.'
