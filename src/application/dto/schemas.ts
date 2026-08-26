@@ -40,6 +40,8 @@ export const brlAmount = z.preprocess((raw) => {
 export const orderItemSchema = z.object({
   productId: z.string().min(1),
   quantity: z.number().int().min(1, 'Quantidade precisa ser ao menos 1'),
+  /** Desconto da linha em reais, já resolvido: a tela converte a porcentagem. */
+  discountReais: z.number().min(0).optional(),
 });
 
 export const createOrderSchema = z.object({
@@ -50,6 +52,8 @@ export const createOrderSchema = z.object({
   amountReais: brlAmount,
   notes: z.string().trim().max(500).optional().or(z.literal('')),
   items: z.array(orderItemSchema).optional(),
+  deliveryFeeReais: brlAmount.optional(),
+  paymentMethod: z.enum(['CASH', 'CREDIT', 'DEBIT', 'PIX', 'ONLINE']).optional(),
 });
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
 

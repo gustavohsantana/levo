@@ -26,12 +26,22 @@ export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
  * aquele valor. Ler o preço do produto na hora de exibir faria o histórico se
  * reescrever a cada reajuste, e a conta do dia deixaria de fechar.
  */
+export type PaymentMethod = 'CASH' | 'CREDIT' | 'DEBIT' | 'PIX' | 'ONLINE';
+
 export interface OrderItem {
   /** Procedência. Nulo quando o produto é apagado do catálogo. */
   productId: string | null;
   name: string;
   unitPrice: Money;
   quantity: number;
+  /**
+   * Desconto já aplicado sobre a linha inteira.
+   *
+   * Guardamos o valor, não a porcentagem: é o valor que entra na conta, e uma
+   * porcentagem guardada precisaria ser recalculada a cada exibição — com
+   * chance de dar um centavo diferente do que foi cobrado.
+   */
+  discount: Money;
 }
 
 interface OrderProps {
@@ -44,6 +54,8 @@ interface OrderProps {
   address: Address;
   coordinates: Coordinates | null;
   amount: Money;
+  deliveryFee: Money;
+  paymentMethod: PaymentMethod | null;
   items: OrderItem[];
   notes: string | null;
   status: OrderStatus;
@@ -73,12 +85,15 @@ export class Order extends AggregateRoot {
     address: Address;
     coordinates?: Coordinates | null;
     amount?: Money;
+    deliveryFee?: Money;
+    paymentMethod?: PaymentMethod | null;
     items?: OrderItem[];
     notes?: string | null;
     now?: Date;
   }): Order {
     const now = input.now ?? new Date();
     const itens = input.items ?? [];
+    const taxa = input.deliveryFee ?? Money.zero();
 
     const order = new Order({
       id: input.id,
@@ -94,7 +109,9 @@ export class Order extends AggregateRoot {
        * lista de itens abriria a porta para os dois discordarem, e a versão
        * errada seria a que o dono vê na conta do dia.
        */
-      amount: itens.length > 0 ? somar(itens) : (input.amount ?? Money.zero()),
+      amount: itens.length > 0 ? somar(itens).add(taxa) : (input.amount ?? Money.zero()),
+      deliveryFee: taxa,
+      paymentMethod: input.paymentMethod ?? null,
       items: itens,
       notes: input.notes?.trim() || null,
       status: OrderStatus.New,
@@ -198,6 +215,10 @@ export class Order extends AggregateRoot {
     return 'NOVO';
   }
   get items(): readonly OrderItem[] { return this.props.items; }
+  get deliveryFee() { return this.props.deliveryFee; }
+  get paymentMethod() { return this.props.paymentMethod; }
+  /** O que é venda, sem o frete. */
+  get subtotal() { return Money.fromCents(this.props.amount.cents - this.props.deliveryFee.cents); }
   get notes() { return this.props.notes; }
   get status() { return this.props.status; }
   get trackingToken() { return this.props.trackingToken; }
@@ -297,6 +318,12 @@ export class Order extends AggregateRoot {
 /** Soma dos itens. Multiplicação em centavos, sem ponto flutuante no meio. */
 function somar(itens: OrderItem[]): Money {
   return Money.fromCents(
-    itens.reduce((total, item) => total + item.unitPrice.cents * item.quantity, 0),
+    itens.reduce(
+      (total, item) =>
+        // O desconto nunca deixa a linha negativa: um desconto maior que o item
+        // viraria crédito, que este produto não sabe representar.
+        total + Math.max(0, item.unitPrice.cents * item.quantity - item.discount.cents),
+      0,
+    ),
   );
 }

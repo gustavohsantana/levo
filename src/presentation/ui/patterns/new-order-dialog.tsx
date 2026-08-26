@@ -7,14 +7,17 @@ import { LoaderCircle, X } from 'lucide-react';
 import { createOrderAction } from '@/presentation/actions';
 import type { ProductView } from '@/presentation/queries';
 import { OrderItemsPicker, type ItemEscolhido } from './order-items-picker';
-import { Button, Field, Input, Textarea } from '../primitives';
+import { Button, Field, Input, Select, Textarea } from '../primitives';
 
 export function NewOrderDialog({
   trigger,
   produtos = [],
+  taxaPadraoReais = 0,
 }: {
   trigger: React.ReactNode;
   produtos?: ProductView[];
+  /** Vem das Configurações. O dono muda no pedido quando for diferente. */
+  taxaPadraoReais?: number;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -22,6 +25,7 @@ export function NewOrderDialog({
   const [pending, submit] = useTransition();
   const [itens, setItens] = useState<ItemEscolhido[]>([]);
   const [totalCents, setTotalCents] = useState(0);
+  const [taxa, setTaxa] = useState(taxaPadraoReais ? taxaPadraoReais.toFixed(2) : '');
 
   /**
    * Sem `useEffect` observando o resultado: a ação já devolve se deu certo,
@@ -103,8 +107,8 @@ export function NewOrderDialog({
               </Field>
 
               <Field
-                label="Valor"
-                hint={itens.length > 0 ? 'somado dos itens' : undefined}
+                label="Total"
+                hint={itens.length > 0 ? 'itens + taxa' : undefined}
               >
                 <Input
                   name="amountReais"
@@ -117,7 +121,11 @@ export function NewOrderDialog({
                    * conta do dia.
                    */
                   readOnly={itens.length > 0}
-                  value={itens.length > 0 ? (totalCents / 100).toFixed(2) : undefined}
+                  value={
+                    itens.length > 0
+                      ? ((totalCents + Math.round(Number(taxa || 0) * 100)) / 100).toFixed(2)
+                      : undefined
+                  }
                   onChange={itens.length > 0 ? () => undefined : undefined}
                 />
               </Field>
@@ -130,6 +138,28 @@ export function NewOrderDialog({
                 setTotalCents(total);
               }}
             />
+
+            <div className="grid grid-cols-2 gap-3.5">
+              <Field label="Taxa de entrega" hint="vem das Configurações">
+                <Input
+                  name="deliveryFeeReais"
+                  inputMode="decimal"
+                  value={taxa}
+                  onChange={(evento) => setTaxa(evento.target.value)}
+                  placeholder="0,00"
+                />
+              </Field>
+
+              <Field label="Pagamento">
+                <Select name="paymentMethod" defaultValue="">
+                  <option value="">Não informado</option>
+                  <option value="CASH">Dinheiro</option>
+                  <option value="PIX">Pix</option>
+                  <option value="CREDIT">Crédito</option>
+                  <option value="DEBIT">Débito</option>
+                </Select>
+              </Field>
+            </div>
 
             <Field label="Referência" hint="Portão, interfone, bloco">
               <Input name="reference" placeholder="Portão azul, interfone 12" />

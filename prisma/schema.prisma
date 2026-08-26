@@ -47,19 +47,21 @@ enum StopStatus {
 }
 
 model Establishment {
-  id        String   @id @default(uuid())
-  name      String
-  address   String
+  id               String   @id @default(uuid())
+  name             String
+  address          String
   /// Cidade e estado da operação.
   ///
   /// Entram em toda busca de endereço: sem eles o geocodificador procura no
   /// pais inteiro e "Rua das Flores, 100" casa com a primeira rua homonima que
   /// aparecer. O dono nao digita a cidade dele em cada pedido — nem deveria.
-  city      String?
-  state     String?
-  lat       Float
-  lng       Float
-  createdAt DateTime @default(now())
+  city             String?
+  state            String?
+  /// Taxa de entrega sugerida ao lancar pedido manual. Editavel no pedido.
+  deliveryFeeCents Int      @default(0)
+  lat              Float
+  lng              Float
+  createdAt        DateTime @default(now())
 
   users               User[]
   couriers            Courier[]
@@ -99,29 +101,33 @@ model Courier {
 }
 
 model Order {
-  id              String          @id @default(uuid())
-  establishmentId String
-  source          OrderSourceKind
-  externalId      String?
-  customerName    String
-  customerPhone   String?
-  address         String
-  reference       String?
-  lat             Float?
-  lng             Float?
-  amountCents     Int             @default(0)
-  notes           String?
-  status          OrderStatus     @default(NEW)
-  trackingToken   String          @unique
-  routeId         String?
+  id               String          @id @default(uuid())
+  establishmentId  String
+  source           OrderSourceKind
+  externalId       String?
+  customerName     String
+  customerPhone    String?
+  address          String
+  reference        String?
+  lat              Float?
+  lng              Float?
+  amountCents      Int             @default(0)
+  /// Taxa de entrega, ja somada em `amountCents`. Guardada a parte porque o
+  /// acerto do dia separa o que e venda do que e frete.
+  deliveryFeeCents Int             @default(0)
+  paymentMethod    PaymentMethod?
+  notes            String?
+  status           OrderStatus     @default(NEW)
+  trackingToken    String          @unique
+  routeId          String?
   /// Aceito pelo lojista. Antes disso o pedido esta na coluna "novos", que e
   /// onde ele decide se consegue atender.
-  confirmedAt     DateTime?
+  confirmedAt      DateTime?
   /// Saiu da cozinha e espera motoboy. Separa "montando" de "pronto" no
   /// painel, que sao filas com donos diferentes.
-  readyAt         DateTime?
-  createdAt       DateTime        @default(now())
-  deliveredAt     DateTime?
+  readyAt          DateTime?
+  createdAt        DateTime        @default(now())
+  deliveredAt      DateTime?
 
   establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
   stop          RouteStop?
@@ -385,9 +391,24 @@ model OrderItem {
   name           String
   unitPriceCents Int
   quantity       Int
+  /// Desconto ja aplicado, em centavos, sobre a linha inteira.
+  ///
+  /// Guardamos o valor resultante, nao a porcentagem: e o valor que entra na
+  /// conta, e uma porcentagem guardada precisaria ser recalculada a cada
+  /// exibicao, com chance de dar um centavo diferente.
+  discountCents  Int     @default(0)
 
   order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@index([orderId])
+}
+
+enum PaymentMethod {
+  CASH
+  CREDIT
+  DEBIT
+  PIX
+  /// Pago no aplicativo do marketplace — nao ha o que receber na porta.
+  ONLINE
 }

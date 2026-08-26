@@ -1,5 +1,5 @@
 import type { Courier as CourierRow, Establishment as EstablishmentRow } from '@/generated/prisma/client';
-import { Address, Coordinates, Courier, Establishment, PhoneNumber } from '@/core';
+import { Address, Coordinates, Courier, Establishment, Money, PhoneNumber } from '@/core';
 
 export * from './order-mapper';
 export * from './route-mapper';
@@ -35,6 +35,7 @@ export const EstablishmentMapper = {
       Coordinates.create(row.lat, row.lng),
       row.city,
       row.state,
+      Money.fromCents(row.deliveryFeeCents),
     );
   },
 };

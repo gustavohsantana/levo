@@ -1,0 +1,8 @@
+CREATE TYPE "PaymentMethod" AS ENUM ('CASH', 'CREDIT', 'DEBIT', 'PIX', 'ONLINE');
+
+ALTER TABLE "Order" ADD COLUMN "deliveryFeeCents" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Order" ADD COLUMN "paymentMethod" "PaymentMethod";
+
+ALTER TABLE "OrderItem" ADD COLUMN "discountCents" INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE "Establishment" ADD COLUMN "deliveryFeeCents" INTEGER NOT NULL DEFAULT 0;

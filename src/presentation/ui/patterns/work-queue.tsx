@@ -40,6 +40,7 @@ export function WorkQueue({
   couriers,
   establishment,
   produtos = [],
+  taxaPadraoReais = 0,
 }: {
   pending: OrderView[];
   /** As rotas na rua, para a quarta coluna. */
@@ -48,6 +49,7 @@ export function WorkQueue({
   establishment: { name: string; coordinates: { lat: number; lng: number } };
   /** Catálogo, para montar o pedido sem digitar preço. */
   produtos?: ProductView[];
+  taxaPadraoReais?: number;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -158,6 +160,7 @@ export function WorkQueue({
 
         <NewOrderDialog
           produtos={produtos}
+          taxaPadraoReais={taxaPadraoReais}
           trigger={
             <Button size="sm" className="ml-auto">
               <Plus />
@@ -206,6 +209,7 @@ export function WorkQueue({
           action={
             <NewOrderDialog
               produtos={produtos}
+              taxaPadraoReais={taxaPadraoReais}
               trigger={
                 <Button size="sm" variant="primary">
                   Lançar o primeiro pedido

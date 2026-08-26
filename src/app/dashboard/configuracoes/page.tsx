@@ -15,6 +15,7 @@ export default async function ConfiguracoesPage() {
       address: atual.address.raw,
       city: atual.city,
       state: atual.state,
+      deliveryFeeReais: atual.deliveryFee.reais,
     };
   });
 

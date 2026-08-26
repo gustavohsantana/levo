@@ -1,4 +1,5 @@
 import { Entity } from './entity';
+import { Money } from '../value-objects';
 import type { Address, Coordinates } from '../value-objects';
 
 /** O tenant. Também é o ponto de partida e chegada de toda rota. */
@@ -17,6 +18,8 @@ export class Establishment extends Entity {
      */
     readonly city: string | null = null,
     readonly state: string | null = null,
+    /** Taxa de entrega sugerida ao lançar pedido manual. */
+    readonly deliveryFee: Money = Money.zero(),
   ) {
     super(id);
   }

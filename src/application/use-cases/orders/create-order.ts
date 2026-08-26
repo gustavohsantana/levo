@@ -2,6 +2,7 @@ import {
   Address,
   NotFoundError,
   type OrderItem,
+  type PaymentMethod,
   type Product,
   ValidationError,
   type Clock,
@@ -24,7 +25,15 @@ interface Input {
   source?: OrderSourceKind;
   externalId?: string | null;
   /** Itens do catálogo. Quando vêm, o total sai deles. */
-  items?: Array<{ productId: string; quantity: number }>;
+  items?: Array<{
+    productId: string;
+    quantity: number;
+    /** Desconto sobre a linha, em reais. Já resolvido — a tela converte %. */
+    discountReais?: number;
+  }>;
+  /** Ausente usa a taxa configurada no estabelecimento. */
+  deliveryFeeReais?: number | null;
+  paymentMethod?: PaymentMethod | null;
 }
 
 export class CreateOrder {
@@ -74,6 +83,11 @@ export class CreateOrder {
         address,
         coordinates,
         amount: Money.fromReais(input.amountReais ?? 0),
+        deliveryFee:
+          input.deliveryFeeReais === undefined || input.deliveryFeeReais === null
+            ? estabelecimento.deliveryFee
+            : Money.fromReais(input.deliveryFeeReais),
+        paymentMethod: input.paymentMethod,
         items: itens,
         notes: input.notes,
         now: this.clock.now(),
@@ -97,7 +111,7 @@ export class CreateOrder {
    */
   private async resolverItens(
     repos: { products: { findManyByIds(ids: string[]): Promise<Product[]> } },
-    pedidos: Array<{ productId: string; quantity: number }>,
+    pedidos: Array<{ productId: string; quantity: number; discountReais?: number }>,
   ): Promise<OrderItem[]> {
     if (pedidos.length === 0) return [];
 
@@ -120,6 +134,7 @@ export class CreateOrder {
         name: produto.name,
         unitPrice: produto.price,
         quantity: pedido.quantity,
+        discount: Money.fromReais(pedido.discountReais ?? 0),
       };
     });
   }

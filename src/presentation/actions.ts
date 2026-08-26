@@ -83,6 +83,8 @@ export async function createOrderAction(
      * silêncio quando alguém renomeia um campo.
      */
     items: parseItens(formData.get('items')),
+    deliveryFeeReais: formData.get('deliveryFeeReais') || undefined,
+    paymentMethod: formData.get('paymentMethod') || undefined,
   });
 
   if (!parsed.success) {
@@ -236,14 +238,16 @@ export async function advanceOrderStageAction(
 export async function salvarRegiaoAction(formData: FormData): Promise<ActionResult> {
   const city = String(formData.get('city') ?? '').trim();
   const state = String(formData.get('state') ?? '').trim().toUpperCase();
+  const taxa = Number(String(formData.get('deliveryFeeReais') ?? '0').replace(',', '.'));
 
   if (city.length < 2) return { ok: false, error: 'Informe a cidade' };
   if (state.length !== 2) return { ok: false, error: 'O estado tem duas letras (ex.: MG)' };
+  if (!Number.isFinite(taxa) || taxa < 0) return { ok: false, error: 'Taxa de entrega inválida' };
 
   try {
     const session = await requireSession();
     await containerFor(session.establishmentId).read((repos) =>
-      repos.establishments.saveRegion(city, state),
+      repos.establishments.saveSettings(city, state, Math.round(taxa * 100)),
     );
   } catch (cause) {
     return { ok: false, error: toFormError(cause) };

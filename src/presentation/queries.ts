@@ -21,6 +21,9 @@ export interface OrderView {
   reference: string | null;
   amountCents: number;
   notes: string | null;
+  source: 'MANUAL' | 'WEBHOOK' | 'IFOOD' | 'AIQFOME';
+  deliveryFeeCents: number;
+  paymentMethod: 'CASH' | 'CREDIT' | 'DEBIT' | 'PIX' | 'ONLINE' | null;
   status: 'NEW' | 'IN_ROUTE' | 'DELIVERED' | 'FAILED' | 'CANCELLED';
   /** Coluna do painel. Derivado de `status` mais os carimbos de preparo. */
   stage: 'NOVO' | 'MONTANDO' | 'PRONTO' | 'EM_ROTA' | 'FINALIZADO';
@@ -74,6 +77,9 @@ function toOrderView(order: Order, whatsapp: string | null, trackingUrl: string)
     address: order.address.raw,
     reference: order.address.reference,
     amountCents: order.amount.cents,
+    deliveryFeeCents: order.deliveryFee.cents,
+    paymentMethod: order.paymentMethod,
+    source: order.source,
     notes: order.notes,
     status: order.status,
     isGeocoded: order.isGeocoded,
@@ -319,6 +325,7 @@ export async function getDashboard() {
         id: establishment.id,
         name: establishment.name,
         coordinates: establishment.coordinates.toJSON(),
+        deliveryFeeReais: establishment.deliveryFee.reais,
       },
       pending: pending.map((order) =>
         toOrderView(

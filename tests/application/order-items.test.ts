@@ -123,3 +123,69 @@ describe('pedido com itens do catálogo', () => {
     ).rejects.toThrow(NotFoundError);
   });
 });
+
+/**
+ * Taxa de entrega, desconto e forma de pagamento.
+ *
+ * O desconto guarda o **valor**, não a porcentagem: é o valor que entra na
+ * conta, e recalcular a porcentagem a cada exibição abriria a chance de um
+ * centavo diferente entre a tela e o que foi cobrado.
+ */
+describe('composição do pedido', () => {
+  it('soma a taxa de entrega ao total dos itens', async () => {
+    const pizza = await salvarProduto.execute({ name: 'Pizza', priceReais: 50 });
+
+    const pedido = await criar.execute({
+      ...cliente,
+      items: [{ productId: pizza.id, quantity: 1 }],
+      deliveryFeeReais: 8,
+    });
+
+    expect(pedido.amount.cents).toBe(58_00);
+    expect(pedido.deliveryFee.cents).toBe(8_00);
+    expect(pedido.subtotal.cents).toBe(50_00);
+  });
+
+  it('aplica desconto na linha antes de somar', async () => {
+    const pizza = await salvarProduto.execute({ name: 'Pizza', priceReais: 50 });
+
+    const pedido = await criar.execute({
+      ...cliente,
+      items: [{ productId: pizza.id, quantity: 2, discountReais: 15 }],
+    });
+
+    expect(pedido.amount.cents).toBe(100_00 - 15_00);
+    expect(pedido.items[0].discount.cents).toBe(15_00);
+  });
+
+  it('não deixa o desconto tornar a linha negativa', async () => {
+    // Desconto maior que o item viraria crédito, que este produto não sabe
+    // representar — e um total negativo estragaria o fechamento do dia.
+    const agua = await salvarProduto.execute({ name: 'Água', priceReais: 4 });
+
+    const pedido = await criar.execute({
+      ...cliente,
+      items: [{ productId: agua.id, quantity: 1, discountReais: 10 }],
+    });
+
+    expect(pedido.amount.cents).toBe(0);
+  });
+
+  it('guarda a forma de pagamento', async () => {
+    const pedido = await criar.execute({ ...cliente, amountReais: 30, paymentMethod: 'PIX' });
+
+    expect(pedido.paymentMethod).toBe('PIX');
+  });
+
+  it('subtotal separa venda de frete', async () => {
+    // O acerto do dia precisa dos dois separados: um é receita da cozinha, o
+    // outro é do entregador.
+    const pedido = await criar.execute({
+      ...cliente,
+      amountReais: 40,
+      deliveryFeeReais: 7,
+    });
+
+    expect(pedido.deliveryFee.cents).toBe(7_00);
+  });
+});

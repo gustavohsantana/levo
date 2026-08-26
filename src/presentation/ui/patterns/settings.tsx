@@ -16,7 +16,13 @@ import { Button, Field, Input } from '../primitives';
 export function Settings({
   establishment,
 }: {
-  establishment: { name: string; address: string; city: string | null; state: string | null };
+  establishment: {
+    name: string;
+    address: string;
+    city: string | null;
+    state: string | null;
+    deliveryFeeReais: number;
+  };
 }) {
   const [erro, setErro] = useState<string | null>(null);
   const [salvo, setSalvo] = useState(false);
@@ -59,7 +65,7 @@ export function Settings({
           </div>
         </div>
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-[1fr_7rem]">
+        <div className="mt-4 grid gap-4 sm:grid-cols-[1fr_7rem_9rem]">
           <Field label="Cidade">
             <Input name="city" defaultValue={establishment.city ?? ''} required />
           </Field>
@@ -71,6 +77,15 @@ export function Settings({
               maxLength={2}
               placeholder="MG"
               required
+            />
+          </Field>
+
+          <Field label="Taxa de entrega" hint="sugerida no pedido">
+            <Input
+              name="deliveryFeeReais"
+              inputMode="decimal"
+              defaultValue={establishment.deliveryFeeReais.toFixed(2)}
+              placeholder="0,00"
             />
           </Field>
         </div>

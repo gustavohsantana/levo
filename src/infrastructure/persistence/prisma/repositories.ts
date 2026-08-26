@@ -81,6 +81,7 @@ export class PrismaOrderRepository extends TenantScoped implements OrderReposito
         name: item.name,
         unitPriceCents: item.unitPrice.cents,
         quantity: item.quantity,
+        discountCents: item.discount.cents,
       })),
     });
   }
@@ -234,10 +235,14 @@ export class PrismaEstablishmentRepository extends TenantScoped implements Estab
     if (!row) throw new NotFoundError('Estabelecimento', this.establishmentId);
     return EstablishmentMapper.toDomain(row);
   }
-  async saveRegion(city: string | null, state: string | null): Promise<void> {
+  async saveSettings(
+    city: string | null,
+    state: string | null,
+    deliveryFeeCents: number,
+  ): Promise<void> {
     await this.tx.establishment.update({
       where: { id: this.establishmentId },
-      data: { city, state },
+      data: { city, state, deliveryFeeCents },
     });
   }
 }

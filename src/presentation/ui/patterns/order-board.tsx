@@ -17,6 +17,7 @@ import type { OrderView, RouteView } from '@/presentation/queries';
 import { Button } from '../primitives';
 import { clockTime, currency } from '../format';
 import { PinPickerDialog } from './pin-picker-dialog';
+import { SourceTag } from './source-tag';
 import { StartRouteButton } from './start-route-button';
 
 /**
@@ -271,7 +272,10 @@ function OrderCard({
         ) : null}
 
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-ink">{pedido.customerName}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="truncate text-sm font-medium text-ink">{pedido.customerName}</p>
+            <SourceTag source={pedido.source} />
+          </div>
           <p className="truncate text-xs text-ink-faint">{pedido.address}</p>
         </div>
 
