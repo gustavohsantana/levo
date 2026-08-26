@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { env } from '@/env';
 import { aiqfomeOAuth } from '@/infrastructure/integrations/aiqfome/factory';
 import { CredentialStore } from '@/infrastructure/integrations/credential-store';
+import { listarLojasAiqfome } from '@/infrastructure/integrations/aiqfome/stores';
 import { getPrismaClient } from '@/infrastructure/persistence/prisma/client';
 import { toErrorResponse } from '@/presentation/http/error-mapper';
 import { consumeOAuthState } from '@/presentation/http/oauth-state';
@@ -34,19 +35,33 @@ export async function GET(request: Request) {
 
     const tokens = await aiqfomeOAuth().exchangeCode(code);
 
+    /*
+     * A loja precisa entrar junto com o token. Sem `merchantId` não há o que
+     * passar em `filter[store_ids]`, e a integração fica num estado que parece
+     * conectado e não importa nada — o pior dos dois mundos.
+     *
+     * Com uma loja só, resolve sozinho. Com várias, grava e deixa o dono
+     * escolher na tela; pedir que ele decida antes de a gente saber os nomes
+     * seria pedir que adivinhasse.
+     */
+    const lojas = await listarLojasAiqfome(tokens.accessToken);
+
     // Cifra, `upsert` e renovação vivem no store — um caminho só para gravar
     // credencial, compartilhado com o iFood.
     const store = new CredentialStore(getPrismaClient(env().DATABASE_URL), env().AUTH_SECRET);
-    await store.save(establishmentId, 'AIQFOME', tokens);
+    await store.save(establishmentId, 'AIQFOME', {
+      ...tokens,
+      merchantId: lojas.length === 1 ? lojas[0].id : null,
+    });
 
-    return backToPanel('conectado');
+    return backToPanel(lojas.length > 1 ? 'escolher-loja' : 'conectado');
   } catch (cause) {
     return toErrorResponse(cause);
   }
 }
 
 function backToPanel(result: string): NextResponse {
-  const target = new URL('/dashboard', env().PUBLIC_BASE_URL);
+  const target = new URL('/dashboard/integracoes', env().PUBLIC_BASE_URL);
   target.searchParams.set('aiqfome', result);
   return NextResponse.redirect(target);
 }

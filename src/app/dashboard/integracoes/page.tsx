@@ -4,6 +4,8 @@ import { CredentialStore } from '@/infrastructure/integrations/credential-store'
 import { getPrismaClient } from '@/infrastructure/persistence/prisma/client';
 import { requireSession } from '@/presentation/http/session';
 import { IfoodConnect } from '@/presentation/ui/patterns/ifood-connect';
+import { AiqfomeConnect } from '@/presentation/ui/patterns/aiqfome-connect';
+import { listarLojasAiqfome } from '@/infrastructure/integrations/aiqfome/stores';
 
 export const metadata: Metadata = { title: 'Integrações · Levô' };
 export const dynamic = 'force-dynamic';
@@ -28,16 +30,37 @@ export default async function IntegracoesPage() {
    * Estourar aqui deixaria o dono com uma página quebrada e nenhuma pista do
    * que fazer, quando a saída é um clique.
    */
-  const ifood = await store.read(session.establishmentId, 'IFOOD').catch((cause) => {
+  const ilegivel = (provider: string) => (cause: unknown) => {
     // Engolir em silêncio esconde a causa justamente quando ela importa: sem
     // isto, uma credencial ilegível é indistinguível de nunca ter conectado.
     console.error('[integracoes] credencial ilegível', {
       establishmentId: session.establishmentId,
+      provider,
       cause: String(cause),
     });
     return null;
-  });
+  };
+
+  const [ifood, aiqfome] = await Promise.all([
+    store.read(session.establishmentId, 'IFOOD').catch(ilegivel('IFOOD')),
+    store.read(session.establishmentId, 'AIQFOME').catch(ilegivel('AIQFOME')),
+  ]);
+
   const nomeDaLoja = ifood?.merchantId ? await buscarNome(ifood) : null;
+
+  /*
+   * Só consulta as lojas do aiqfome quando ainda não há uma escolhida. Com a
+   * loja definida, essa chamada seria uma ida à rede a cada abertura da tela
+   * para exibir uma lista que ninguém vai usar.
+   */
+  const lojasAiq = aiqfome && !aiqfome.merchantId
+    ? await listarLojasAiqfome(aiqfome.accessToken)
+    : [];
+
+  const nomeAiq =
+    aiqfome?.merchantId
+      ? (lojasAiq.find((l) => l.id === aiqfome.merchantId)?.nome ?? aiqfome.merchantId)
+      : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -53,12 +76,11 @@ export default async function IntegracoesPage() {
         lojaAtual={ifood?.merchantId ? { id: ifood.merchantId, nome: nomeDaLoja } : null}
       />
 
-      <div className="rounded-lg bg-raised p-5 hairline">
-        <h3 className="font-semibold text-ink-muted">aiqfome</h3>
-        <p className="mt-1 text-sm text-ink-faint">
-          Em processo de homologação. Assim que sair, aparece aqui do mesmo jeito.
-        </p>
-      </div>
+      <AiqfomeConnect
+        conectado={Boolean(aiqfome)}
+        lojaAtual={aiqfome ? { id: aiqfome.merchantId ?? '', nome: nomeAiq } : null}
+        lojas={lojasAiq}
+      />
     </div>
   );
 }

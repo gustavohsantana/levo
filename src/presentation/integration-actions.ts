@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { env } from '@/env';
 import { IfoodAuth } from '@/infrastructure/integrations/ifood/auth';
 import { CredentialStore } from '@/infrastructure/integrations/credential-store';
+import { listarLojasAiqfome } from '@/infrastructure/integrations/aiqfome/stores';
 import { getPrismaClient } from '@/infrastructure/persistence/prisma/client';
 import { requireSession } from './http/session';
 import { toFormError } from './http/error-mapper';
@@ -182,4 +183,58 @@ async function buscarLojas(accessToken: string): Promise<Array<{ id: string; nom
   return Array.isArray(lojas)
     ? lojas.map((loja) => ({ id: loja.id, nome: loja.name ?? loja.id }))
     : [];
+}
+
+/**
+ * O aiqfome não tem o vaivém de código do iFood: o lojista é redirecionado,
+ * consente e volta. Por isso aqui só existem as ações de depois — escolher a
+ * loja e desconectar. O começo é um link para `/api/integrations/aiqfome/connect`,
+ * que precisa ser navegação de verdade para o cookie de `state` viajar junto.
+ */
+export async function lojasAiqfome(): Promise<Array<{ id: string; nome: string }>> {
+  try {
+    const session = await requireSession();
+    const store = new CredentialStore(getPrismaClient(env().DATABASE_URL), env().AUTH_SECRET);
+
+    const credencial = await store.read(session.establishmentId, 'AIQFOME');
+    if (!credencial) return [];
+
+    return await listarLojasAiqfome(credencial.accessToken);
+  } catch {
+    return [];
+  }
+}
+
+export async function escolherLojaAiqfome(
+  merchantId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const session = await requireSession();
+    const store = new CredentialStore(getPrismaClient(env().DATABASE_URL), env().AUTH_SECRET);
+
+    const atual = await store.read(session.establishmentId, 'AIQFOME');
+    if (!atual) return { ok: false, error: 'Conecte o aiqfome primeiro.' };
+
+    await store.save(session.establishmentId, 'AIQFOME', { ...atual, merchantId });
+
+    revalidatePath('/dashboard/integracoes');
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+export async function desconectarAiqfome(): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const session = await requireSession();
+
+    await getPrismaClient(env().DATABASE_URL).integrationCredential.deleteMany({
+      where: { establishmentId: session.establishmentId, provider: 'AIQFOME' },
+    });
+
+    revalidatePath('/dashboard/integracoes');
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
 }
