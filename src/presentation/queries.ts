@@ -162,6 +162,14 @@ export interface CourierRouteView {
   failed: number;
   distanceMeters: number;
   durationSeconds: number;
+  /** Detalhe de cada parada, para o acordeão da tela. */
+  paradas: Array<{
+    position: number;
+    customerName: string;
+    address: string;
+    status: 'PENDING' | 'DELIVERED' | 'FAILED';
+    amountCents: number;
+  }>;
 }
 
 /**
@@ -181,6 +189,16 @@ export async function getCourierMonth(courierId: string, month: Date) {
   return container.read(async (repos) => {
     const courier = await repos.couriers.findById(courierId);
     const routes = await repos.routes.listByCourier(courierId, from, to);
+
+    /*
+     * Os pedidos vêm numa consulta só, e não uma por rota: um mês movimentado
+     * tem dezenas de rotas, e uma ida ao banco por rota transformaria a tela
+     * num travamento de segundos.
+     */
+    const pedidos = await repos.orders.findManyByIds(
+      routes.flatMap((route) => route.stops.map((stop) => stop.orderId)),
+    );
+    const pedidoPorId = new Map(pedidos.map((pedido) => [pedido.id, pedido]));
 
     const porDia = new Map<string, CourierDay>();
 
@@ -214,6 +232,18 @@ export async function getCourierMonth(courierId: string, month: Date) {
         failed: falhas,
         distanceMeters: route.distanceMeters,
         durationSeconds: route.durationSeconds,
+        paradas: [...route.stops]
+          .sort((a, b) => a.position - b.position)
+          .map((stop) => {
+            const pedido = pedidoPorId.get(stop.orderId);
+            return {
+              position: stop.position,
+              customerName: pedido?.customerName ?? '—',
+              address: pedido?.address.raw ?? '—',
+              status: stop.status,
+              amountCents: pedido?.amount.cents ?? 0,
+            };
+          }),
       };
     });
 

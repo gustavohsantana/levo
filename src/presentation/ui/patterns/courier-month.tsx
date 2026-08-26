@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, Route as RouteIcon } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { CourierDay, CourierRouteView } from '@/presentation/queries';
 import { Button } from '../primitives';
-import { clockTime, distance, minutes } from '../format';
+import { clockTime, currency, distance, minutes } from '../format';
 
 /**
  * O mês de trabalho de um entregador.
@@ -90,27 +90,7 @@ export function CourierMonth({ courier, mes, days, routes }: Props) {
           ) : (
             <ul className="overflow-hidden rounded-lg bg-surface hairline">
               {rotasDoDia.map((rota) => (
-                <li key={rota.id} className="flex items-center gap-3 border-b px-4 py-3 last:border-b-0">
-                  <RouteIcon className="size-4 shrink-0 text-ink-faint" aria-hidden />
-
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm text-ink">
-                      {rota.deliveries} de {rota.stops}{' '}
-                      {rota.stops === 1 ? 'entrega' : 'entregas'}
-                      {rota.failed > 0 ? (
-                        <span className="text-danger"> · {rota.failed} sem sucesso</span>
-                      ) : null}
-                    </p>
-                    <p className="numeric text-xs text-ink-faint">
-                      {clockTime(rota.createdAt)} · {distance(rota.distanceMeters)} ·{' '}
-                      {minutes(rota.durationSeconds)}
-                    </p>
-                  </div>
-
-                  <Button asChild variant="ghost" size="sm">
-                    <Link href={`/dashboard/rotas/${rota.id}`}>Ver rota</Link>
-                  </Button>
-                </li>
+                <RouteAccordion key={rota.id} rota={rota} />
               ))}
             </ul>
           )}
@@ -123,6 +103,95 @@ export function CourierMonth({ courier, mes, days, routes }: Props) {
     </div>
   );
 }
+
+/**
+ * Uma rota que abre no lugar.
+ *
+ * O resumo responde "quanto rendeu"; as paradas respondem "o que aconteceu".
+ * Levar a segunda pergunta para outra tela obriga o dono a perder o dia em que
+ * estava, e ele volta para conferir a rota seguinte — por isso abre aqui.
+ */
+function RouteAccordion({ rota }: { rota: CourierRouteView }) {
+  const [aberta, setAberta] = useState(false);
+
+  return (
+    <li className="border-b last:border-b-0">
+      <button
+        type="button"
+        onClick={() => setAberta((atual) => !atual)}
+        aria-expanded={aberta}
+        className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-raised/50"
+      >
+        <ChevronDown
+          className={`size-4 shrink-0 text-ink-faint transition-transform ${
+            aberta ? 'rotate-180' : ''
+          }`}
+          aria-hidden
+        />
+
+        <div className="min-w-0 flex-1">
+          <p className="text-sm text-ink">
+            {rota.deliveries} de {rota.stops} {rota.stops === 1 ? 'entrega' : 'entregas'}
+            {rota.failed > 0 ? (
+              <span className="text-danger"> · {rota.failed} sem sucesso</span>
+            ) : null}
+          </p>
+          <p className="numeric text-xs text-ink-faint">
+            {clockTime(rota.createdAt)} · {distance(rota.distanceMeters)} ·{' '}
+            {minutes(rota.durationSeconds)}
+          </p>
+        </div>
+      </button>
+
+      {aberta ? (
+        <div className="border-t bg-raised/40 px-4 py-3">
+          <ol className="flex flex-col gap-2">
+            {rota.paradas.map((parada) => (
+              <li key={parada.position} className="flex items-center gap-3 text-sm">
+                <span className="numeric w-5 shrink-0 text-xs text-ink-faint">
+                  {parada.position + 1}
+                </span>
+
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-ink">{parada.customerName}</p>
+                  <p className="truncate text-xs text-ink-faint">{parada.address}</p>
+                </div>
+
+                {parada.amountCents > 0 ? (
+                  <span className="numeric shrink-0 text-xs text-ink-muted">
+                    {currency(parada.amountCents)}
+                  </span>
+                ) : null}
+
+                <span
+                  className={`shrink-0 text-xs ${
+                    parada.status === 'DELIVERED'
+                      ? 'text-ink-faint'
+                      : parada.status === 'FAILED'
+                        ? 'text-danger'
+                        : 'text-warning'
+                  }`}
+                >
+                  {ROTULO_PARADA[parada.status]}
+                </span>
+              </li>
+            ))}
+          </ol>
+
+          <Button asChild variant="ghost" size="sm" className="mt-2">
+            <Link href={`/dashboard/rotas/${rota.id}`}>Ver no mapa</Link>
+          </Button>
+        </div>
+      ) : null}
+    </li>
+  );
+}
+
+const ROTULO_PARADA = {
+  DELIVERED: 'entregue',
+  FAILED: 'sem sucesso',
+  PENDING: 'pendente',
+} as const;
 
 function Total({ rotulo, valor }: { rotulo: string; valor: string }) {
   return (
@@ -154,16 +223,16 @@ function Calendario({
   const offset = primeiro.getUTCDay();
 
   return (
-    <div className="rounded-lg bg-surface p-3 hairline">
-      <div className="mb-1 grid grid-cols-7 gap-1">
+    <div className="max-w-xs rounded-lg bg-surface p-2.5 hairline">
+      <div className="mb-0.5 grid grid-cols-7 gap-0.5">
         {DIAS.map((dia, i) => (
-          <span key={i} className="py-1 text-center text-xs text-ink-faint">
+          <span key={i} className="text-center text-[11px] text-ink-faint">
             {dia}
           </span>
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7 gap-0.5">
         {Array.from({ length: offset }, (_, i) => <span key={`vazio-${i}`} />)}
 
         {Array.from({ length: diasNoMes }, (_, i) => {
@@ -178,7 +247,7 @@ function Calendario({
               type="button"
               disabled={!dia}
               onClick={() => onSelect(ativo ? null : data)}
-              className={`flex aspect-square flex-col items-center justify-center rounded-md text-sm transition ${
+              className={`flex h-8 flex-col items-center justify-center rounded text-xs leading-none transition ${
                 ativo
                   ? 'bg-ink text-canvas'
                   : dia
@@ -188,7 +257,7 @@ function Calendario({
             >
               <span className="numeric">{numero}</span>
               {dia ? (
-                <span className="numeric text-[10px] opacity-80">{dia.deliveries}</span>
+                <span className="numeric text-[9px] opacity-80">{dia.deliveries}</span>
               ) : null}
             </button>
           );
