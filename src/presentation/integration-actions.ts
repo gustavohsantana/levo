@@ -24,8 +24,20 @@ import { toFormError } from './http/error-mapper';
  */
 const COOKIE_VERIFIER = 'levo_ifood_verifier';
 
-/** Igual à validade do código no iFood: dez minutos. */
-const TTL_SEGUNDOS = 60 * 10;
+/**
+ * Quanto tempo o `verifier` sobrevive — de propósito, mais que o código.
+ *
+ * O *userCode* vale dez minutos no iFood; o **código de autorização** que o
+ * portal devolve depois tem validade própria. Amarrar o cookie aos dez minutos
+ * fazia a tela desistir enquanto o iFood ainda aceitaria a troca, e com uma
+ * mensagem que culpava o código — mandando o lojista refazer um passo que
+ * estava certo.
+ *
+ * Meia hora cobre o caminho real: aprovar permissão no portal, achar a tela
+ * certa, voltar. Se o código de fato venceu, quem diz isso é o iFood, e a
+ * mensagem dele é mais confiável que o nosso palpite.
+ */
+const TTL_SEGUNDOS = 60 * 30;
 
 export type InicioVinculacao =
   | { ok: true; userCode: string; verificationUrl: string; expiraEmMinutos: number }
@@ -91,7 +103,9 @@ export async function concluirVinculacaoIfood(
     if (!verifier) {
       return {
         ok: false,
-        error: 'O código expirou. Gere um novo e refaça a vinculação.',
+        error:
+          'Esta vinculação expirou ou foi iniciada em outro navegador. ' +
+          'Gere um novo código de conexão e refaça, sem fechar esta aba.',
       };
     }
 
