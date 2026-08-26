@@ -25,6 +25,7 @@ export default async function DashboardPage() {
         couriers={data.couriers}
         establishment={data.establishment}
         produtos={produtos}
+        inRoute={data.orders.filter((order) => order.status === 'IN_ROUTE')}
       />
 
       <ActiveRoutes routes={data.activeRoutes} />

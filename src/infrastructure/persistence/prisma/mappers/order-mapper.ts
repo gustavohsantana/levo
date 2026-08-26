@@ -44,6 +44,8 @@ export const OrderMapper = {
       status: row.status as OrderStatus,
       trackingToken: Token.create(row.trackingToken),
       routeId: row.routeId,
+      confirmedAt: row.confirmedAt,
+      readyAt: row.readyAt,
       createdAt: row.createdAt,
       deliveredAt: row.deliveredAt,
     });
@@ -66,6 +68,8 @@ export const OrderMapper = {
       status: order.status,
       trackingToken: order.trackingToken.value,
       routeId: order.routeId,
+      confirmedAt: order.confirmedAt,
+      readyAt: order.readyAt,
       createdAt: order.createdAt,
       deliveredAt: order.deliveredAt,
     };

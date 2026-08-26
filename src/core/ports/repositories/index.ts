@@ -77,7 +77,8 @@ export interface EventStore {
 /**
  * Um aviso a mandar para o marketplace quando der.
  *
- * `DISPATCH` é "saiu para entrega"; `DELIVERED` é "chegou". Cada plataforma
+ * `CONFIRM` é "aceitei"; `READY`, "saiu da cozinha"; `DISPATCH`, "saiu para
+ * entrega"; `DELIVERED`, "chegou". Cada plataforma
  * traduz do seu jeito, e algumas ignoram um dos dois — o iFood conclui o
  * pedido sozinho depois do dispatch, o aiqfome quer o "entregue" explícito.
  * Guardar o fato, e não a chamada, é o que permite isso.
@@ -86,7 +87,7 @@ export interface MarketplaceCommandEntry {
   establishmentId: string;
   provider: 'IFOOD' | 'AIQFOME';
   externalOrderId: string;
-  command: 'DISPATCH' | 'DELIVERED';
+  command: 'CONFIRM' | 'READY' | 'DISPATCH' | 'DELIVERED';
 }
 
 /**

@@ -100,6 +100,10 @@ export interface OrderSource {
  */
 export interface MarketplaceCommands {
   readonly kind: OrderSourceKind;
+  /** Aceito pelo lojista. */
+  confirm?(externalOrderId: string): Promise<void>;
+  /** Saiu da cozinha, esperando o entregador. */
+  markReady?(externalOrderId: string): Promise<void>;
   /** Saiu para entrega. */
   dispatch?(externalOrderId: string): Promise<void>;
   /** Entregue ao cliente. */

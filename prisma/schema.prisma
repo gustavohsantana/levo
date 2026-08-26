@@ -107,6 +107,12 @@ model Order {
   status          OrderStatus     @default(NEW)
   trackingToken   String          @unique
   routeId         String?
+  /// Aceito pelo lojista. Antes disso o pedido esta na coluna "novos", que e
+  /// onde ele decide se consegue atender.
+  confirmedAt     DateTime?
+  /// Saiu da cozinha e espera motoboy. Separa "montando" de "pronto" no
+  /// painel, que sao filas com donos diferentes.
+  readyAt         DateTime?
   createdAt       DateTime        @default(now())
   deliveredAt     DateTime?
 
@@ -304,6 +310,10 @@ model MarketplaceCommand {
 }
 
 enum MarketplaceCommandKind {
+  /// Aceito pelo lojista. No iFood vira `confirm`.
+  CONFIRM
+  /// Pronto para retirada pelo entregador. No aiqfome vira `mark-as-ready`.
+  READY
   /// Saiu para entrega. No iFood vira `dispatch`.
   DISPATCH
   /// Entregue ao cliente. No aiqfome vira `mark-as-delivered`.

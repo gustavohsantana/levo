@@ -197,8 +197,12 @@ async function drenarAvisos(): Promise<void> {
   for (const aviso of pendentes) {
     try {
       const commands = await commandsFor(aviso.establishmentId, aviso.provider);
-      const executar =
-        aviso.command === 'DISPATCH' ? commands?.dispatch : commands?.markDelivered;
+      const executar = {
+        CONFIRM: commands?.confirm,
+        READY: commands?.markReady,
+        DISPATCH: commands?.dispatch,
+        DELIVERED: commands?.markDelivered,
+      }[aviso.command];
 
       /*
        * Plataforma sem comando equivalente não é pendência: o iFood conclui o

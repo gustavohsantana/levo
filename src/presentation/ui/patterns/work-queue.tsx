@@ -14,7 +14,7 @@ import {
 import { planRouteAction } from '@/presentation/actions';
 import type { OrderView } from '@/presentation/queries';
 import { Button, EmptyState, Select } from '../primitives';
-import { OrderRow } from './order-row';
+import { OrderBoard } from './order-board';
 import type { ProductView } from '@/presentation/queries';
 import { NewOrderDialog } from './new-order-dialog';
 import { PinPickerDialog } from './pin-picker-dialog';
@@ -34,11 +34,14 @@ interface Courier {
  */
 export function WorkQueue({
   pending,
+  inRoute = [],
   couriers,
   establishment,
   produtos = [],
 }: {
   pending: OrderView[];
+  /** Pedidos que já saíram, para a quarta coluna. */
+  inRoute?: OrderView[];
   couriers: Courier[];
   establishment: { name: string; coordinates: { lat: number; lng: number } };
   /** Catálogo, para montar o pedido sem digitar preço. */
@@ -106,7 +109,7 @@ export function WorkQueue({
   return (
     <section className="flex flex-col gap-3">
       <header className="flex items-center gap-3">
-        <h2 className="text-sm font-semibold text-ink">Precisam de rota</h2>
+        <h2 className="text-sm font-semibold text-ink">Pedidos de hoje</h2>
         {pending.length > 0 ? (
           <span className="numeric rounded-xs bg-raised px-1.5 py-0.5 text-xs text-ink-muted">
             {pending.length}
@@ -154,7 +157,7 @@ export function WorkQueue({
         </p>
       ) : null}
 
-      {pending.length === 0 ? (
+      {pending.length === 0 && inRoute.length === 0 ? (
         <EmptyState
           icon={Inbox}
           title="Nenhum pedido esperando"
@@ -171,55 +174,15 @@ export function WorkQueue({
           }
         />
       ) : (
-        <div className="overflow-hidden rounded-lg bg-surface hairline">
-          {routable.map((order) => (
-            <OrderRow
-              key={order.id}
-              order={order}
-              selected={selected.has(order.id)}
-              onToggle={toggle}
-            />
-          ))}
-
-          {/*
-            Pedidos sem pino ficam separados e com ação, não escondidos numa
-            mensagem de erro: o dono precisa resolvê-los antes de despachar,
-            e "resolver" aqui é arrastar o pino no mapa.
-          */}
-          {unlocated.length > 0 ? (
-            <div className="border-t bg-warning-soft/40 px-4 py-3">
-              <p className="flex items-center gap-2 text-xs font-medium text-ink">
-                <MapPinOff className="size-3.5 text-warning" aria-hidden />
-                {unlocated.length === 1
-                  ? '1 pedido sem localização no mapa'
-                  : `${unlocated.length} pedidos sem localização no mapa`}
-              </p>
-              <p className="mt-1 text-xs text-ink-muted">
-                Não entram em rota até o endereço ser localizado no mapa.
-              </p>
-              <ul className="mt-2 space-y-1.5">
-                {unlocated.map((order) => (
-                  <li key={order.id} className="flex items-center gap-2 text-xs text-ink-muted">
-                    <span className="min-w-0 flex-1 truncate">
-                      <span className="font-medium text-ink">{order.customerName}</span> —{' '}
-                      {order.address}
-                    </span>
-                    <PinPickerDialog
-                      order={order}
-                      origin={establishment.coordinates}
-                      trigger={
-                        <Button size="sm" variant="outline" className="shrink-0">
-                          <MapPin />
-                          Marcar no mapa
-                        </Button>
-                      }
-                    />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </div>
+        <OrderBoard
+          novos={pending.filter((o) => o.stage === 'NOVO')}
+          montando={pending.filter((o) => o.stage === 'MONTANDO')}
+          prontos={pending.filter((o) => o.stage === 'PRONTO')}
+          emRota={inRoute}
+          selected={selected}
+          onToggle={toggle}
+          origin={establishment.coordinates}
+        />
       )}
 
       {/*

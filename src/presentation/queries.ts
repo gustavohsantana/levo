@@ -22,6 +22,10 @@ export interface OrderView {
   amountCents: number;
   notes: string | null;
   status: 'NEW' | 'IN_ROUTE' | 'DELIVERED' | 'FAILED' | 'CANCELLED';
+  /** Coluna do painel. Derivado de `status` mais os carimbos de preparo. */
+  stage: 'NOVO' | 'MONTANDO' | 'PRONTO' | 'EM_ROTA' | 'FINALIZADO';
+  confirmedAt: string | null;
+  readyAt: string | null;
   isGeocoded: boolean;
   coordinates: { lat: number; lng: number } | null;
   createdAt: string;
@@ -72,6 +76,9 @@ function toOrderView(order: Order, whatsapp: string | null, trackingUrl: string)
     status: order.status,
     isGeocoded: order.isGeocoded,
     coordinates: order.coordinates?.toJSON() ?? null,
+    stage: order.stage,
+    confirmedAt: order.confirmedAt?.toISOString() ?? null,
+    readyAt: order.readyAt?.toISOString() ?? null,
     createdAt: order.createdAt.toISOString(),
     trackingUrl,
     whatsappLink: whatsapp,

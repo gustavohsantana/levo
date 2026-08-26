@@ -49,6 +49,8 @@ interface OrderProps {
   status: OrderStatus;
   trackingToken: Token;
   routeId: string | null;
+  confirmedAt: Date | null;
+  readyAt: Date | null;
   createdAt: Date;
   deliveredAt: Date | null;
 }
@@ -98,6 +100,8 @@ export class Order extends AggregateRoot {
       status: OrderStatus.New,
       trackingToken: Token.generate(),
       routeId: null,
+      confirmedAt: null,
+      readyAt: null,
       createdAt: now,
       deliveredAt: null,
     });
@@ -108,6 +112,37 @@ export class Order extends AggregateRoot {
     }, now);
 
     return order;
+  }
+
+  /**
+   * O lojista aceitou o pedido.
+   *
+   * Idempotente de propósito: o evento `CFM` do iFood pode chegar depois de o
+   * dono já ter confirmado aqui, e o primeiro carimbo é o que vale — ele conta
+   * o tempo de preparo de verdade.
+   */
+  markConfirmed(at: Date): void {
+    if (this.props.status !== OrderStatus.New) {
+      throw new OrderNotPendingError(this.id, this.props.status);
+    }
+
+    this.props.confirmedAt ??= at;
+  }
+
+  /**
+   * Saiu da cozinha.
+   *
+   * Confirma junto se ninguém confirmou: pular a etapa acontece na correria, e
+   * recusar com "confirme antes" seria o sistema brigando com quem está
+   * trabalhando.
+   */
+  markReady(at: Date): void {
+    if (this.props.status !== OrderStatus.New) {
+      throw new OrderNotPendingError(this.id, this.props.status);
+    }
+
+    this.props.confirmedAt ??= at;
+    this.props.readyAt ??= at;
   }
 
   /** Reidrata do banco sem disparar eventos. Só o mapper usa. */
@@ -123,6 +158,25 @@ export class Order extends AggregateRoot {
   get address() { return this.props.address; }
   get coordinates() { return this.props.coordinates; }
   get amount() { return this.props.amount; }
+  get confirmedAt() { return this.props.confirmedAt; }
+  get readyAt() { return this.props.readyAt; }
+
+  /**
+   * Em qual coluna do painel o pedido está.
+   *
+   * Derivado, não guardado. O estado real é a combinação de `status` com os
+   * carimbos de preparo — e um campo a mais para dizer o que já dá para
+   * calcular é um campo a mais para ficar dessincronizado.
+   */
+  get stage(): 'NOVO' | 'MONTANDO' | 'PRONTO' | 'EM_ROTA' | 'FINALIZADO' {
+    if (this.props.status !== OrderStatus.New) {
+      return this.props.status === OrderStatus.InRoute ? 'EM_ROTA' : 'FINALIZADO';
+    }
+
+    if (this.props.readyAt) return 'PRONTO';
+    if (this.props.confirmedAt) return 'MONTANDO';
+    return 'NOVO';
+  }
   get items(): readonly OrderItem[] { return this.props.items; }
   get notes() { return this.props.notes; }
   get status() { return this.props.status; }

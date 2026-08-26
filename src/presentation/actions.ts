@@ -159,3 +159,28 @@ function parseItens(bruto: FormDataEntryValue | null) {
     return undefined;
   }
 }
+
+/**
+ * Avança o pedido nas etapas de preparo.
+ *
+ * "Aceitei" e "saiu da cozinha" são decisões do lojista. Quando o pedido veio
+ * de marketplace, viram aviso lá fora pela caixa de saída — o cliente vê o
+ * pedido andar no aplicativo dele sem ninguém dar baixa duas vezes.
+ */
+export async function advanceOrderStageAction(
+  orderId: string,
+  stage: 'CONFIRMED' | 'READY',
+): Promise<ActionResult> {
+  try {
+    const session = await requireSession();
+    await containerFor(session.establishmentId).useCases.advanceOrderStage.execute(
+      orderId,
+      stage,
+    );
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+
+  revalidatePath('/dashboard');
+  return { ok: true };
+}

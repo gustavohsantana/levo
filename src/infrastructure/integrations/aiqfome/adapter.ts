@@ -168,6 +168,11 @@ export class AiqfomeOrderSource implements OrderSource {
     }
   }
 
+  /** Pronto para o entregador retirar. */
+  async markReady(externalOrderId: string): Promise<void> {
+    await this.comando('mark-as-ready', externalOrderId);
+  }
+
   /**
    * Avisa a plataforma que o pedido chegou ao cliente.
    *
@@ -176,7 +181,12 @@ export class AiqfomeOrderSource implements OrderSource {
    * dizendo que só loja de catálogo separa. Por isso `dispatch` fica de fora.
    */
   async markDelivered(externalOrderId: string): Promise<void> {
-    const resposta = await fetch(new URL('/api/v2/orders/mark-as-delivered', this.baseUrl), {
+    await this.comando('mark-as-delivered', externalOrderId);
+  }
+
+  /** Os comandos de pedido têm todos a mesma forma: POST com `order_id`. */
+  private async comando(rota: string, externalOrderId: string): Promise<void> {
+    const resposta = await fetch(new URL(`/api/v2/orders/${rota}`, this.baseUrl), {
       method: 'POST',
       headers: { ...(await this.headers()), 'content-type': 'application/json' },
       body: JSON.stringify({ order_id: Number(externalOrderId) }),
