@@ -3,6 +3,8 @@
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  Check,
+  ChefHat,
   Inbox,
   LoaderCircle,
   MapPin,
@@ -11,7 +13,7 @@ import {
   Route as RouteIcon,
   Sparkles,
 } from 'lucide-react';
-import { planRouteAction } from '@/presentation/actions';
+import { advanceOrderStageAction, planRouteAction } from '@/presentation/actions';
 import type { OrderView } from '@/presentation/queries';
 import { Button, EmptyState, Select } from '../primitives';
 import { OrderBoard } from './order-board';
@@ -53,6 +55,7 @@ export function WorkQueue({
   const [courierId, setCourierId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ savedMinutes: number; routeId: string } | null>(null);
+  const [avancando, startAdvance] = useTransition();
   const [planning, startPlanning] = useTransition();
 
   const routable = useMemo(() => pending.filter((order) => order.isGeocoded), [pending]);
@@ -106,6 +109,34 @@ export function WorkQueue({
     });
   }
 
+  /*
+   * Os selecionados que ainda podem avançar. O botão só aparece quando há
+   * alguém para mover: oferecer "Aceitar" com tudo já aceito é um botão que
+   * não faz nada, e botão que não faz nada ensina a ignorar botões.
+   */
+  const selecionados = pending.filter((order) => selected.has(order.id));
+  const paraAceitar = selecionados.filter((order) => order.stage === 'NOVO');
+  const paraProntos = selecionados.filter((order) => order.stage !== 'PRONTO');
+
+  function avancarSelecionados(stage: 'CONFIRMED' | 'READY') {
+    const alvos = stage === 'CONFIRMED' ? paraAceitar : paraProntos;
+
+    startAdvance(async () => {
+      /*
+       * Em série, não em paralelo: cada um abre uma transação e, quando o
+       * pedido é de marketplace, enfileira um aviso. Disparar dez de uma vez
+       * economizaria talvez um segundo e traria disputa por conexão no
+       * momento de maior movimento.
+       */
+      for (const order of alvos) {
+        await advanceOrderStageAction(order.id, stage);
+      }
+
+      setSelected(new Set());
+      router.refresh();
+    });
+  }
+
   return (
     <section className="flex flex-col gap-3">
       <header className="flex items-center gap-3">
@@ -115,6 +146,16 @@ export function WorkQueue({
             {pending.length}
           </span>
         ) : null}
+        {/*
+          A dica só aparece com a seleção vazia. Quem já selecionou está vendo
+          a barra de ação, e repetir a instrução ali seria ruído.
+        */}
+        {selected.size === 0 && pending.length > 0 ? (
+          <span className="hidden text-xs text-ink-faint sm:inline">
+            selecione para avançar etapa ou montar rota
+          </span>
+        ) : null}
+
         <NewOrderDialog
           produtos={produtos}
           trigger={
@@ -196,6 +237,30 @@ export function WorkQueue({
             <strong className="numeric font-semibold">{selected.size}</strong>{' '}
             {selected.size === 1 ? 'pedido selecionado' : 'pedidos selecionados'}
           </span>
+
+          {paraAceitar.length > 0 ? (
+            <Button
+              variant="outline"
+              disabled={avancando}
+              onClick={() => avancarSelecionados('CONFIRMED')}
+              className="border-white/25 bg-transparent text-canvas hover:bg-white/10"
+            >
+              {avancando ? <LoaderCircle className="animate-spin" /> : <Check />}
+              Aceitar {paraAceitar.length}
+            </Button>
+          ) : null}
+
+          {paraProntos.length > 0 ? (
+            <Button
+              variant="outline"
+              disabled={avancando}
+              onClick={() => avancarSelecionados('READY')}
+              className="border-white/25 bg-transparent text-canvas hover:bg-white/10"
+            >
+              {avancando ? <LoaderCircle className="animate-spin" /> : <ChefHat />}
+              Marcar pronto {paraProntos.length}
+            </Button>
+          ) : null}
 
           <Select
             value={courierId}

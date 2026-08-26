@@ -167,7 +167,16 @@ function OrderCard({
   const [pendente, startTransition] = useTransition();
 
   return (
-    <li className="rounded-md bg-surface p-2.5 hairline">
+    <li
+      /*
+       * Enquanto o avanço não volta, o cartão fica apagado e sem clique. A
+       * página inteira recarrega depois da ação, e sem esse sinal o dono
+       * clica de novo achando que não pegou.
+       */
+      className={`rounded-md bg-surface p-2.5 transition-opacity hairline ${
+        pendente ? 'pointer-events-none opacity-50' : ''
+      }`}
+    >
       <div className="flex items-start gap-2">
         {!somenteLeitura && pedido.isGeocoded ? (
           <input
