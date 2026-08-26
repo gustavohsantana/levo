@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import { getCatalog, getDashboard } from '@/presentation/queries';
 import { WorkQueue } from '@/presentation/ui/patterns/work-queue';
-import { ActiveRoutes } from '@/presentation/ui/patterns/active-routes';
 import { DayLedger } from '@/presentation/ui/patterns/day-ledger';
 import { FinishedOrders } from '@/presentation/ui/patterns/finished-orders';
 
@@ -25,10 +24,8 @@ export default async function DashboardPage() {
         couriers={data.couriers}
         establishment={data.establishment}
         produtos={produtos}
-        inRoute={data.orders.filter((order) => order.status === 'IN_ROUTE')}
+        rotasAtivas={data.activeRoutes}
       />
-
-      <ActiveRoutes routes={data.activeRoutes} />
 
       {/* Por último e recolhido: consulta do turno, não fila de trabalho. */}
       <FinishedOrders orders={data.orders} />

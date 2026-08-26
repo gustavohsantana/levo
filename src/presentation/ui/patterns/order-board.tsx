@@ -2,9 +2,18 @@
 
 import { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, ChefHat, LoaderCircle, MapPin, MapPinOff, Package, Truck } from 'lucide-react';
+import Link from 'next/link';
+import {
+  Check,
+  ChefHat,
+  LoaderCircle,
+  MapPinOff,
+  MessageCircle,
+  Package,
+  Truck,
+} from 'lucide-react';
 import { advanceOrderStageAction } from '@/presentation/actions';
-import type { OrderView } from '@/presentation/queries';
+import type { OrderView, RouteView } from '@/presentation/queries';
 import { Button } from '../primitives';
 import { clockTime, currency } from '../format';
 import { PinPickerDialog } from './pin-picker-dialog';
@@ -25,7 +34,15 @@ interface Props {
   novos: OrderView[];
   montando: OrderView[];
   prontos: OrderView[];
-  emRota: OrderView[];
+  /**
+   * As rotas na rua, não os pedidos delas.
+   *
+   * Um pedido em rota, sozinho, não diz nada acionável: o que o dono quer
+   * saber é quem está na rua, quanto já entregou e como falar com ele. E
+   * antes isso vivia numa seção abaixo do quadro, que exigia rolar a página
+   * inteira num dia movimentado.
+   */
+  rotas: RouteView[];
   selected: Set<string>;
   onToggle: (id: string, shiftKey: boolean) => void;
   origin: { lat: number; lng: number };
@@ -35,7 +52,7 @@ export function OrderBoard({
   novos,
   montando,
   prontos,
-  emRota,
+  rotas,
   selected,
   onToggle,
   origin,
@@ -72,17 +89,68 @@ export function OrderBoard({
         onToggle={onToggle}
         origin={origin}
       />
-      <Column
-        titulo="Em rota"
-        icone={Truck}
-        pedidos={emRota}
-        vazio="Ninguém na rua."
-        somenteLeitura
-        selected={selected}
-        onToggle={onToggle}
-        origin={origin}
-      />
+      <section className="flex min-w-0 flex-col rounded-lg bg-raised/60 p-2.5">
+        <header className="mb-2 flex items-center gap-2 px-1">
+          <Truck className="size-3.5 text-ink-faint" aria-hidden />
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+            Em rota
+          </h3>
+          {rotas.length > 0 ? (
+            <span className="numeric ml-auto rounded-xs bg-surface px-1.5 text-xs text-ink-muted">
+              {rotas.length}
+            </span>
+          ) : null}
+        </header>
+
+        {rotas.length === 0 ? (
+          <p className="px-1 py-3 text-xs text-ink-faint">Ninguém na rua.</p>
+        ) : (
+          <ul className="flex max-h-[60dvh] flex-col gap-2 overflow-y-auto">
+            {rotas.map((rota) => (
+              <RouteCard key={rota.id} rota={rota} />
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
+  );
+}
+
+/** Uma rota na rua: quem está, quanto já entregou e como falar com ele. */
+function RouteCard({ rota }: { rota: RouteView }) {
+  const feitas = rota.stops.filter((stop) => stop.status !== 'PENDING').length;
+  const progresso = rota.stops.length > 0 ? (feitas / rota.stops.length) * 100 : 0;
+
+  return (
+    <li className="rounded-md bg-surface p-2.5 hairline">
+      <p className="truncate text-sm font-medium text-ink">{rota.courierName}</p>
+      <p className="text-xs text-ink-faint">
+        {rota.status === 'PLANNED' ? 'aguardando saída' : 'na rua'} ·{' '}
+        <span className="numeric">
+          {feitas}/{rota.stops.length}
+        </span>{' '}
+        entregues
+      </p>
+
+      <div className="mt-2 h-1 overflow-hidden rounded-full bg-raised">
+        <div className="h-full rounded-full bg-moving" style={{ width: `${progresso}%` }} />
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-1">
+        <Button asChild variant="ghost" size="sm">
+          <Link href={`/dashboard/rotas/${rota.id}`}>Mapa</Link>
+        </Button>
+
+        {rota.courierWhatsappLink ? (
+          <Button asChild variant="ghost" size="sm">
+            <a href={rota.courierWhatsappLink} target="_blank" rel="noreferrer">
+              <MessageCircle />
+              WhatsApp
+            </a>
+          </Button>
+        ) : null}
+      </div>
+    </li>
   );
 }
 
@@ -130,7 +198,13 @@ function Column({
       {pedidos.length === 0 ? (
         <p className="px-1 py-3 text-xs text-ink-faint">{vazio}</p>
       ) : (
-        <ul className="flex flex-col gap-2">
+        /*
+         * Cada coluna rola por dentro. Sem isso, catorze pedidos numa coluna
+         * empurram o resto da tela para baixo e o dono precisa rolar a página
+         * inteira para ver quem está na rua — que é a informação mais urgente
+         * justamente no dia movimentado.
+         */
+        <ul className="flex max-h-[60dvh] flex-col gap-2 overflow-y-auto">
           {pedidos.map((pedido) => (
             <OrderCard
               key={pedido.id}
@@ -178,7 +252,7 @@ function OrderCard({
       }`}
     >
       <div className="flex items-start gap-2">
-        {!somenteLeitura && pedido.isGeocoded ? (
+        {pedido.isGeocoded ? (
           <input
             type="checkbox"
             checked={selecionado}
@@ -235,11 +309,6 @@ function OrderCard({
             {pendente ? <LoaderCircle className="animate-spin" /> : null}
             {acao.rotulo}
           </Button>
-        ) : somenteLeitura ? (
-          <span className="ml-auto flex items-center gap-1 text-xs text-ink-faint">
-            <MapPin className="size-3" aria-hidden />
-            na rua
-          </span>
         ) : null}
       </div>
     </li>

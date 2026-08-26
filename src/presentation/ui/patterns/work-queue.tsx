@@ -14,7 +14,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { advanceOrderStageAction, planRouteAction } from '@/presentation/actions';
-import type { OrderView } from '@/presentation/queries';
+import type { OrderView, RouteView } from '@/presentation/queries';
 import { Button, EmptyState, Select } from '../primitives';
 import { OrderBoard } from './order-board';
 import type { ProductView } from '@/presentation/queries';
@@ -36,14 +36,14 @@ interface Courier {
  */
 export function WorkQueue({
   pending,
-  inRoute = [],
+  rotasAtivas = [],
   couriers,
   establishment,
   produtos = [],
 }: {
   pending: OrderView[];
-  /** Pedidos que já saíram, para a quarta coluna. */
-  inRoute?: OrderView[];
+  /** As rotas na rua, para a quarta coluna. */
+  rotasAtivas?: RouteView[];
   couriers: Courier[];
   establishment: { name: string; coordinates: { lat: number; lng: number } };
   /** Catálogo, para montar o pedido sem digitar preço. */
@@ -198,7 +198,7 @@ export function WorkQueue({
         </p>
       ) : null}
 
-      {pending.length === 0 && inRoute.length === 0 ? (
+      {pending.length === 0 && rotasAtivas.length === 0 ? (
         <EmptyState
           icon={Inbox}
           title="Nenhum pedido esperando"
@@ -219,7 +219,7 @@ export function WorkQueue({
           novos={pending.filter((o) => o.stage === 'NOVO')}
           montando={pending.filter((o) => o.stage === 'MONTANDO')}
           prontos={pending.filter((o) => o.stage === 'PRONTO')}
-          emRota={inRoute}
+          rotas={rotasAtivas}
           selected={selected}
           onToggle={toggle}
           origin={establishment.coordinates}
