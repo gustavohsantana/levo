@@ -5,6 +5,7 @@ import {
   type Geocoder,
   type Logger,
 } from '@/core';
+import { candidatosDeBusca, type Regiao } from './address-query';
 
 interface Options {
   baseUrl: string;
@@ -58,13 +59,26 @@ export class NominatimGeocoder implements Geocoder {
     };
   }
 
-  async geocode(address: Address): Promise<Coordinates | null> {
-    return this.enqueue(() => this.search(address));
+  async geocode(address: Address, regiao: Regiao = {}): Promise<Coordinates | null> {
+    /*
+     * Uma tentativa por candidato, da mais específica para a mais tolerante —
+     * ver `candidatosDeBusca`. Cada uma respeita o intervalo entre chamadas, e
+     * a primeira que responder encerra: no caso comum é a primeira, e o custo
+     * extra só aparece quando o endereço estava mal escrito, que é exatamente
+     * quando vale gastar mais uma consulta.
+     */
+    for (const consulta of candidatosDeBusca(address.searchable, regiao)) {
+      const encontrado = await this.enqueue(() => this.search(consulta, address.raw));
+      if (encontrado) return encontrado;
+    }
+
+    this.options.logger?.warn({ address: address.raw }, 'geocode.not_found');
+    return null;
   }
 
-  private async search(address: Address): Promise<Coordinates | null> {
+  private async search(consulta: string, original: string): Promise<Coordinates | null> {
     const params = new URLSearchParams({
-      q: address.searchable,
+      q: consulta,
       format: 'json',
       limit: '1',
       countrycodes: this.options.countryCode,
@@ -89,10 +103,7 @@ export class NominatimGeocoder implements Geocoder {
     }
 
     const results = (await response.json()) as NominatimResult[] | { error?: string };
-    if (!Array.isArray(results) || results.length === 0) {
-      this.options.logger?.warn({ address: address.raw }, 'geocode.not_found');
-      return null;
-    }
+    if (!Array.isArray(results) || results.length === 0) return null;
 
     const coordinates = Coordinates.create(Number(results[0].lat), Number(results[0].lon));
 
@@ -102,7 +113,7 @@ export class NominatimGeocoder implements Geocoder {
     // tratar como "não encontrado" e deixar o dono ajustar o pino na mão.
     if (!coordinates.isPlausibleForBrazil) {
       this.options.logger?.warn(
-        { address: address.raw, ...coordinates.toJSON() },
+        { address: original, consulta, ...coordinates.toJSON() },
         'geocode.outside_brazil',
       );
       return null;

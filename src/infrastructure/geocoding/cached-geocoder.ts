@@ -17,8 +17,16 @@ export class CachedGeocoder implements Geocoder {
     private readonly logger?: Logger,
   ) {}
 
-  async geocode(address: Address): Promise<Coordinates | null> {
-    const key = address.cacheKey;
+  async geocode(
+    address: Address,
+    regiao?: { city?: string | null; state?: string | null },
+  ): Promise<Coordinates | null> {
+    /*
+     * A região entra na chave: o mesmo texto de endereço em cidades
+     * diferentes é lugar diferente, e um cache que ignorasse isso serviria
+     * a coordenada de outra cidade ao segundo estabelecimento.
+     */
+    const key = [address.cacheKey, regiao?.city, regiao?.state].filter(Boolean).join('|');
 
     const cached = await this.cache.get(key);
     if (cached) {
@@ -26,7 +34,7 @@ export class CachedGeocoder implements Geocoder {
       return cached;
     }
 
-    const found = await this.inner.geocode(address);
+    const found = await this.inner.geocode(address, regiao);
 
     // Só resultado positivo é guardado: um endereço que falhou hoje pode ser
     // corrigido no OSM amanhã, e cachear o "não achei" congelaria o erro.

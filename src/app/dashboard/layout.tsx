@@ -33,6 +33,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <Button asChild variant="ghost" size="sm">
               <Link href="/dashboard/integracoes">Integrações</Link>
             </Button>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/dashboard/configuracoes">Configurações</Link>
+            </Button>
           </nav>
 
           <form action={logoutAction}>

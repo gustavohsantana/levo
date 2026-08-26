@@ -8,6 +8,15 @@ export class Establishment extends Entity {
     readonly name: string,
     readonly address: Address,
     readonly coordinates: Coordinates,
+    /**
+     * Cidade e estado da operação.
+     *
+     * Entram em toda busca de endereço: sem eles o geocodificador procura no
+     * país inteiro. Opcionais porque o cadastro antigo não os tinha — e um
+     * campo obrigatório retroativo quebraria quem já está usando.
+     */
+    readonly city: string | null = null,
+    readonly state: string | null = null,
   ) {
     super(id);
   }

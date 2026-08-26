@@ -50,6 +50,13 @@ model Establishment {
   id        String   @id @default(uuid())
   name      String
   address   String
+  /// Cidade e estado da operação.
+  ///
+  /// Entram em toda busca de endereço: sem eles o geocodificador procura no
+  /// pais inteiro e "Rua das Flores, 100" casa com a primeira rua homonima que
+  /// aparecer. O dono nao digita a cidade dele em cada pedido — nem deveria.
+  city      String?
+  state     String?
   lat       Float
   lng       Float
   createdAt DateTime @default(now())

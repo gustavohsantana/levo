@@ -48,7 +48,16 @@ export class CreateOrder {
      * aparece marcado na tela e o dono ajusta o pino. Perder o pedido porque o
      * geocodificador piscou seria muito pior que exibi-lo sem mapa.
      */
-    const coordinates = await this.geocoder.geocode(address).catch(() => null);
+    /*
+     * A cidade do estabelecimento entra na busca. Ler antes da transação é uma
+     * ida a mais ao banco, e vale: sem ela o geocodificador procura no país
+     * inteiro e devolve rua homônima de outro estado.
+     */
+    const estabelecimento = await this.uow.run((repos) => repos.establishments.current());
+
+    const coordinates = await this.geocoder
+      .geocode(address, { city: estabelecimento.city, state: estabelecimento.state })
+      .catch(() => null);
 
     return this.uow.run(async (repos) => {
       const itens = await this.resolverItens(repos, input.items ?? []);

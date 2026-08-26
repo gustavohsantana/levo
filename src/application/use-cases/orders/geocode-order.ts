@@ -43,7 +43,17 @@ export class GeocodeOrder {
 
     const coordinates = manual
       ? Coordinates.create(manual.lat, manual.lng)
-      : await this.geocoder.geocode(order.address).catch(() => null);
+      : await (async () => {
+          const estabelecimento = await this.uow.run((repos) =>
+            repos.establishments.current(),
+          );
+          return this.geocoder
+            .geocode(order.address, {
+              city: estabelecimento.city,
+              state: estabelecimento.state,
+            })
+            .catch(() => null);
+        })();
 
     if (!coordinates) {
       return this.uow.run(async (repos) => {

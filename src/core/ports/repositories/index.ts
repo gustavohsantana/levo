@@ -48,6 +48,8 @@ export interface CourierRepository {
 
 export interface EstablishmentRepository {
   current(): Promise<Establishment>;
+  /** Só a região por enquanto: é o que a tela de configurações edita. */
+  saveRegion(city: string | null, state: string | null): Promise<void>;
 }
 
 /** Posição do motoboy. Tabela mais escrita do sistema — ver retenção na Parte 3. */

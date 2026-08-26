@@ -141,6 +141,11 @@ function buildRepositories(db: InMemoryDatabase): Repositories {
     async current() {
       return db.establishment;
     },
+
+    async saveRegion() {
+      // O fake guarda o estabelecimento imutável; a região não é lida em
+      // nenhum teste de regra, e fingir persistência aqui só criaria estado.
+    },
   };
 
   const pings: CourierPingRepository = {

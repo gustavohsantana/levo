@@ -164,10 +164,15 @@ export async function buscarEnderecoAction(
 ): Promise<{ ok: true; lat: number; lng: number } | { ok: false; error: string }> {
   try {
     const session = await requireSession();
-    const { geocoder } = containerFor(session.establishmentId);
+    const container = containerFor(session.establishmentId);
+    const { geocoder } = container;
 
     const endereco = Address.create(texto);
-    const coordenadas = await geocoder.geocode(endereco).catch(() => null);
+    const estabelecimento = await container.read((repos) => repos.establishments.current());
+
+    const coordenadas = await geocoder
+      .geocode(endereco, { city: estabelecimento.city, state: estabelecimento.state })
+      .catch(() => null);
 
     if (!coordenadas) {
       return {
@@ -218,5 +223,32 @@ export async function advanceOrderStageAction(
   }
 
   revalidatePath('/dashboard');
+  return { ok: true };
+}
+
+/**
+ * Cidade e estado da operação.
+ *
+ * Editável porque entra em toda busca de endereço: um piloto em Pouso Alegre e
+ * outro em Curitiba não podem compartilhar o mesmo palpite, e ninguém deveria
+ * digitar a própria cidade em cada pedido.
+ */
+export async function salvarRegiaoAction(formData: FormData): Promise<ActionResult> {
+  const city = String(formData.get('city') ?? '').trim();
+  const state = String(formData.get('state') ?? '').trim().toUpperCase();
+
+  if (city.length < 2) return { ok: false, error: 'Informe a cidade' };
+  if (state.length !== 2) return { ok: false, error: 'O estado tem duas letras (ex.: MG)' };
+
+  try {
+    const session = await requireSession();
+    await containerFor(session.establishmentId).read((repos) =>
+      repos.establishments.saveRegion(city, state),
+    );
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+
+  revalidatePath('/dashboard/configuracoes');
   return { ok: true };
 }

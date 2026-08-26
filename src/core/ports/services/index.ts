@@ -2,8 +2,17 @@ import type { Address, Coordinates } from '../../value-objects';
 import type { OrderSourceKind } from '../../entities';
 
 export interface Geocoder {
-  /** `null` quando o endereço não foi localizado — não é exceção, é rotina. */
-  geocode(address: Address): Promise<Coordinates | null>;
+  /**
+   * `regiao` é a cidade e o estado do estabelecimento.
+   *
+   * Sem isso o geocodificador procura no país inteiro, e "Rua das Flores, 100"
+   * casa com a primeira rua homônima que ele achar. O dono não digita a cidade
+   * dele em todo pedido — nem deveria.
+   */
+  geocode(
+    address: Address,
+    regiao?: { city?: string | null; state?: string | null },
+  ): Promise<Coordinates | null>;
 }
 
 export interface RouteLeg {

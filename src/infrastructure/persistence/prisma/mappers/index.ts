@@ -33,6 +33,8 @@ export const EstablishmentMapper = {
       row.name,
       Address.create(row.address),
       Coordinates.create(row.lat, row.lng),
+      row.city,
+      row.state,
     );
   },
 };

@@ -234,6 +234,12 @@ export class PrismaEstablishmentRepository extends TenantScoped implements Estab
     if (!row) throw new NotFoundError('Estabelecimento', this.establishmentId);
     return EstablishmentMapper.toDomain(row);
   }
+  async saveRegion(city: string | null, state: string | null): Promise<void> {
+    await this.tx.establishment.update({
+      where: { id: this.establishmentId },
+      data: { city, state },
+    });
+  }
 }
 
 export class PrismaCourierPingRepository implements CourierPingRepository {
