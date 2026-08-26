@@ -119,6 +119,130 @@ export async function getCatalog(): Promise<ProductView[]> {
   });
 }
 
+export interface CourierView {
+  id: string;
+  name: string;
+  phone: string;
+  active: boolean;
+  busy: boolean;
+}
+
+export async function getCouriers(): Promise<CourierView[]> {
+  const { container } = await currentContainer();
+
+  return container.read(async (repos) => {
+    const couriers = await repos.couriers.list();
+    const ativas = await repos.routes.listActive();
+
+    return couriers.map((courier) => ({
+      id: courier.id,
+      name: courier.name,
+      phone: courier.phone.formatted,
+      active: courier.active,
+      busy: ativas.some((route) => route.courierId === courier.id),
+    }));
+  });
+}
+
+export interface CourierDay {
+  /** `YYYY-MM-DD`, no fuso do estabelecimento. */
+  date: string;
+  routes: number;
+  deliveries: number;
+  failed: number;
+  distanceMeters: number;
+}
+
+export interface CourierRouteView {
+  id: string;
+  createdAt: string;
+  status: string;
+  stops: number;
+  deliveries: number;
+  failed: number;
+  distanceMeters: number;
+  durationSeconds: number;
+}
+
+/**
+ * O mês de trabalho de um entregador.
+ *
+ * Serve para o acerto: por entrega, por dia ou por rota, o dono precisa do
+ * número que ele usa para pagar. Por isso os totais vêm por dia e por rota, e
+ * **não** por parada — a distância que guardamos é a da rota inteira, e
+ * reparti-la entre as entregas seria estimativa apresentada como fato.
+ */
+export async function getCourierMonth(courierId: string, month: Date) {
+  const { container } = await currentContainer();
+
+  const from = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth(), 1));
+  const to = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() + 1, 1));
+
+  return container.read(async (repos) => {
+    const courier = await repos.couriers.findById(courierId);
+    const routes = await repos.routes.listByCourier(courierId, from, to);
+
+    const porDia = new Map<string, CourierDay>();
+
+    const detalhes: CourierRouteView[] = routes.map((route) => {
+      const entregues = route.stops.filter((stop) => stop.status === 'DELIVERED').length;
+      const falhas = route.stops.filter((stop) => stop.status === 'FAILED').length;
+      const dia = diaLocal(route.createdAt);
+
+      const atual = porDia.get(dia) ?? {
+        date: dia,
+        routes: 0,
+        deliveries: 0,
+        failed: 0,
+        distanceMeters: 0,
+      };
+
+      porDia.set(dia, {
+        ...atual,
+        routes: atual.routes + 1,
+        deliveries: atual.deliveries + entregues,
+        failed: atual.failed + falhas,
+        distanceMeters: atual.distanceMeters + route.distanceMeters,
+      });
+
+      return {
+        id: route.id,
+        createdAt: route.createdAt.toISOString(),
+        status: route.status,
+        stops: route.stops.length,
+        deliveries: entregues,
+        failed: falhas,
+        distanceMeters: route.distanceMeters,
+        durationSeconds: route.durationSeconds,
+      };
+    });
+
+    return {
+      courier: courier
+        ? { id: courier.id, name: courier.name, phone: courier.phone.formatted, active: courier.active }
+        : null,
+      days: [...porDia.values()].sort((a, b) => a.date.localeCompare(b.date)),
+      routes: detalhes,
+    };
+  });
+}
+
+/**
+ * O dia como o lojista o vê, não como o servidor o guarda.
+ *
+ * O servidor roda em UTC; uma rota das 22h de Pouso Alegre cairia no dia
+ * seguinte se agrupássemos pela data crua — e o acerto do mês fecharia errado
+ * exatamente nas rotas de fim de expediente.
+ */
+function diaLocal(date: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
 export async function getDashboard() {
   const { session, container } = await currentContainer();
 

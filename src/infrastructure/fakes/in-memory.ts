@@ -105,6 +105,16 @@ function buildRepositories(db: InMemoryDatabase): Repositories {
     async listOfDay(day) {
       return [...db.routes.values()].filter((route) => sameDay(route.createdAt, day));
     },
+    async listByCourier(courierId, from, to) {
+      return [...db.routes.values()]
+        .filter(
+          (route) =>
+            route.courierId === courierId &&
+            route.createdAt >= from &&
+            route.createdAt < to,
+        )
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    },
     async hasActiveRouteFor(courierId) {
       return [...db.routes.values()].some(
         (route) => route.courierId === courierId && route.status !== RouteStatus.Finished,

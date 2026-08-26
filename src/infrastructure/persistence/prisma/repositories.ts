@@ -174,6 +174,15 @@ export class PrismaRouteRepository extends TenantScoped implements RouteReposito
     return rows.map(RouteMapper.toDomain);
   }
 
+  async listByCourier(courierId: string, from: Date, to: Date): Promise<Route[]> {
+    const rows = await this.tx.route.findMany({
+      where: this.scoped({ courierId, createdAt: { gte: from, lt: to } }),
+      include: { stops: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    return rows.map(RouteMapper.toDomain);
+  }
+
   async hasActiveRouteFor(courierId: string): Promise<boolean> {
     const count = await this.tx.route.count({
       where: this.scoped({ courierId, status: { in: ACTIVE_ROUTE_STATUSES } }),

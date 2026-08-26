@@ -63,6 +63,13 @@ export const saveProductSchema = z.object({
 });
 export type SaveProductInput = z.infer<typeof saveProductSchema>;
 
+export const saveCourierSchema = z.object({
+  id: z.string().min(1).optional().or(z.literal('')),
+  name: z.string().trim().min(2, 'Informe o nome do entregador'),
+  phone: z.string().trim().min(10, 'Telefone incompleto'),
+});
+export type SaveCourierInput = z.infer<typeof saveCourierSchema>;
+
 export const planRouteSchema = z.object({
   courierId: z.string().min(1, 'Escolha um motoboy'),
   orderIds: z.array(z.string().min(1)).min(1, 'Selecione ao menos um pedido'),

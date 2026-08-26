@@ -34,6 +34,8 @@ export interface RouteRepository {
   findById(id: string): Promise<Route | null>;
   listActive(): Promise<Route[]>;
   listOfDay(day: Date): Promise<Route[]>;
+  /** Histórico de um entregador num intervalo, para o calendário e o acerto. */
+  listByCourier(courierId: string, from: Date, to: Date): Promise<Route[]>;
   hasActiveRouteFor(courierId: string): Promise<boolean>;
 }
 
