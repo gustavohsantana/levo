@@ -61,6 +61,7 @@ model Establishment {
   events              DomainEventLog[]
   credentials         IntegrationCredential[]
   marketplaceCommands MarketplaceCommand[]
+  products            Product[]
 }
 
 model User {
@@ -306,4 +307,41 @@ enum MarketplaceCommandKind {
   DISPATCH
   /// Entregue ao cliente. No aiqfome vira `mark-as-delivered`.
   DELIVERED
+}
+
+/// Um item que o estabelecimento vende.
+///
+/// O catálogo é **da plataforma**, não espelho de marketplace. Nasceu do caso
+/// que nenhum aplicativo cobre: o cliente que liga ou manda mensagem no
+/// WhatsApp. Sem catálogo próprio, esse pedido é digitado de cabeça e o valor
+/// sai errado — e é justamente onde o dono tem mais margem.
+///
+/// Importar do iFood preenche a lista sem digitação, mas o produto passa a ser
+/// nosso: editar aqui não escreve de volta lá. Sincronizar nos dois sentidos
+/// quebraria no primeiro item que só existe no WhatsApp, que é a razão de o
+/// catálogo existir.
+model Product {
+  id              String          @id @default(uuid())
+  establishmentId String
+  name            String
+  description     String?
+  priceCents      Int
+  /// Texto livre: o lojista organiza como quiser, e importar de fora traz o
+  /// nome da categoria de lá sem exigir um cadastro à parte.
+  category        String?
+  /// Fora de estoque, sazonal, descontinuado — sai da lista sem apagar o
+  /// histórico dos pedidos que já o usaram.
+  active          Boolean         @default(true)
+  /// De onde veio. `MANUAL` é cadastro próprio; o resto é procedência.
+  source          OrderSourceKind @default(MANUAL)
+  externalId      String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+
+  /// Reimportar não duplica. Em Postgres, NULL é distinto de NULL, então
+  /// vários produtos manuais convivem sem esbarrar nesta restrição.
+  @@unique([establishmentId, source, externalId])
+  @@index([establishmentId, active, name])
 }

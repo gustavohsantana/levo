@@ -22,6 +22,9 @@ import {
   type RouteRepository,
   type MarketplaceOutbox,
   type MarketplaceCommandEntry,
+  Money,
+  Product,
+  type ProductRepository,
 } from '@/core';
 import { CourierMapper, EstablishmentMapper, OrderMapper, RouteMapper } from './mappers';
 
@@ -293,6 +296,92 @@ export class PrismaMarketplaceOutbox implements MarketplaceOutbox {
   }
 }
 
+export class PrismaProductRepository implements ProductRepository {
+  constructor(
+    private readonly tx: Tx,
+    private readonly establishmentId: string,
+  ) {}
+
+  async list(options: { onlyActive?: boolean } = {}): Promise<Product[]> {
+    const rows = await this.tx.product.findMany({
+      where: {
+        establishmentId: this.establishmentId,
+        ...(options.onlyActive ? { active: true } : {}),
+      },
+      orderBy: [{ category: 'asc' }, { name: 'asc' }],
+    });
+
+    return rows.map(toProduct);
+  }
+
+  async findById(id: string): Promise<Product | null> {
+    const row = await this.tx.product.findFirst({
+      where: { id, establishmentId: this.establishmentId },
+    });
+
+    return row ? toProduct(row) : null;
+  }
+
+  async findManyByIds(ids: string[]): Promise<Product[]> {
+    if (ids.length === 0) return [];
+
+    const rows = await this.tx.product.findMany({
+      where: { id: { in: ids }, establishmentId: this.establishmentId },
+    });
+
+    return rows.map(toProduct);
+  }
+
+  async save(product: Product): Promise<void> {
+    const dados = {
+      establishmentId: this.establishmentId,
+      name: product.name,
+      description: product.description,
+      priceCents: product.price.cents,
+      category: product.category,
+      active: product.active,
+      source: product.source,
+      externalId: product.externalId,
+    };
+
+    await this.tx.product.upsert({
+      where: { id: product.id },
+      create: { id: product.id, ...dados },
+      update: dados,
+    });
+  }
+
+  async delete(id: string): Promise<void> {
+    // `deleteMany` com o filtro de tenant: `delete` por id apagaria produto de
+    // outro estabelecimento se um id vazasse.
+    await this.tx.product.deleteMany({ where: { id, establishmentId: this.establishmentId } });
+  }
+}
+
+function toProduct(row: {
+  id: string;
+  establishmentId: string;
+  name: string;
+  description: string | null;
+  priceCents: number;
+  category: string | null;
+  active: boolean;
+  source: OrderSourceKind;
+  externalId: string | null;
+}): Product {
+  return Product.restore({
+    id: row.id,
+    establishmentId: row.establishmentId,
+    name: row.name,
+    description: row.description,
+    price: Money.fromCents(row.priceCents),
+    category: row.category,
+    active: row.active,
+    source: row.source,
+    externalId: row.externalId,
+  });
+}
+
 export function buildRepositories(tx: Tx, establishmentId: string): Repositories {
   return {
     orders: new PrismaOrderRepository(tx, establishmentId),
@@ -300,6 +389,7 @@ export function buildRepositories(tx: Tx, establishmentId: string): Repositories
     couriers: new PrismaCourierRepository(tx, establishmentId),
     establishments: new PrismaEstablishmentRepository(tx, establishmentId),
     pings: new PrismaCourierPingRepository(tx),
+    products: new PrismaProductRepository(tx, establishmentId),
     events: new PrismaEventStore(tx),
     marketplace: new PrismaMarketplaceOutbox(tx),
     geocodeCache: new PrismaGeocodeCacheRepository(tx),

@@ -1,4 +1,11 @@
-import type { Courier, Establishment, Order, OrderSourceKind, Route } from '../../entities';
+import type {
+  Courier,
+  Establishment,
+  Order,
+  OrderSourceKind,
+  Product,
+  Route,
+} from '../../entities';
 import type { DomainEvent } from '../../events/domain-event';
 import type { Coordinates } from '../../value-objects';
 
@@ -49,6 +56,20 @@ export interface CourierPingRepository {
   purgeFinishedBefore(cutoff: Date): Promise<number>;
 }
 
+/**
+ * O catálogo do estabelecimento.
+ *
+ * Listar aceita inativos para a tela de gestão; quem monta pedido só quer os
+ * ativos, e é a tela que decide — o repositório não adivinha.
+ */
+export interface ProductRepository {
+  list(options?: { onlyActive?: boolean }): Promise<Product[]>;
+  findById(id: string): Promise<Product | null>;
+  findManyByIds(ids: string[]): Promise<Product[]>;
+  save(product: Product): Promise<void>;
+  delete(id: string): Promise<void>;
+}
+
 export interface EventStore {
   append(events: DomainEvent[]): Promise<void>;
 }
@@ -93,6 +114,7 @@ export interface Repositories {
   couriers: CourierRepository;
   establishments: EstablishmentRepository;
   pings: CourierPingRepository;
+  products: ProductRepository;
   events: EventStore;
   marketplace: MarketplaceOutbox;
   geocodeCache: GeocodeCacheRepository;

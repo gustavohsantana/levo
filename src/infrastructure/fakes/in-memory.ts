@@ -20,6 +20,8 @@ import {
   type UnitOfWork,
   type MarketplaceOutbox,
   type MarketplaceCommandEntry,
+  Product,
+  type ProductRepository,
 } from '@/core';
 
 /**
@@ -38,6 +40,7 @@ export class InMemoryDatabase {
   geocodeCache = new Map<string, Coordinates>();
   /** Avisos enfileirados para o marketplace, por (provedor, pedido, comando). */
   marketplace = new Map<string, MarketplaceCommandEntry>();
+  products = new Map<string, Product>();
   events: DomainEvent[] = [];
 
   constructor(readonly establishment: Establishment) {}
@@ -165,6 +168,32 @@ function buildRepositories(db: InMemoryDatabase): Repositories {
     },
   };
 
+  const products: ProductRepository = {
+    async list(options = {}) {
+      const todos = [...db.products.values()];
+      const visiveis = options.onlyActive ? todos.filter((p) => p.active) : todos;
+
+      // Mesma ordem do banco: categoria e depois nome. Sem isto, um teste que
+      // depende da ordem passaria aqui e falharia em produção.
+      return visiveis.sort(
+        (a, b) =>
+          (a.category ?? '').localeCompare(b.category ?? '') || a.name.localeCompare(b.name),
+      );
+    },
+    async findById(id) {
+      return db.products.get(id) ?? null;
+    },
+    async findManyByIds(ids) {
+      return ids.map((id) => db.products.get(id)).filter((p): p is Product => Boolean(p));
+    },
+    async save(product) {
+      db.products.set(product.id, product);
+    },
+    async delete(id) {
+      db.products.delete(id);
+    },
+  };
+
   const geocodeCache: GeocodeCacheRepository = {
     async get(key) {
       return db.geocodeCache.get(key) ?? null;
@@ -174,7 +203,17 @@ function buildRepositories(db: InMemoryDatabase): Repositories {
     },
   };
 
-  return { orders, routes, couriers, establishments, pings, events, marketplace, geocodeCache };
+  return {
+    orders,
+    routes,
+    couriers,
+    establishments,
+    pings,
+    events,
+    marketplace,
+    products,
+    geocodeCache,
+  };
 }
 
 function sameDay(a: Date, b: Date): boolean {

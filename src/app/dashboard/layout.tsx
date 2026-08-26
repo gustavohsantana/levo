@@ -22,6 +22,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
           <nav className="ml-auto flex items-center gap-1">
             <Button asChild variant="ghost" size="sm">
+              <Link href="/dashboard/catalogo">Catálogo</Link>
+            </Button>
+            <Button asChild variant="ghost" size="sm">
               <Link href="/dashboard/integracoes">Integrações</Link>
             </Button>
           </nav>

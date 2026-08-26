@@ -13,6 +13,9 @@ import { GeocodeOrder } from './application/use-cases/orders/geocode-order';
 import { ImportOrderFromSource } from './application/use-cases/orders/import-order-from-source';
 import { PlanRoute } from './application/use-cases/routes/plan-route';
 import { StartRoute } from './application/use-cases/routes/start-route';
+import { SaveProduct } from '@/application/use-cases/catalog/save-product';
+import { SetProductActive } from '@/application/use-cases/catalog/set-product-active';
+import { RemoveProduct } from '@/application/use-cases/catalog/remove-product';
 import { CompleteStop } from './application/use-cases/routes/complete-stop';
 import { RecordCourierPing } from './application/use-cases/routes/record-courier-ping';
 import { GetTrackingSnapshot } from './application/use-cases/tracking/get-tracking-snapshot';
@@ -42,6 +45,9 @@ export interface Container {
     completeStop: CompleteStop;
     recordPing: RecordCourierPing;
     tracking: GetTrackingSnapshot;
+    saveProduct: SaveProduct;
+    setProductActive: SetProductActive;
+    removeProduct: RemoveProduct;
   };
 }
 
@@ -93,6 +99,9 @@ export function containerFor(establishmentId: string): Container {
       startRoute: new StartRoute(uow, clock),
       completeStop: new CompleteStop(uow, clock),
       recordPing: new RecordCourierPing(uow, clock),
+      saveProduct: new SaveProduct(uow, ids, establishmentId),
+      setProductActive: new SetProductActive(uow),
+      removeProduct: new RemoveProduct(uow),
       tracking: new GetTrackingSnapshot(uow, clock),
     },
   };

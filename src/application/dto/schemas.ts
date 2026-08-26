@@ -40,6 +40,15 @@ export const createOrderSchema = z.object({
 });
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
 
+export const saveProductSchema = z.object({
+  id: z.string().min(1).optional().or(z.literal('')),
+  name: z.string().trim().min(2, 'O produto precisa de um nome'),
+  description: z.string().trim().max(500).optional().or(z.literal('')),
+  priceReais: brlAmount,
+  category: z.string().trim().max(60).optional().or(z.literal('')),
+});
+export type SaveProductInput = z.infer<typeof saveProductSchema>;
+
 export const planRouteSchema = z.object({
   courierId: z.string().min(1, 'Escolha um motoboy'),
   orderIds: z.array(z.string().min(1)).min(1, 'Selecione ao menos um pedido'),

@@ -78,6 +78,36 @@ function toOrderView(order: Order, whatsapp: string | null, trackingUrl: string)
   };
 }
 
+export interface ProductView {
+  id: string;
+  name: string;
+  description: string | null;
+  priceCents: number;
+  category: string | null;
+  active: boolean;
+  source: string;
+  importado: boolean;
+}
+
+export async function getCatalog(): Promise<ProductView[]> {
+  const { container } = await currentContainer();
+
+  return container.read(async (repos) => {
+    const produtos = await repos.products.list();
+
+    return produtos.map((p) => ({
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      priceCents: p.price.cents,
+      category: p.category,
+      active: p.active,
+      source: p.source,
+      importado: p.importado,
+    }));
+  });
+}
+
 export async function getDashboard() {
   const { session, container } = await currentContainer();
 
