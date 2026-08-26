@@ -1,4 +1,4 @@
-import type { Order as OrderRow } from '@/generated/prisma/client';
+import type { Order as OrderRow, OrderItem as OrderItemRow } from '@/generated/prisma/client';
 import {
   Address,
   Coordinates,
@@ -18,7 +18,12 @@ import {
  * arquivo por agregado, nunca espalhado pelos casos de uso.
  */
 export const OrderMapper = {
-  toDomain(row: OrderRow): Order {
+  /**
+   * `items` chega separado porque nem toda consulta os carrega: a lista do
+   * painel mostra centenas de pedidos e não precisa de item nenhum. Quem
+   * quer os itens pede o `include` e passa aqui.
+   */
+  toDomain(row: OrderRow & { items?: OrderItemRow[] }): Order {
     return Order.restore({
       id: row.id,
       establishmentId: row.establishmentId,
@@ -29,6 +34,12 @@ export const OrderMapper = {
       address: Address.create(row.address, row.reference),
       coordinates: row.lat !== null && row.lng !== null ? Coordinates.create(row.lat, row.lng) : null,
       amount: Money.fromCents(row.amountCents),
+      items: (row.items ?? []).map((item) => ({
+        productId: item.productId,
+        name: item.name,
+        unitPrice: Money.fromCents(item.unitPriceCents),
+        quantity: item.quantity,
+      })),
       notes: row.notes,
       status: row.status as OrderStatus,
       trackingToken: Token.create(row.trackingToken),

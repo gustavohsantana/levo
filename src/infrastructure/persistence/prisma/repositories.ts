@@ -61,6 +61,28 @@ export class PrismaOrderRepository extends TenantScoped implements OrderReposito
   async save(order: Order): Promise<void> {
     const data = OrderMapper.toPersistence(order);
     await this.tx.order.upsert({ where: { id: order.id }, create: data, update: data });
+
+    /*
+     * Itens são reescritos por inteiro, não sincronizados linha a linha.
+     * A lista é curta e imutável depois de criada — comparar o que mudou seria
+     * mais código e mais chance de erro para o mesmo resultado.
+     *
+     * Só toca no banco quando há itens: pedido de marketplace não tem nenhum,
+     * e um `deleteMany` por pedido importado seria uma escrita a cada ciclo do
+     * worker sem nada para apagar.
+     */
+    if (order.items.length === 0) return;
+
+    await this.tx.orderItem.deleteMany({ where: { orderId: order.id } });
+    await this.tx.orderItem.createMany({
+      data: order.items.map((item) => ({
+        orderId: order.id,
+        productId: item.productId,
+        name: item.name,
+        unitPriceCents: item.unitPrice.cents,
+        quantity: item.quantity,
+      })),
+    });
   }
 
   async saveMany(orders: Order[]): Promise<void> {
@@ -70,7 +92,10 @@ export class PrismaOrderRepository extends TenantScoped implements OrderReposito
   }
 
   async findById(id: string): Promise<Order | null> {
-    const row = await this.tx.order.findFirst({ where: this.scoped({ id }) });
+    const row = await this.tx.order.findFirst({
+      where: this.scoped({ id }),
+      include: { items: true },
+    });
     return row ? OrderMapper.toDomain(row) : null;
   }
 

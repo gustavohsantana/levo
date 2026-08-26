@@ -19,6 +19,21 @@ export const OrderStatus = {
 } as const;
 export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
 
+/**
+ * Um item do pedido, com **cópia** do nome e do preço.
+ *
+ * Preço de catálogo muda; o pedido registra o que foi vendido naquele dia por
+ * aquele valor. Ler o preço do produto na hora de exibir faria o histórico se
+ * reescrever a cada reajuste, e a conta do dia deixaria de fechar.
+ */
+export interface OrderItem {
+  /** Procedência. Nulo quando o produto é apagado do catálogo. */
+  productId: string | null;
+  name: string;
+  unitPrice: Money;
+  quantity: number;
+}
+
 interface OrderProps {
   id: string;
   establishmentId: string;
@@ -29,6 +44,7 @@ interface OrderProps {
   address: Address;
   coordinates: Coordinates | null;
   amount: Money;
+  items: OrderItem[];
   notes: string | null;
   status: OrderStatus;
   trackingToken: Token;
@@ -55,10 +71,13 @@ export class Order extends AggregateRoot {
     address: Address;
     coordinates?: Coordinates | null;
     amount?: Money;
+    items?: OrderItem[];
     notes?: string | null;
     now?: Date;
   }): Order {
     const now = input.now ?? new Date();
+    const itens = input.items ?? [];
+
     const order = new Order({
       id: input.id,
       establishmentId: input.establishmentId,
@@ -68,7 +87,13 @@ export class Order extends AggregateRoot {
       customerPhone: input.customerPhone ?? null,
       address: input.address,
       coordinates: input.coordinates ?? null,
-      amount: input.amount ?? Money.zero(),
+      /*
+       * Com itens, o total sai deles — digitar o total à mão ao lado de uma
+       * lista de itens abriria a porta para os dois discordarem, e a versão
+       * errada seria a que o dono vê na conta do dia.
+       */
+      amount: itens.length > 0 ? somar(itens) : (input.amount ?? Money.zero()),
+      items: itens,
       notes: input.notes?.trim() || null,
       status: OrderStatus.New,
       trackingToken: Token.generate(),
@@ -98,6 +123,7 @@ export class Order extends AggregateRoot {
   get address() { return this.props.address; }
   get coordinates() { return this.props.coordinates; }
   get amount() { return this.props.amount; }
+  get items(): readonly OrderItem[] { return this.props.items; }
   get notes() { return this.props.notes; }
   get status() { return this.props.status; }
   get trackingToken() { return this.props.trackingToken; }
@@ -192,4 +218,11 @@ export class Order extends AggregateRoot {
       throw new OrderNotPendingError(this.id, this.props.status);
     }
   }
+}
+
+/** Soma dos itens. Multiplicação em centavos, sem ponto flutuante no meio. */
+function somar(itens: OrderItem[]): Money {
+  return Money.fromCents(
+    itens.reduce((total, item) => total + item.unitPrice.cents * item.quantity, 0),
+  );
 }

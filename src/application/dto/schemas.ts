@@ -30,6 +30,18 @@ export const brlAmount = z.preprocess((raw) => {
     : Number(cleaned);
 }, z.number().min(0, 'Valor não pode ser negativo').default(0));
 
+/**
+ * Itens vindos do catálogo.
+ *
+ * `amountReais` continua existindo ao lado: item fora do catálogo é caso real
+ * — a promoção do dia, a taxa combinada por telefone — e obrigar o cadastro
+ * antes de anotar o pedido transformaria conveniência em obstáculo.
+ */
+export const orderItemSchema = z.object({
+  productId: z.string().min(1),
+  quantity: z.number().int().min(1, 'Quantidade precisa ser ao menos 1'),
+});
+
 export const createOrderSchema = z.object({
   customerName: z.string().trim().min(2, 'Informe o nome do cliente'),
   customerPhone: z.string().trim().optional().or(z.literal('')),
@@ -37,6 +49,7 @@ export const createOrderSchema = z.object({
   reference: z.string().trim().optional().or(z.literal('')),
   amountReais: brlAmount,
   notes: z.string().trim().max(500).optional().or(z.literal('')),
+  items: z.array(orderItemSchema).optional(),
 });
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
 

@@ -15,6 +15,7 @@ import { planRouteAction } from '@/presentation/actions';
 import type { OrderView } from '@/presentation/queries';
 import { Button, EmptyState, Select } from '../primitives';
 import { OrderRow } from './order-row';
+import type { ProductView } from '@/presentation/queries';
 import { NewOrderDialog } from './new-order-dialog';
 import { PinPickerDialog } from './pin-picker-dialog';
 
@@ -35,10 +36,13 @@ export function WorkQueue({
   pending,
   couriers,
   establishment,
+  produtos = [],
 }: {
   pending: OrderView[];
   couriers: Courier[];
   establishment: { name: string; coordinates: { lat: number; lng: number } };
+  /** Catálogo, para montar o pedido sem digitar preço. */
+  produtos?: ProductView[];
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -109,6 +113,7 @@ export function WorkQueue({
           </span>
         ) : null}
         <NewOrderDialog
+          produtos={produtos}
           trigger={
             <Button size="sm" className="ml-auto">
               <Plus />
@@ -154,7 +159,16 @@ export function WorkQueue({
           icon={Inbox}
           title="Nenhum pedido esperando"
           description="Quando um pedido entrar — na mão, por webhook ou pelas plataformas — ele aparece aqui para virar rota."
-          action={<NewOrderDialog trigger={<Button size="sm" variant="primary">Lançar o primeiro pedido</Button>} />}
+          action={
+            <NewOrderDialog
+              produtos={produtos}
+              trigger={
+                <Button size="sm" variant="primary">
+                  Lançar o primeiro pedido
+                </Button>
+              }
+            />
+          }
         />
       ) : (
         <div className="overflow-hidden rounded-lg bg-surface hairline">

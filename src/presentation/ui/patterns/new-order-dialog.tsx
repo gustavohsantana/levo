@@ -5,13 +5,23 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { useRouter } from 'next/navigation';
 import { LoaderCircle, X } from 'lucide-react';
 import { createOrderAction } from '@/presentation/actions';
+import type { ProductView } from '@/presentation/queries';
+import { OrderItemsPicker, type ItemEscolhido } from './order-items-picker';
 import { Button, Field, Input, Textarea } from '../primitives';
 
-export function NewOrderDialog({ trigger }: { trigger: React.ReactNode }) {
+export function NewOrderDialog({
+  trigger,
+  produtos = [],
+}: {
+  trigger: React.ReactNode;
+  produtos?: ProductView[];
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, submit] = useTransition();
+  const [itens, setItens] = useState<ItemEscolhido[]>([]);
+  const [totalCents, setTotalCents] = useState(0);
 
   /**
    * Sem `useEffect` observando o resultado: a ação já devolve se deu certo,
@@ -22,11 +32,20 @@ export function NewOrderDialog({ trigger }: { trigger: React.ReactNode }) {
   function handleSubmit(formData: FormData) {
     setError(null);
 
+    /*
+     * Os itens viajam como JSON num campo escondido. `FormData` não representa
+     * lista de objetos sem inventar convenção de nome — e convenção de nome é
+     * onde esse tipo de código quebra em silêncio quando alguém renomeia algo.
+     */
+    if (itens.length > 0) formData.set('items', JSON.stringify(itens));
+
     submit(async () => {
       const result = await createOrderAction(null, formData);
 
       if (result.ok) {
         setOpen(false);
+        setItens([]);
+        setTotalCents(0);
         router.refresh();
       } else {
         setError(result.error);
@@ -78,10 +97,34 @@ export function NewOrderDialog({ trigger }: { trigger: React.ReactNode }) {
                 <Input name="customerPhone" inputMode="tel" placeholder="(41) 99999-9999" />
               </Field>
 
-              <Field label="Valor">
-                <Input name="amountReais" inputMode="decimal" placeholder="0,00" />
+              <Field
+                label="Valor"
+                hint={itens.length > 0 ? 'somado dos itens' : undefined}
+              >
+                <Input
+                  name="amountReais"
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  /*
+                   * Com itens escolhidos o total vem deles. Deixar o campo
+                   * editável ao lado da lista abriria a porta para os dois
+                   * discordarem — e a versão errada seria a que aparece na
+                   * conta do dia.
+                   */
+                  readOnly={itens.length > 0}
+                  value={itens.length > 0 ? (totalCents / 100).toFixed(2) : undefined}
+                  onChange={itens.length > 0 ? () => undefined : undefined}
+                />
               </Field>
             </div>
+
+            <OrderItemsPicker
+              produtos={produtos}
+              onChange={(escolhidos, total) => {
+                setItens(escolhidos);
+                setTotalCents(total);
+              }}
+            />
 
             <Field label="Referência" hint="Portão, interfone, bloco">
               <Input name="reference" placeholder="Portão azul, interfone 12" />

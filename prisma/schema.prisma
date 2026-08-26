@@ -112,6 +112,7 @@ model Order {
 
   establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
   stop          RouteStop?
+  items         OrderItem[]
 
   // ⭐ A idempotência da importação, garantida pelo banco.
   //
@@ -339,9 +340,33 @@ model Product {
   updatedAt       DateTime        @updatedAt
 
   establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+  orderItems    OrderItem[]
 
   /// Reimportar não duplica. Em Postgres, NULL é distinto de NULL, então
   /// vários produtos manuais convivem sem esbarrar nesta restrição.
   @@unique([establishmentId, source, externalId])
   @@index([establishmentId, active, name])
+}
+
+/// Um item dentro de um pedido.
+///
+/// Guarda **cópia** do nome e do preço, não referência ao produto. Preço de
+/// catálogo muda; o pedido registra o que foi vendido naquele dia, por aquele
+/// valor. Ler o preço do produto na hora de exibir faria o histórico se
+/// reescrever sozinho a cada reajuste — e a conta do dia deixaria de fechar.
+///
+/// `productId` fica só como procedência, e nulo quando o produto for apagado.
+model OrderItem {
+  id             String  @id @default(uuid())
+  orderId        String
+  productId      String?
+  /// Cópia no momento do pedido.
+  name           String
+  unitPriceCents Int
+  quantity       Int
+
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
 }

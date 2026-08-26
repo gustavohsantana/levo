@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { getDashboard } from '@/presentation/queries';
+import { getCatalog, getDashboard } from '@/presentation/queries';
 import { WorkQueue } from '@/presentation/ui/patterns/work-queue';
 import { ActiveRoutes } from '@/presentation/ui/patterns/active-routes';
 import { DayLedger } from '@/presentation/ui/patterns/day-ledger';
@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: 'Painel · Levô' };
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
-  const data = await getDashboard();
+  const [data, produtos] = await Promise.all([getDashboard(), getCatalog()]);
 
   return (
     <div className="flex flex-col gap-7">
@@ -24,6 +24,7 @@ export default async function DashboardPage() {
         pending={data.pending}
         couriers={data.couriers}
         establishment={data.establishment}
+        produtos={produtos}
       />
 
       <ActiveRoutes routes={data.activeRoutes} />

@@ -75,6 +75,13 @@ export async function createOrderAction(
     reference: formData.get('reference'),
     amountReais: formData.get('amountReais') || 0,
     notes: formData.get('notes'),
+    /*
+     * Os itens chegam como JSON num campo escondido. Um `FormData` plano não
+     * representa lista de objetos sem inventar convenção de nome — e a
+     * convenção é justamente onde esse tipo de código costuma quebrar em
+     * silêncio quando alguém renomeia um campo.
+     */
+    items: parseItens(formData.get('items')),
   });
 
   if (!parsed.success) {
@@ -137,4 +144,18 @@ export async function fixOrderPinAction(
 
   revalidatePath('/dashboard');
   return { ok: true };
+}
+
+/** Itens do catálogo, se houver. Entrada malformada vira pedido sem itens. */
+function parseItens(bruto: FormDataEntryValue | null) {
+  if (typeof bruto !== 'string' || !bruto.trim()) return undefined;
+
+  try {
+    const lista = JSON.parse(bruto);
+    return Array.isArray(lista) && lista.length > 0 ? lista : undefined;
+  } catch {
+    // O schema recusaria mesmo assim; devolver `undefined` deixa a mensagem
+    // ser sobre o pedido, não sobre JSON quebrado.
+    return undefined;
+  }
 }

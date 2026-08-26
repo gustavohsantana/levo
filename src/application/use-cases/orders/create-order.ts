@@ -1,5 +1,9 @@
 import {
   Address,
+  NotFoundError,
+  type OrderItem,
+  type Product,
+  ValidationError,
   type Clock,
   type Geocoder,
   type IdGenerator,
@@ -19,6 +23,8 @@ interface Input {
   notes?: string | null;
   source?: OrderSourceKind;
   externalId?: string | null;
+  /** Itens do catálogo. Quando vêm, o total sai deles. */
+  items?: Array<{ productId: string; quantity: number }>;
 }
 
 export class CreateOrder {
@@ -45,6 +51,8 @@ export class CreateOrder {
     const coordinates = await this.geocoder.geocode(address).catch(() => null);
 
     return this.uow.run(async (repos) => {
+      const itens = await this.resolverItens(repos, input.items ?? []);
+
       const order = Order.create({
         id: this.ids.next(),
         establishmentId: this.establishmentId,
@@ -57,6 +65,7 @@ export class CreateOrder {
         address,
         coordinates,
         amount: Money.fromReais(input.amountReais ?? 0),
+        items: itens,
         notes: input.notes,
         now: this.clock.now(),
       });
@@ -67,6 +76,42 @@ export class CreateOrder {
       await repos.events.append(order.pullEvents());
 
       return order;
+    });
+  }
+
+  /**
+   * Copia nome e preço do catálogo para dentro do pedido.
+   *
+   * A cópia é o ponto: o preço muda amanhã e o pedido de hoje precisa continuar
+   * valendo o que valeu. Guardar só o `productId` faria o histórico se
+   * reescrever a cada reajuste, e a conta do dia deixaria de fechar.
+   */
+  private async resolverItens(
+    repos: { products: { findManyByIds(ids: string[]): Promise<Product[]> } },
+    pedidos: Array<{ productId: string; quantity: number }>,
+  ): Promise<OrderItem[]> {
+    if (pedidos.length === 0) return [];
+
+    const produtos = await repos.products.findManyByIds(pedidos.map((i) => i.productId));
+    const porId = new Map(produtos.map((p) => [p.id, p]));
+
+    return pedidos.map((pedido) => {
+      const produto = porId.get(pedido.productId);
+      if (!produto) throw new NotFoundError('Produto', pedido.productId);
+
+      if (!Number.isInteger(pedido.quantity) || pedido.quantity < 1) {
+        throw new ValidationError('Quantidade inválida', {
+          productId: pedido.productId,
+          quantity: pedido.quantity,
+        });
+      }
+
+      return {
+        productId: produto.id,
+        name: produto.name,
+        unitPrice: produto.price,
+        quantity: pedido.quantity,
+      };
     });
   }
 }
