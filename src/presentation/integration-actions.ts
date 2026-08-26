@@ -191,12 +191,54 @@ async function buscarLojas(accessToken: string): Promise<Array<{ id: string; nom
     signal: AbortSignal.timeout(20_000),
   });
 
-  if (!resposta.ok) return [];
+  if (resposta.ok) {
+    const lojas = (await resposta.json()) as Array<{ id: string; name?: string }>;
 
-  const lojas = (await resposta.json()) as Array<{ id: string; name?: string }>;
-  return Array.isArray(lojas)
-    ? lojas.map((loja) => ({ id: loja.id, nome: loja.name ?? loja.id }))
-    : [];
+    if (Array.isArray(lojas) && lojas.length > 0) {
+      return lojas.map((loja) => ({ id: loja.id, nome: loja.name ?? loja.id }));
+    }
+  }
+
+  /*
+   * Sem o módulo Merchant, `/merchants` responde 200 com lista vazia — e a
+   * vinculação morria aí, dizendo que a conta não tem loja. Tinha: o id estava
+   * dentro do próprio token o tempo todo.
+   *
+   * O iFood carimba em `merchant_scope` as lojas que autorizaram o aplicativo,
+   * no formato `id:modulo`. É a fonte mais confiável que existe para isto — não
+   * depende de nenhum módulo extra e vem assinada.
+   */
+  return lojasDoToken(accessToken);
+}
+
+/**
+ * As lojas que o token declara, lidas do claim `merchant_scope`.
+ *
+ * Sem nome: o endpoint que teria o nome é justamente o que não responde. O id
+ * aparece na tela, o que já diz ao dono que existe uma loja conectada — e o
+ * nome volta sozinho quando o módulo Merchant for concedido.
+ */
+function lojasDoToken(accessToken: string): Array<{ id: string; nome: string }> {
+  const corpo = accessToken.split('.')[1];
+  if (!corpo) return [];
+
+  try {
+    const claims = JSON.parse(Buffer.from(corpo, 'base64url').toString('utf8')) as {
+      merchant_scope?: unknown;
+    };
+
+    if (!Array.isArray(claims.merchant_scope)) return [];
+
+    const ids = new Set(
+      claims.merchant_scope
+        .map((entrada) => String(entrada).split(':')[0])
+        .filter((id) => id.length > 0),
+    );
+
+    return [...ids].map((id) => ({ id, nome: id }));
+  } catch {
+    return [];
+  }
 }
 
 /**
