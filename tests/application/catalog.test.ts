@@ -102,6 +102,29 @@ describe('catálogo', () => {
     expect(db.products.get(produto.id)!.active).toBe(true);
   });
 
+  it('reaproveita a grafia da categoria que já existe', async () => {
+    // "doces" e "Doces" em dias diferentes viravam dois grupos na tela, e o
+    // dono só descobria quando a lista ficasse estranha.
+    await salvar.execute({ name: 'Brigadeiro', priceReais: 5, category: 'Doces' });
+    const segundo = await salvar.execute({
+      name: 'Beijinho',
+      priceReais: 5,
+      category: 'doces',
+    });
+
+    expect(segundo.category).toBe('Doces');
+  });
+
+  it('mantém a grafia de quem inaugura a categoria', async () => {
+    const produto = await salvar.execute({
+      name: 'Yakisoba',
+      priceReais: 32,
+      category: 'orientais',
+    });
+
+    expect(produto.category).toBe('orientais');
+  });
+
   it('apaga de vez quando pedido', async () => {
     const produto = await salvar.execute({ name: 'Item errado', priceReais: 1 });
 

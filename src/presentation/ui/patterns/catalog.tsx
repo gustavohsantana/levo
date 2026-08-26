@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { BookOpen, LoaderCircle, Pencil, Plus, Trash2 } from 'lucide-react';
 import {
   alternarProdutoAction,
@@ -20,11 +20,46 @@ import { currency } from '../format';
  * Item inativo continua visível, apagado. Escondê-lo faria o dono cadastrar
  * de novo o que já existe quando o estoque voltasse.
  */
+/**
+ * Categorias sugeridas quando o catálogo ainda está vazio.
+ *
+ * Não é taxonomia: é economia de digitação no primeiro dia. Quem vende outra
+ * coisa escreve o nome que quiser, e a partir daí a própria categoria dele
+ * passa a ser sugerida.
+ */
+const CATEGORIAS_PADRAO = [
+  'Bebidas',
+  'Combos',
+  'Doces',
+  'Lanches',
+  'Massas',
+  'Petiscos',
+  'Pizzas',
+  'Porções',
+  'Saladas',
+  'Sobremesas',
+];
+
 export function Catalog({ produtos }: { produtos: ProductView[] }) {
   const [editando, setEditando] = useState<ProductView | null>(null);
   const [criando, setCriando] = useState(false);
 
   const porCategoria = agrupar(produtos);
+
+  /*
+   * As que o lojista já usou vêm primeiro na lista de sugestões, porque são as
+   * que ele vai usar de novo. As padrão entram só para completar — e somem da
+   * sugestão quando ele já tem a sua.
+   */
+  const categorias = useMemo(() => {
+    const usadas = produtos
+      .map((p) => p.category)
+      .filter((c): c is string => Boolean(c));
+
+    return [...new Set([...usadas, ...CATEGORIAS_PADRAO])].sort((a, b) =>
+      a.localeCompare(b),
+    );
+  }, [produtos]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -51,6 +86,7 @@ export function Catalog({ produtos }: { produtos: ProductView[] }) {
       {criando || editando ? (
         <ProductForm
           produto={editando}
+          categorias={categorias}
           onDone={() => {
             setCriando(false);
             setEditando(null);
@@ -157,9 +193,11 @@ function ProductRow({
 
 function ProductForm({
   produto,
+  categorias,
   onDone,
 }: {
   produto: ProductView | null;
+  categorias: string[];
   onDone: () => void;
 }) {
   const [erro, setErro] = useState<string | null>(null);
@@ -205,12 +243,25 @@ function ProductForm({
           />
         </Field>
 
-        <Field label="Categoria" hint="opcional — agrupa a lista">
+        <Field label="Categoria" hint="escolha uma ou escreva a sua">
+          {/*
+            `datalist` em vez de `select`: sugere o que já existe sem fechar a
+            porta para uma categoria nova. Um `select` obrigaria a cadastrar
+            categoria antes de cadastrar produto — burocracia para quem só quer
+            anotar o que vende.
+          */}
           <Input
             name="category"
+            list="categorias-do-catalogo"
             defaultValue={produto?.category ?? ''}
             placeholder="Pizzas, Bebidas…"
+            autoComplete="off"
           />
+          <datalist id="categorias-do-catalogo">
+            {categorias.map((categoria) => (
+              <option key={categoria} value={categoria} />
+            ))}
+          </datalist>
         </Field>
 
         <Field label="Descrição" hint="opcional">

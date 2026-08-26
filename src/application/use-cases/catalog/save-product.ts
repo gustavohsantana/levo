@@ -26,6 +26,7 @@ export class SaveProduct {
   async execute(input: Input): Promise<Product> {
     return this.uow.run(async (repos) => {
       const price = Money.fromReais(input.priceReais);
+      const category = await this.categoriaCanonica(repos, input.category);
 
       if (!input.id) {
         const product = Product.create({
@@ -34,7 +35,7 @@ export class SaveProduct {
           name: input.name,
           description: input.description,
           price,
-          category: input.category,
+          category,
         });
 
         await repos.products.save(product);
@@ -53,11 +54,37 @@ export class SaveProduct {
         name: input.name,
         description: input.description,
         price,
-        category: input.category,
+        category,
       });
 
       await repos.products.save(product);
       return product;
     });
+  }
+
+  /**
+   * Reaproveita a grafia da categoria que já existe.
+   *
+   * "doces" e "Doces" digitados em dias diferentes viravam dois grupos na
+   * tela, e o dono só descobria quando a lista ficasse estranha. Comparar sem
+   * caixa e devolver a grafia original resolve na entrada, que é onde custa
+   * barato — depois, seria migração de dados.
+   *
+   * Quem escreve uma categoria nova mantém a grafia dele: a primeira vez
+   * define, as seguintes seguem.
+   */
+  private async categoriaCanonica(
+    repos: { products: { list(): Promise<Product[]> } },
+    escrita: string | null | undefined,
+  ): Promise<string | null> {
+    const nome = escrita?.trim();
+    if (!nome) return null;
+
+    const existentes = await repos.products.list();
+    const igual = existentes.find(
+      (p) => p.category && p.category.toLocaleLowerCase() === nome.toLocaleLowerCase(),
+    );
+
+    return igual?.category ?? nome;
   }
 }
