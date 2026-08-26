@@ -17,6 +17,7 @@ import type { OrderView, RouteView } from '@/presentation/queries';
 import { Button } from '../primitives';
 import { clockTime, currency } from '../format';
 import { PinPickerDialog } from './pin-picker-dialog';
+import { StartRouteButton } from './start-route-button';
 
 /**
  * O dia em colunas, na ordem em que o trabalho acontece.
@@ -137,6 +138,13 @@ function RouteCard({ rota }: { rota: RouteView }) {
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-1">
+        {/*
+          Enquanto a rota está planejada, sair é a única ação que importa — e
+          ela vivia numa seção que saiu do painel. Sem isto, a rota ficava
+          "aguardando saída" para sempre e o rastreio do cliente nunca começava.
+        */}
+        {rota.status === 'PLANNED' ? <StartRouteButton routeId={rota.id} /> : null}
+
         <Button asChild variant="ghost" size="sm">
           <Link href={`/dashboard/rotas/${rota.id}`}>Mapa</Link>
         </Button>

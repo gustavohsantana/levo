@@ -140,8 +140,28 @@ export function RouteMap({
       ).addTo(layer.current);
     }
 
+    /*
+     * Duas paradas na mesma coordenada existem de verdade: o geocodificador
+     * devolve o centro da rua quando não conhece o número, então dois pedidos
+     * na mesma via caem no mesmo ponto. Empilhados, um marcador esconde o
+     * outro e a rota parece ter perdido uma parada.
+     *
+     * O desempate afasta os repetidos em círculo, poucos metros — longe o
+     * bastante para os dois aparecerem, perto o bastante para não mentir sobre
+     * onde é.
+     */
+    const vistos = new Map<string, number>();
+
     for (const marker of markers) {
-      L.marker([marker.lat, marker.lng], {
+      const chave = `${marker.lat.toFixed(5)},${marker.lng.toFixed(5)}`;
+      const repetido = vistos.get(chave) ?? 0;
+      vistos.set(chave, repetido + 1);
+
+      const { lat, lng } = repetido === 0
+        ? marker
+        : afastar(marker, repetido);
+
+      L.marker([lat, lng], {
         icon: iconFor(marker),
         title: marker.label,
         // O motoboy fica por cima de tudo; paradas concluídas, por baixo.
@@ -150,7 +170,7 @@ export function RouteMap({
         .addTo(layer.current)
         .bindPopup(marker.label);
 
-      bounds.push([marker.lat, marker.lng]);
+      bounds.push([lat, lng]);
     }
 
     if (bounds.length > 0) {
@@ -226,4 +246,25 @@ function iconFor(marker: MapMarker): L.DivIcon {
     iconAnchor: [style.size / 2, style.size / 2],
     popupAnchor: [0, -style.size / 2],
   });
+}
+
+/**
+ * Afasta um marcador repetido em círculo.
+ *
+ * ~12 metros por volta, o suficiente para separar visualmente sem sugerir que
+ * a entrega é noutro lugar. A posição é determinística: o mesmo conjunto de
+ * paradas desenha sempre igual, e um mapa que muda a cada atualização faria o
+ * dono achar que o pedido se moveu.
+ */
+function afastar(
+  ponto: { lat: number; lng: number },
+  indice: number,
+): { lat: number; lng: number } {
+  const raio = 0.00011 * Math.ceil(indice / 6);
+  const angulo = (indice * 2 * Math.PI) / 6;
+
+  return {
+    lat: ponto.lat + raio * Math.cos(angulo),
+    lng: ponto.lng + raio * Math.sin(angulo),
+  };
 }

@@ -8,6 +8,7 @@ import type { RouteView } from '@/presentation/queries';
 import type { MapMarker } from './route-map';
 import { Button } from '../primitives';
 import { CopyLink } from './copy-link';
+import { StartRouteButton } from './start-route-button';
 import { clockTime, distance, minutes } from '../format';
 
 const RouteMap = dynamic(() => import('./route-map').then((mod) => mod.RouteMap), {
@@ -87,6 +88,9 @@ export function RouteMonitor({
         </dl>
 
         <div className="ml-auto flex gap-2 print:hidden">
+          {/* Mesma razão do painel: com a rota planejada, sair é o que importa. */}
+          {route.status === 'PLANNED' ? <StartRouteButton routeId={route.id} /> : null}
+
           <CopyLink
             whatsappLink={route.courierWhatsappLink}
             path={`/m/${route.accessToken}`}
