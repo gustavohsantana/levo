@@ -34,10 +34,37 @@ const PING_RETENTION_DAYS = 7;
 const config = env();
 const logger = createLogger(config.LOG_LEVEL, !config.isProduction);
 
+/**
+ * Monta as origens de um estabelecimento sem deixar uma derrubar a outra.
+ *
+ * Uma credencial ilegível estourava dentro de `sourcesFor`, que roda **fora**
+ * do try/catch por origem — então o erro subia e abortava o ciclo inteiro. Na
+ * prática: o aiqfome com credencial quebrada calou o polling do iFood, que
+ * estava perfeito, e o iFood passou a ver o aplicativo como OFFLINE. Custou uma
+ * homologação.
+ *
+ * Isolar aqui é barato e a falha vira o que ela é: uma plataforma de fora nesta
+ * rodada, com o motivo no log, e o resto trabalhando.
+ */
 async function sourcesFor(establishmentId: string): Promise<OrderSource[]> {
   const sources: OrderSource[] = [];
 
-  if (config.ifoodEnabled) {
+  for (const montar of [ifoodSourceFor, aiqfomeSourceFor]) {
+    try {
+      const source = await montar(establishmentId);
+      if (source) sources.push(source);
+    } catch (cause) {
+      logger.error({ establishmentId, cause: String(cause) }, 'worker.origem_indisponivel');
+    }
+  }
+
+  return sources;
+}
+
+async function ifoodSourceFor(establishmentId: string): Promise<OrderSource | null> {
+  if (!config.ifoodEnabled) return null;
+
+  {
     if (!config.IFOOD_CLIENT_ID || !config.IFOOD_CLIENT_SECRET) {
       logger.error({ establishmentId }, 'ifood.credenciais_ausentes');
     } else {
@@ -59,21 +86,25 @@ async function sourcesFor(establishmentId: string): Promise<OrderSource[]> {
       } else if (!credential.merchantId) {
         logger.warn({ establishmentId }, 'ifood.sem_loja_vinculada');
       } else {
-        sources.push(
-          new IfoodOrderSource({
-            merchantId: credential.merchantId,
-            accessToken: () =>
-              store.accessTokenFor(establishmentId, 'IFOOD', (refreshToken) =>
-                auth.refresh(refreshToken),
-              ),
-            logger,
-          }),
-        );
+        return new IfoodOrderSource({
+          merchantId: credential.merchantId,
+          accessToken: () =>
+            store.accessTokenFor(establishmentId, 'IFOOD', (refreshToken) =>
+              auth.refresh(refreshToken),
+            ),
+          logger,
+        });
       }
     }
   }
 
-  if (config.aiqfomeEnabled) {
+  return null;
+}
+
+async function aiqfomeSourceFor(establishmentId: string): Promise<OrderSource | null> {
+  if (!config.aiqfomeEnabled) return null;
+
+  {
     /*
      * A credencial é da loja, não do parceiro: cada lojista autoriza o
      * aplicativo na loja dele e o token sai do `CredentialStore`. Sem
@@ -88,18 +119,16 @@ async function sourcesFor(establishmentId: string): Promise<OrderSource[]> {
     } else if (!credencial.merchantId) {
       logger.error({ establishmentId }, 'aiqfome.loja_nao_escolhida');
     } else {
-      sources.push(
-        new AiqfomeOrderSource({
-          accessToken: aiqfomeAccessTokenFor(store, establishmentId),
-          storeId: credencial.merchantId,
-          baseUrl: config.AIQFOME_BASE_URL,
-          logger,
-        }),
-      );
+      return new AiqfomeOrderSource({
+        accessToken: aiqfomeAccessTokenFor(store, establishmentId),
+        storeId: credencial.merchantId,
+        baseUrl: config.AIQFOME_BASE_URL,
+        logger,
+      });
     }
   }
 
-  return sources;
+  return null;
 }
 
 /**
