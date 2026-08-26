@@ -19,6 +19,8 @@ datasource db {
 
 enum OrderSourceKind {
   MANUAL
+  /// Pedido feito pelo proprio cliente, no cardapio publico.
+  SITE
   WEBHOOK
   IFOOD
   AIQFOME
@@ -50,6 +52,11 @@ model Establishment {
   id               String   @id @default(uuid())
   name             String
   address          String
+  /// Endereco publico do cardapio: /cardapio/{slug}.
+  ///
+  /// Legivel de proposito — o dono manda esse link no Instagram e no WhatsApp,
+  /// e um uuid ali seria um link que ninguem digita nem confia.
+  slug             String?  @unique
   /// Cidade e estado da operação.
   ///
   /// Entram em toda busca de endereço: sem eles o geocodificador procura no

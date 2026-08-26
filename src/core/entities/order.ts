@@ -7,7 +7,7 @@ import {
 } from '../errors';
 import { Address, Coordinates, Money, PhoneNumber, Token } from '../value-objects';
 
-export type OrderSourceKind = 'MANUAL' | 'WEBHOOK' | 'IFOOD' | 'AIQFOME';
+export type OrderSourceKind = 'MANUAL' | 'SITE' | 'WEBHOOK' | 'IFOOD' | 'AIQFOME';
 
 export const OrderStatus = {
   New: 'NEW',

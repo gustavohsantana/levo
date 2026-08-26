@@ -36,6 +36,7 @@ export const EstablishmentMapper = {
       row.city,
       row.state,
       Money.fromCents(row.deliveryFeeCents),
+      row.slug,
     );
   },
 };

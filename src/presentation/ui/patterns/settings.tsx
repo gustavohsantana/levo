@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { LoaderCircle, MapPin } from 'lucide-react';
+import { Link2, LoaderCircle, MapPin } from 'lucide-react';
 import { salvarRegiaoAction } from '@/presentation/actions';
 import { Button, Field, Input } from '../primitives';
 
@@ -22,6 +22,8 @@ export function Settings({
     city: string | null;
     state: string | null;
     deliveryFeeReais: number;
+    slug: string | null;
+    baseUrl: string;
   };
 }) {
   const [erro, setErro] = useState<string | null>(null);
@@ -51,7 +53,45 @@ export function Settings({
         <p className="mt-0.5 text-sm text-ink-faint">{establishment.address}</p>
       </section>
 
-      <form action={handleSubmit} className="rounded-lg bg-surface p-5 hairline">
+      <form action={handleSubmit} className="flex flex-col gap-5">
+      <section className="rounded-lg bg-surface p-5 hairline">
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-md bg-accent-soft text-accent-ink">
+            <Link2 className="size-4" aria-hidden />
+          </span>
+          <div>
+            <h2 className="font-semibold text-ink">Seu cardápio na internet</h2>
+            <p className="mt-1 text-sm leading-relaxed text-ink-muted">
+              Mande esse link no Instagram e no WhatsApp. O cliente monta o pedido e ele
+              entra aqui direto, sem comissão de marketplace.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <Field label="Endereço do cardápio">
+            <div className="flex items-center gap-1">
+              <span className="shrink-0 text-sm text-ink-faint">
+                {establishment.baseUrl.replace(/^https?:\/\//, '')}/cardapio/
+              </span>
+              <Input name="slug" defaultValue={establishment.slug ?? ''} required />
+            </div>
+          </Field>
+
+          {establishment.slug ? (
+            <a
+              href={`/cardapio/${establishment.slug}`}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-block text-sm text-accent-ink hover:underline"
+            >
+              Abrir o cardápio →
+            </a>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="rounded-lg bg-surface p-5 hairline">
         <div className="flex items-start gap-3">
           <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-md bg-accent-soft text-accent-ink">
             <MapPin className="size-4" aria-hidden />
@@ -97,6 +137,7 @@ export function Settings({
           {pendente ? <LoaderCircle className="animate-spin" /> : null}
           Salvar
         </Button>
+      </section>
       </form>
     </div>
   );

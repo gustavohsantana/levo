@@ -239,15 +239,23 @@ export async function salvarRegiaoAction(formData: FormData): Promise<ActionResu
   const city = String(formData.get('city') ?? '').trim();
   const state = String(formData.get('state') ?? '').trim().toUpperCase();
   const taxa = Number(String(formData.get('deliveryFeeReais') ?? '0').replace(',', '.'));
+  const slug = String(formData.get('slug') ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
 
   if (city.length < 2) return { ok: false, error: 'Informe a cidade' };
   if (state.length !== 2) return { ok: false, error: 'O estado tem duas letras (ex.: MG)' };
   if (!Number.isFinite(taxa) || taxa < 0) return { ok: false, error: 'Taxa de entrega inválida' };
+  if (slug.length < 3) return { ok: false, error: 'O endereço do cardápio é muito curto' };
 
   try {
     const session = await requireSession();
     await containerFor(session.establishmentId).read((repos) =>
-      repos.establishments.saveSettings(city, state, Math.round(taxa * 100)),
+      repos.establishments.saveSettings(city, state, Math.round(taxa * 100), slug),
     );
   } catch (cause) {
     return { ok: false, error: toFormError(cause) };

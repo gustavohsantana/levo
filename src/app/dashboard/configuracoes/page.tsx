@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { env } from '@/env';
 import { currentContainer } from '@/presentation/queries';
 import { Settings } from '@/presentation/ui/patterns/settings';
 
@@ -16,6 +17,8 @@ export default async function ConfiguracoesPage() {
       city: atual.city,
       state: atual.state,
       deliveryFeeReais: atual.deliveryFee.reais,
+      slug: atual.slug,
+      baseUrl: env().PUBLIC_BASE_URL,
     };
   });
 

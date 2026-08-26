@@ -239,10 +239,11 @@ export class PrismaEstablishmentRepository extends TenantScoped implements Estab
     city: string | null,
     state: string | null,
     deliveryFeeCents: number,
+    slug: string,
   ): Promise<void> {
     await this.tx.establishment.update({
       where: { id: this.establishmentId },
-      data: { city, state, deliveryFeeCents },
+      data: { city, state, deliveryFeeCents, slug },
     });
   }
 }

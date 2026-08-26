@@ -20,6 +20,8 @@ export class Establishment extends Entity {
     readonly state: string | null = null,
     /** Taxa de entrega sugerida ao lançar pedido manual. */
     readonly deliveryFee: Money = Money.zero(),
+    /** Endereço público do cardápio. `null` enquanto o dono não publicou. */
+    readonly slug: string | null = null,
   ) {
     super(id);
   }

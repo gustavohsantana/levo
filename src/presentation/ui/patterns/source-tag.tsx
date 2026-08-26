@@ -13,6 +13,7 @@ import type { OrderView } from '@/presentation/queries';
 const ETIQUETAS: Partial<Record<OrderView['source'], { texto: string; classe: string }>> = {
   IFOOD: { texto: 'iFood', classe: 'bg-[#ea1d2c]/10 text-[#c4111f]' },
   AIQFOME: { texto: 'aiqfome', classe: 'bg-[#7b2cbf]/10 text-[#6a1fb0]' },
+  SITE: { texto: 'cardápio', classe: 'bg-accent-soft text-accent-ink' },
   WEBHOOK: { texto: 'webhook', classe: 'bg-raised text-ink-faint' },
 };
 

@@ -53,6 +53,7 @@ export interface EstablishmentRepository {
     city: string | null,
     state: string | null,
     deliveryFeeCents: number,
+    slug: string,
   ): Promise<void>;
 }
 

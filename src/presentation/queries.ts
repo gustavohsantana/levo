@@ -21,7 +21,7 @@ export interface OrderView {
   reference: string | null;
   amountCents: number;
   notes: string | null;
-  source: 'MANUAL' | 'WEBHOOK' | 'IFOOD' | 'AIQFOME';
+  source: 'MANUAL' | 'SITE' | 'WEBHOOK' | 'IFOOD' | 'AIQFOME';
   deliveryFeeCents: number;
   paymentMethod: 'CASH' | 'CREDIT' | 'DEBIT' | 'PIX' | 'ONLINE' | null;
   status: 'NEW' | 'IN_ROUTE' | 'DELIVERED' | 'FAILED' | 'CANCELLED';
