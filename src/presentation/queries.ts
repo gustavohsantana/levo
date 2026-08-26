@@ -169,6 +169,8 @@ export interface CourierRouteView {
     address: string;
     status: 'PENDING' | 'DELIVERED' | 'FAILED';
     amountCents: number;
+    /** Distância do trecho anterior até esta parada — o km desta entrega. */
+    legDistanceMeters: number;
   }>;
 }
 
@@ -242,6 +244,7 @@ export async function getCourierMonth(courierId: string, month: Date) {
               address: pedido?.address.raw ?? '—',
               status: stop.status,
               amountCents: pedido?.amount.cents ?? 0,
+              legDistanceMeters: stop.legDistanceMeters,
             };
           }),
       };

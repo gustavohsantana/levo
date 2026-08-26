@@ -26,7 +26,14 @@ interface Props {
 }
 
 export function CourierMonth({ courier, mes, days, routes }: Props) {
-  const [diaSelecionado, setDiaSelecionado] = useState<string | null>(null);
+  /*
+   * Abre no dia mais recente com movimento em vez de vazio. Quem entra aqui
+   * quer ver o último trabalho — pedir um clique antes de mostrar qualquer
+   * coisa desperdiça a tela e o tempo de quem chegou.
+   */
+  const [diaSelecionado, setDiaSelecionado] = useState<string | null>(
+    days.length > 0 ? days[days.length - 1].date : null,
+  );
 
   const porDia = new Map(days.map((dia) => [dia.date, dia]));
   const total = days.reduce(
@@ -72,34 +79,45 @@ export function CourierMonth({ courier, mes, days, routes }: Props) {
         </dl>
       </div>
 
-      <Calendario
-        mes={mes}
-        porDia={porDia}
-        selecionado={diaSelecionado}
-        onSelect={setDiaSelecionado}
-      />
+      <div className="grid items-start gap-6 lg:grid-cols-[17rem_1fr]">
+        <Calendario
+          mes={mes}
+          porDia={porDia}
+          selecionado={diaSelecionado}
+          onSelect={setDiaSelecionado}
+        />
 
-      {diaSelecionado ? (
-        <section>
+        {diaSelecionado ? (
+        <section className="min-w-0">
           <h2 className="mb-2 text-sm font-semibold text-ink">
             {diaPorExtenso(diaSelecionado)}
+            {porDia.get(diaSelecionado) ? (
+              <span className="ml-2 font-normal text-ink-faint">
+                {porDia.get(diaSelecionado)!.deliveries} entregues ·{' '}
+                {distance(porDia.get(diaSelecionado)!.distanceMeters)}
+              </span>
+            ) : null}
           </h2>
 
           {rotasDoDia.length === 0 ? (
             <p className="text-sm text-ink-faint">Nenhuma rota neste dia.</p>
           ) : (
             <ul className="overflow-hidden rounded-lg bg-surface hairline">
-              {rotasDoDia.map((rota) => (
-                <RouteAccordion key={rota.id} rota={rota} />
+              {rotasDoDia.map((rota, indice) => (
+                // A primeira já vem aberta: com uma rota só no dia, que é o caso
+                // comum, o acordeão fechado seria um clique para ver a única coisa
+                // que existe ali.
+                <RouteAccordion key={rota.id} rota={rota} inicialmenteAberta={indice === 0} />
               ))}
             </ul>
           )}
         </section>
-      ) : (
-        <p className="text-sm text-ink-faint">
-          Clique num dia com movimento para ver as rotas dele.
-        </p>
-      )}
+        ) : (
+          <p className="text-sm text-ink-faint">
+            Nenhuma rota neste mês.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -111,8 +129,14 @@ export function CourierMonth({ courier, mes, days, routes }: Props) {
  * Levar a segunda pergunta para outra tela obriga o dono a perder o dia em que
  * estava, e ele volta para conferir a rota seguinte — por isso abre aqui.
  */
-function RouteAccordion({ rota }: { rota: CourierRouteView }) {
-  const [aberta, setAberta] = useState(false);
+function RouteAccordion({
+  rota,
+  inicialmenteAberta,
+}: {
+  rota: CourierRouteView;
+  inicialmenteAberta?: boolean;
+}) {
+  const [aberta, setAberta] = useState(Boolean(inicialmenteAberta));
 
   return (
     <li className="border-b last:border-b-0">
@@ -149,12 +173,17 @@ function RouteAccordion({ rota }: { rota: CourierRouteView }) {
             {rota.paradas.map((parada) => (
               <li key={parada.position} className="flex items-center gap-3 text-sm">
                 <span className="numeric w-5 shrink-0 text-xs text-ink-faint">
-                  {parada.position + 1}
+                  {parada.position}
                 </span>
 
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-ink">{parada.customerName}</p>
-                  <p className="truncate text-xs text-ink-faint">{parada.address}</p>
+                  <p className="truncate text-xs text-ink-faint">
+                    {parada.address}
+                    {parada.legDistanceMeters > 0 ? (
+                      <span className="numeric"> · {distance(parada.legDistanceMeters)}</span>
+                    ) : null}
+                  </p>
                 </div>
 
                 {parada.amountCents > 0 ? (
@@ -223,7 +252,7 @@ function Calendario({
   const offset = primeiro.getUTCDay();
 
   return (
-    <div className="max-w-xs rounded-lg bg-surface p-2.5 hairline">
+    <div className="rounded-lg bg-surface p-2.5 hairline">
       <div className="mb-0.5 grid grid-cols-7 gap-0.5">
         {DIAS.map((dia, i) => (
           <span key={i} className="text-center text-[11px] text-ink-faint">
