@@ -38,3 +38,53 @@ describe('WhatsAppLinkBuilder', () => {
     expect(builder.dispatchLink(orderWith(null), 'Pizzaria do Zé')).toBeNull();
   });
 });
+
+/**
+ * O link da rota para o motoboy.
+ *
+ * Copiar e colar é um passo que se perde na correria — e o link colado na
+ * conversa errada entrega a rota de um motoboy a outro.
+ */
+describe('routeLink', () => {
+  const builder = new WhatsAppLinkBuilder('https://levoentregas.vercel.app');
+
+  const base = {
+    accessToken: 'n3tVnThLwWzXbTYNuPHWTg',
+    courierWhatsapp: '5541999990001',
+    courierName: 'Jefferson Silva',
+    stops: 3,
+  };
+
+  it('abre a conversa do motoboy com a rota escrita', () => {
+    const link = builder.routeLink(base)!;
+    const texto = decodeURIComponent(new URL(link).searchParams.get('text')!);
+
+    expect(link.startsWith('https://wa.me/5541999990001?')).toBe(true);
+    expect(texto).toContain('Jefferson');
+    expect(texto).toContain('3 pedidos');
+    expect(texto).toContain('https://levoentregas.vercel.app/m/n3tVnThLwWzXbTYNuPHWTg');
+  });
+
+  it('usa só o primeiro nome', () => {
+    // "Oi, Jefferson Silva!" soa como cobrança; "Oi, Jefferson!" soa como
+    // mensagem de quem trabalha junto.
+    const texto = decodeURIComponent(
+      new URL(builder.routeLink(base)!).searchParams.get('text')!,
+    );
+
+    expect(texto).toContain('Oi, Jefferson!');
+  });
+
+  it('concorda no singular com uma parada só', () => {
+    const texto = decodeURIComponent(
+      new URL(builder.routeLink({ ...base, stops: 1 })!).searchParams.get('text')!,
+    );
+
+    expect(texto).toContain('1 pedido está pronta');
+    expect(texto).not.toContain('1 pedidos');
+  });
+
+  it('devolve null sem telefone — a tela esconde o botão', () => {
+    expect(builder.routeLink({ ...base, courierWhatsapp: null })).toBeNull();
+  });
+});

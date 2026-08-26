@@ -37,6 +37,8 @@ export interface RouteView {
   id: string;
   courierId: string;
   courierName: string;
+  /** Conversa do motoboy já com a rota escrita. `null` sem telefone válido. */
+  courierWhatsappLink: string | null;
   status: 'PLANNED' | 'IN_PROGRESS' | 'FINISHED';
   accessToken: string;
   geometry: string | null;
@@ -183,7 +185,18 @@ export async function getDashboard() {
         busy: activeRoutes.some((route) => route.courierId === courier.id),
       })),
       activeRoutes: activeRoutes.map((route) =>
-        toRouteView(route, orderById, couriers.find((c) => c.id === route.courierId)?.name ?? '—'),
+        toRouteView(
+        route,
+        orderById,
+        couriers.find((c) => c.id === route.courierId)?.name ?? '—',
+        container.whatsapp.routeLink({
+          accessToken: route.accessToken.value,
+          courierWhatsapp:
+            couriers.find((c) => c.id === route.courierId)?.phone.whatsapp ?? null,
+          courierName: couriers.find((c) => c.id === route.courierId)?.name ?? '',
+          stops: route.stops.length,
+        }),
+      ),
       ),
       /** Números do dia — a evidência que o piloto precisa produzir. */
       today: {
@@ -200,11 +213,13 @@ function toRouteView(
   route: Route,
   orderById: Map<string, Order>,
   courierName: string,
+  courierWhatsappLink: string | null = null,
 ): RouteView {
   return {
     id: route.id,
     courierId: route.courierId,
     courierName,
+    courierWhatsappLink,
     status: route.status,
     accessToken: route.accessToken.value,
     geometry: route.geometry,
@@ -251,6 +266,14 @@ export async function getRoute(routeId: string) {
         route,
         new Map(orders.map((order) => [order.id, order])),
         couriers.find((courier) => courier.id === route.courierId)?.name ?? '—',
+        container.whatsapp.routeLink({
+          accessToken: route.accessToken.value,
+          courierWhatsapp:
+            couriers.find((courier) => courier.id === route.courierId)?.phone.whatsapp ?? null,
+          courierName:
+            couriers.find((courier) => courier.id === route.courierId)?.name ?? '',
+          stops: route.stops.length,
+        }),
       ),
       establishment: {
         name: establishment.name,

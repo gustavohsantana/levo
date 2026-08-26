@@ -76,6 +76,7 @@ export function ActiveRoutes({ routes }: { routes: RouteView[] }) {
                   <Link href={`/dashboard/rotas/${route.id}`}>Acompanhar no mapa</Link>
                 </Button>
                 <CopyLink
+                  whatsappLink={route.courierWhatsappLink}
                   path={`/m/${route.accessToken}`}
                   label="Copiar link do motoboy"
                   done={

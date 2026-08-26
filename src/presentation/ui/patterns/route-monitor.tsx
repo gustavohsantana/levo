@@ -88,6 +88,7 @@ export function RouteMonitor({
 
         <div className="ml-auto flex gap-2 print:hidden">
           <CopyLink
+            whatsappLink={route.courierWhatsappLink}
             path={`/m/${route.accessToken}`}
             label="Link do motoboy"
             done={<><Check className="size-3.5" /> Copiado</>}

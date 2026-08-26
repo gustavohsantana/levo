@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Link2 } from 'lucide-react';
+import { Link2, MessageCircle } from 'lucide-react';
 import { Button } from '../primitives';
 
 /**
@@ -15,10 +15,19 @@ export function CopyLink({
   path,
   label,
   done,
+  whatsappLink,
 }: {
   path: string;
   label: string;
   done: React.ReactNode;
+  /**
+   * Conversa do motoboy já com a rota escrita.
+   *
+   * Quando existe, vira a ação principal e o copiar fica de reserva: copiar e
+   * colar é um passo que se perde na correria, e o link colado na conversa
+   * errada entrega a rota de um motoboy a outro.
+   */
+  whatsappLink?: string | null;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -37,8 +46,19 @@ export function CopyLink({
   }
 
   return (
-    <Button size="sm" variant="ghost" onClick={copy}>
-      {copied ? done : <><Link2 />{label}</>}
-    </Button>
+    <>
+      {whatsappLink ? (
+        <Button size="sm" variant="outline" asChild>
+          <a href={whatsappLink} target="_blank" rel="noreferrer">
+            <MessageCircle />
+            Enviar no WhatsApp
+          </a>
+        </Button>
+      ) : null}
+
+      <Button size="sm" variant="ghost" onClick={copy}>
+        {copied ? done : <><Link2 />{label}</>}
+      </Button>
+    </>
   );
 }
