@@ -136,6 +136,18 @@ function ProductRow({
         produto.active ? '' : 'opacity-55'
       }`}
     >
+      {produto.imageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element -- a imagem é de
+        // domínio de terceiro (iFood, aiqfome) e muda sem aviso; o otimizador
+        // do Next exigiria liberar host a host.
+        <img
+          src={produto.imageUrl}
+          alt=""
+          className="size-9 shrink-0 rounded object-cover"
+          loading="lazy"
+        />
+      ) : null}
+
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium text-ink">
           {produto.name}
@@ -266,6 +278,18 @@ function ProductForm({
 
         <Field label="Descrição" hint="opcional">
           <Textarea name="description" rows={2} defaultValue={produto?.description ?? ''} />
+        </Field>
+
+        <Field
+          label="Foto"
+          hint="cole o endereço de uma imagem — a importação preenche sozinha"
+        >
+          <Input
+            name="imageUrl"
+            type="url"
+            defaultValue={produto?.imageUrl ?? ''}
+            placeholder="https://…"
+          />
         </Field>
       </div>
 

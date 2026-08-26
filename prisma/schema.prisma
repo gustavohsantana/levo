@@ -332,6 +332,10 @@ model Product {
   category        String?
   /// Fora de estoque, sazonal, descontinuado — sai da lista sem apagar o
   /// histórico dos pedidos que já o usaram.
+  /// Endereço da foto. Guardamos a URL, não o arquivo: importar do iFood já
+  /// traz a imagem hospedada lá, e subir arquivo exigiria um armazenamento
+  /// que o projeto ainda não tem.
+  imageUrl        String?
   active          Boolean         @default(true)
   /// De onde veio. `MANUAL` é cadastro próprio; o resto é procedência.
   source          OrderSourceKind @default(MANUAL)

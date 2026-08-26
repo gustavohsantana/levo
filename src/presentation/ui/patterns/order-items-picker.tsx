@@ -78,7 +78,7 @@ export function OrderItemsPicker({
   if (disponiveis.length === 0) return null;
 
   return (
-    <div className="rounded-md bg-raised p-3">
+    <div className="rounded-md bg-raised p-2.5">
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">Itens</p>
         {totalCents > 0 ? (
@@ -93,12 +93,22 @@ export function OrderItemsPicker({
         className="mt-2"
       />
 
-      <ul className="mt-2 max-h-52 overflow-y-auto">
+      <ul className="mt-2 max-h-40 overflow-y-auto">
         {filtrados.map((produto) => {
           const quantidade = quantidades[produto.id] ?? 0;
 
           return (
-            <li key={produto.id} className="flex items-center gap-2 py-1.5">
+            <li key={produto.id} className="flex items-center gap-2 py-1">
+              {produto.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={produto.imageUrl}
+                  alt=""
+                  className="size-7 shrink-0 rounded object-cover"
+                  loading="lazy"
+                />
+              ) : null}
+
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm text-ink">{produto.name}</p>
                 <p className="numeric text-xs text-ink-faint">{currency(produto.priceCents)}</p>

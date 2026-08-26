@@ -65,8 +65,13 @@ export function NewOrderDialog({
 
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/35 backdrop-blur-[2px]" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(30rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-surface p-5 shadow-xl">
-          <div className="mb-4 flex items-start justify-between gap-4">
+        {/*
+          Altura limitada e rolagem interna: com o catálogo aberto o formulário
+          passava da tela e o botão de lançar ficava inalcançável — pior ainda
+          em notebook, que é onde isso é usado.
+        */}
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[min(30rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg bg-surface shadow-xl">
+          <div className="flex items-start justify-between gap-4 border-b px-5 py-4">
             <div>
               <Dialog.Title className="text-sm font-semibold text-ink">Novo pedido</Dialog.Title>
               <Dialog.Description className="mt-0.5 text-xs text-ink-muted">
@@ -80,7 +85,7 @@ export function NewOrderDialog({
             </Dialog.Close>
           </div>
 
-          <form action={handleSubmit} className="flex flex-col gap-3.5">
+          <form action={handleSubmit} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 py-4">
             <Field label="Cliente">
               <Input name="customerName" required autoFocus placeholder="Nome de quem recebe" />
             </Field>
@@ -140,7 +145,12 @@ export function NewOrderDialog({
               </p>
             ) : null}
 
-            <div className="mt-1 flex justify-end gap-2">
+            {/*
+              O rodapé fica fora da área que rola: o botão de lançar precisa
+              estar sempre visível, senão quem escolheu cinco itens tem que
+              rolar de volta para concluir.
+            */}
+            <div className="sticky bottom-0 -mx-5 -mb-4 mt-1 flex justify-end gap-2 border-t bg-surface px-5 py-3">
               <Dialog.Close asChild>
                 <Button type="button" variant="ghost">
                   Cancelar

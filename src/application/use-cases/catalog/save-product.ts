@@ -7,6 +7,7 @@ interface Input {
   description?: string | null;
   priceReais: number;
   category?: string | null;
+  imageUrl?: string | null;
 }
 
 /**
@@ -36,6 +37,7 @@ export class SaveProduct {
           description: input.description,
           price,
           category,
+          imageUrl: input.imageUrl,
         });
 
         await repos.products.save(product);
@@ -55,6 +57,7 @@ export class SaveProduct {
         description: input.description,
         price,
         category,
+        imageUrl: input.imageUrl,
       });
 
       await repos.products.save(product);

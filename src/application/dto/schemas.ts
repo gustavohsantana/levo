@@ -59,6 +59,7 @@ export const saveProductSchema = z.object({
   description: z.string().trim().max(500).optional().or(z.literal('')),
   priceReais: brlAmount,
   category: z.string().trim().max(60).optional().or(z.literal('')),
+  imageUrl: z.string().trim().url('Endereço de imagem inválido').optional().or(z.literal('')),
 });
 export type SaveProductInput = z.infer<typeof saveProductSchema>;
 

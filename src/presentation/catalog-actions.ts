@@ -22,6 +22,7 @@ export async function salvarProdutoAction(formData: FormData): Promise<ActionRes
     description: formData.get('description') ?? '',
     priceReais: formData.get('priceReais'),
     category: formData.get('category') ?? '',
+    imageUrl: formData.get('imageUrl') ?? '',
   });
 
   if (!parsed.success) {
@@ -38,6 +39,7 @@ export async function salvarProdutoAction(formData: FormData): Promise<ActionRes
       description: parsed.data.description || null,
       priceReais: parsed.data.priceReais,
       category: parsed.data.category || null,
+      imageUrl: parsed.data.imageUrl || null,
     });
 
     revalidatePath('/dashboard/catalogo');

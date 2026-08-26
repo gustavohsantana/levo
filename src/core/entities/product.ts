@@ -17,6 +17,7 @@ export interface ProductProps {
   description: string | null;
   price: Money;
   category: string | null;
+  imageUrl: string | null;
   active: boolean;
   source: OrderSourceKind;
   externalId: string | null;
@@ -34,6 +35,7 @@ export class Product extends Entity {
     description?: string | null;
     price: Money;
     category?: string | null;
+    imageUrl?: string | null;
     active?: boolean;
     source?: OrderSourceKind;
     externalId?: string | null;
@@ -53,6 +55,7 @@ export class Product extends Entity {
       description: input.description?.trim() || null,
       price: input.price,
       category: input.category?.trim() || null,
+      imageUrl: input.imageUrl?.trim() || null,
       active: input.active ?? true,
       source: input.source ?? 'MANUAL',
       externalId: input.externalId ?? null,
@@ -68,6 +71,7 @@ export class Product extends Entity {
   get description() { return this.props.description; }
   get price() { return this.props.price; }
   get category() { return this.props.category; }
+  get imageUrl() { return this.props.imageUrl; }
   get active() { return this.props.active; }
   get source() { return this.props.source; }
   get externalId() { return this.props.externalId; }
@@ -82,6 +86,7 @@ export class Product extends Entity {
     description?: string | null;
     price?: Money;
     category?: string | null;
+    imageUrl?: string | null;
   }): void {
     if (input.name !== undefined) {
       const name = input.name.trim();
@@ -94,6 +99,7 @@ export class Product extends Entity {
     if (input.description !== undefined) this.props.description = input.description?.trim() || null;
     if (input.price !== undefined) this.props.price = input.price;
     if (input.category !== undefined) this.props.category = input.category?.trim() || null;
+    if (input.imageUrl !== undefined) this.props.imageUrl = input.imageUrl?.trim() || null;
   }
 
   /**

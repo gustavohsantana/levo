@@ -364,6 +364,7 @@ export class PrismaProductRepository implements ProductRepository {
       description: product.description,
       priceCents: product.price.cents,
       category: product.category,
+      imageUrl: product.imageUrl,
       active: product.active,
       source: product.source,
       externalId: product.externalId,
@@ -390,6 +391,7 @@ function toProduct(row: {
   description: string | null;
   priceCents: number;
   category: string | null;
+  imageUrl: string | null;
   active: boolean;
   source: OrderSourceKind;
   externalId: string | null;
@@ -401,6 +403,7 @@ function toProduct(row: {
     description: row.description,
     price: Money.fromCents(row.priceCents),
     category: row.category,
+    imageUrl: row.imageUrl,
     active: row.active,
     source: row.source,
     externalId: row.externalId,

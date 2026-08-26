@@ -84,6 +84,7 @@ export interface ProductView {
   description: string | null;
   priceCents: number;
   category: string | null;
+  imageUrl: string | null;
   active: boolean;
   source: string;
   importado: boolean;
@@ -101,6 +102,7 @@ export async function getCatalog(): Promise<ProductView[]> {
       description: p.description,
       priceCents: p.price.cents,
       category: p.category,
+      imageUrl: p.imageUrl,
       active: p.active,
       source: p.source,
       importado: p.importado,
