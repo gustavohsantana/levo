@@ -40,6 +40,25 @@ interface AiqfomeOrder {
   timeline?: { created_at?: string; timezone?: string };
 }
 
+/*
+ * O que a **lista** devolve, que não é o que o detalhe devolve.
+ *
+ * A documentação só publica o formato do `show-order`; o de `/api/v2/orders`
+ * foi lido do ambiente real e usa outros nomes — `order_id` no lugar de `id`,
+ * `order_is_pickup` no lugar de `is_pickup` — e não traz endereço nem valor.
+ * Por isso a importação lista e depois busca cada pedido: sem o detalhe não há
+ * como montar uma parada.
+ *
+ * Os dois nomes ficam aceitos porque a divergência é provavelmente um descuido
+ * deles, e o dia em que alinharem não pode quebrar a importação.
+ */
+interface AiqfomeOrderSummary {
+  order_id?: number;
+  id?: number;
+  order_is_pickup?: boolean;
+  is_pickup?: boolean;
+}
+
 interface AiqfomeAddress {
   street?: string;
   number?: string | number;
@@ -55,7 +74,8 @@ interface AiqfomeAddress {
  *
  * Os endereços vêm da documentação oficial e do gateway real:
  *
- *     GET  /api/v2/orders?filter[store_ids]=…   pedidos não lidos
+ *     GET  /api/v2/orders?filter[store_ids]=…   pedidos não lidos (resumo)
+ *     GET  /api/v2/orders/:id                   o pedido inteiro
  *     POST /api/v2/orders/mark-as-read          { order_id }
  *
  * O token é **por loja**: o lojista autoriza o aplicativo em cada loja dele, e
@@ -81,12 +101,40 @@ export class AiqfomeOrderSource implements OrderSource {
     const url = new URL('/api/v2/orders', this.baseUrl);
     url.searchParams.set('filter[store_ids]', this.options.storeId);
 
+    const resumos = await this.get<AiqfomeOrderSummary[]>(url);
+    const pedidos: ExternalOrder[] = [];
+
+    for (const resumo of resumos) {
+      /*
+       * Pedido de retirada não tem entrega. Importá-lo colocaria no painel uma
+       * parada que ninguém vai fazer — e o motoboy descobriria isso na porta.
+       */
+      if (resumo.order_is_pickup ?? resumo.is_pickup) continue;
+
+      const id = resumo.order_id ?? resumo.id;
+      if (id === undefined) continue;
+
+      const detalhe = await this.get<AiqfomeOrder>(
+        new URL(`/api/v2/orders/${id}`, this.baseUrl),
+      );
+
+      if (detalhe) pedidos.push(mapAiqfomeOrder(detalhe));
+    }
+
+    return pedidos;
+  }
+
+  /**
+   * `T[]` quando a rota lista, `T` quando ela mostra um só — a API embrulha os
+   * dois em `data`, e `204` significa nada a fazer.
+   */
+  private async get<T>(url: URL): Promise<T extends unknown[] ? T : T> {
     const response = await fetch(url, {
       headers: await this.headers(),
       signal: AbortSignal.timeout(20_000),
     });
 
-    if (response.status === 204) return [];
+    if (response.status === 204) return [] as never;
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
       throw new ExternalServiceError(
@@ -95,14 +143,8 @@ export class AiqfomeOrderSource implements OrderSource {
       );
     }
 
-    const payload = (await response.json()) as { data?: AiqfomeOrder[] };
-    const orders = payload.data ?? [];
-
-    /*
-     * Pedido de retirada não tem entrega. Importá-lo colocaria no painel uma
-     * parada que ninguém vai fazer — e o motoboy descobriria isso na porta.
-     */
-    return orders.filter((order) => !order.is_pickup).map(mapAiqfomeOrder);
+    const payload = (await response.json()) as { data?: unknown };
+    return (payload.data ?? []) as never;
   }
 
   async acknowledge(externalIds: string[]): Promise<void> {
