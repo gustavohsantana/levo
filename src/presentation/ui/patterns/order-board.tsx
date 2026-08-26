@@ -289,7 +289,7 @@ function OrderCard({
             trigger={
               <Button size="sm" variant="outline" className="ml-auto">
                 <MapPinOff />
-                Sem pino
+                Localizar
               </Button>
             }
           />

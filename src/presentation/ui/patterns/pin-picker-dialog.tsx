@@ -4,10 +4,10 @@ import { useState, useTransition } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import * as Dialog from '@radix-ui/react-dialog';
-import { LoaderCircle, MapPin, X } from 'lucide-react';
-import { fixOrderPinAction } from '@/presentation/actions';
+import { LoaderCircle, MapPin, Search, X } from 'lucide-react';
+import { buscarEnderecoAction, fixOrderPinAction } from '@/presentation/actions';
 import type { OrderView } from '@/presentation/queries';
-import { Button } from '../primitives';
+import { Button, Input } from '../primitives';
 
 const RouteMap = dynamic(() => import('./route-map').then((mod) => mod.RouteMap), {
   ssr: false,
@@ -22,8 +22,14 @@ const RouteMap = dynamic(() => import('./route-map').then((mod) => mod.RouteMap)
  * tela o pedido fica preso para sempre — nunca entra em rota, nunca é entregue
  * pelo sistema, e o dono volta para o papel só por causa dele.
  *
- * A saída é a mais direta possível: o dono conhece a região melhor que qualquer
- * API, então ele clica no lugar certo e pronto.
+ * O caminho principal é **corrigir o texto**: digitar o endereço de novo, com
+ * bairro e cidade, e ver onde o mapa o coloca. Isso é mais honesto que arrastar
+ * um alfinete, porque o endereço também vai para o link de rastreio do cliente
+ * e para a tela do motoboy — um pino certo com endereço errado engana os dois.
+ *
+ * Clicar no mapa continua existindo, para o caso em que nenhuma escrita
+ * funciona: rua nova, condomínio sem número, "depois da igreja". Aí o dono, que
+ * conhece a região melhor que qualquer API, marca o lugar.
  */
 export function PinPickerDialog({
   order,
@@ -37,6 +43,8 @@ export function PinPickerDialog({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<{ lat: number; lng: number } | null>(null);
+  const [endereco, setEndereco] = useState(order.address);
+  const [buscando, buscar] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [saving, save] = useTransition();
 
@@ -45,7 +53,12 @@ export function PinPickerDialog({
     setError(null);
 
     save(async () => {
-      const result = await fixOrderPinAction(order.id, picked);
+      const enderecoMudou = endereco.trim() !== order.address.trim();
+      const result = await fixOrderPinAction(
+        order.id,
+        picked,
+        enderecoMudou ? endereco : undefined,
+      );
       if (result.ok) {
         setOpen(false);
         setPicked(null);
@@ -53,6 +66,17 @@ export function PinPickerDialog({
       } else {
         setError(result.error);
       }
+    });
+  }
+
+  function procurar() {
+    setError(null);
+
+    buscar(async () => {
+      const resultado = await buscarEnderecoAction(endereco);
+
+      if (resultado.ok) setPicked({ lat: resultado.lat, lng: resultado.lng });
+      else setError(resultado.error);
     });
   }
 
@@ -64,6 +88,7 @@ export function PinPickerDialog({
         if (!next) {
           setPicked(null);
           setError(null);
+          setEndereco(order.address);
         }
       }}
     >
@@ -88,10 +113,31 @@ export function PinPickerDialog({
             </Dialog.Close>
           </div>
 
-          <p className="mb-2 text-xs text-ink-muted">
-            Clique no mapa para marcar o local. Não precisa ser exato — só perto o
-            suficiente para o motoboy achar.
-          </p>
+          <div className="mb-3">
+            <div className="flex gap-2">
+              <Input
+                value={endereco}
+                onChange={(evento) => setEndereco(evento.target.value)}
+                onKeyDown={(evento) => {
+                  if (evento.key === 'Enter') {
+                    evento.preventDefault();
+                    procurar();
+                  }
+                }}
+                placeholder="Rua, número, bairro e cidade"
+                aria-label="Endereço"
+              />
+              <Button type="button" variant="outline" onClick={procurar} disabled={buscando}>
+                {buscando ? <LoaderCircle className="animate-spin" /> : <Search />}
+                Procurar
+              </Button>
+            </div>
+
+            <p className="mt-1.5 text-xs text-ink-faint">
+              Corrija o endereço e procure. Se ainda não achar, clique no mapa —
+              não precisa ser exato, só perto o suficiente para o motoboy achar.
+            </p>
+          </div>
 
           <div className="h-80 overflow-hidden rounded-md hairline">
             <RouteMap

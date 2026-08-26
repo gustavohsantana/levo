@@ -20,6 +20,8 @@ export const OrderEvents = {
   Created: 'order.created',
   Geocoded: 'order.geocoded',
   GeocodingFailed: 'order.geocoding_failed',
+  /** O dono corrigiu o endereço porque o mapa não o encontrou. */
+  AddressChanged: 'order.address_changed',
   Routed: 'order.routed',
   Delivered: 'order.delivered',
   Failed: 'order.failed',

@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { containerFor } from '@/composition-root';
+import { Address } from '@/core';
 import { createOrderSchema, credentialsSchema, planRouteSchema } from '@/application/dto/schemas';
 import { createSession, destroySession, requireSession } from './http/session';
 import { toFormError } from './http/error-mapper';
@@ -133,17 +134,52 @@ export async function startRouteAction(routeId: string): Promise<ActionResult> {
 
 export async function fixOrderPinAction(
   orderId: string,
-  coordinates: { lat: number; lng: number },
+  coordinates: { lat: number; lng: number } | null,
+  novoEndereco?: string,
 ): Promise<ActionResult> {
   try {
     const session = await requireSession();
-    await containerFor(session.establishmentId).useCases.geocodeOrder.execute(orderId, coordinates);
+    await containerFor(session.establishmentId).useCases.geocodeOrder.execute(
+      orderId,
+      coordinates ?? undefined,
+      novoEndereco,
+    );
   } catch (cause) {
     return { ok: false, error: toFormError(cause) };
   }
 
   revalidatePath('/dashboard');
   return { ok: true };
+}
+
+/**
+ * Procura um endereço no mapa sem gravar nada.
+ *
+ * Serve para o dono corrigir o texto e **ver** onde caiu antes de confirmar —
+ * bem mais honesto que arrastar um alfinete adivinhando, porque o endereço
+ * certo também vai para o link do cliente e para a tela do motoboy.
+ */
+export async function buscarEnderecoAction(
+  texto: string,
+): Promise<{ ok: true; lat: number; lng: number } | { ok: false; error: string }> {
+  try {
+    const session = await requireSession();
+    const { geocoder } = containerFor(session.establishmentId);
+
+    const endereco = Address.create(texto);
+    const coordenadas = await geocoder.geocode(endereco).catch(() => null);
+
+    if (!coordenadas) {
+      return {
+        ok: false,
+        error: 'Não encontrei esse endereço. Tente com rua, número, bairro e cidade.',
+      };
+    }
+
+    return { ok: true, lat: coordenadas.lat, lng: coordenadas.lng };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
 }
 
 /** Itens do catálogo, se houver. Entrada malformada vira pedido sem itens. */

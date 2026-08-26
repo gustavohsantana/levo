@@ -8,7 +8,7 @@ import {
   InMemoryUnitOfWork,
   SequentialIds,
 } from '@/infrastructure/fakes/in-memory';
-import { Coordinates, OrderNotPendingError } from '@/core';
+import { Address, Coordinates, OrderNotPendingError } from '@/core';
 import { FakeRoutingService, makeOrder, newDatabase } from '../helpers/fixtures';
 
 /**
@@ -139,5 +139,53 @@ describe('etapas do pedido', () => {
     await planRoute.execute({ orderIds: [order.id], courierId: 'courier-1' });
 
     expect(db.orders.get(order.id)!.stage).toBe('EM_ROTA');
+  });
+});
+
+/**
+ * Corrigir o endereço quando o mapa não o encontrou.
+ *
+ * Arrastar um alfinete resolve o pino e deixa o endereço errado — e o endereço
+ * também vai para o link de rastreio do cliente e para a tela do motoboy.
+ */
+describe('correção de endereço', () => {
+  it('grava o endereço novo e limpa a coordenada antiga', async () => {
+    const order = pedido();
+    expect(order.coordinates).not.toBeNull();
+
+    order.changeAddress(
+      Address.create('Rua Adolfo Olinto, 250 - Centro, Pouso Alegre, MG'),
+      clock.now(),
+    );
+
+    expect(order.address.raw).toContain('Adolfo Olinto');
+    expect(order.coordinates).toBeNull();
+  });
+
+  it('preserva a referência do endereço antigo', async () => {
+    // "Portão azul" continua valendo mesmo com a rua corrigida — é a instrução
+    // que o motoboy usa para achar a casa.
+    const order = pedido();
+    const referencia = order.address.reference;
+
+    order.changeAddress(Address.create('Rua Nova, 10', referencia), clock.now());
+
+    expect(order.address.reference).toBe(referencia);
+  });
+
+  it('recusa corrigir pedido que já saiu para entrega', async () => {
+    const order = pedido();
+    const planRoute = new PlanRoute(
+      uow,
+      new FakeRoutingService(),
+      new TwoOptOptimizer(),
+      new SequentialIds('r'),
+      clock,
+    );
+    await planRoute.execute({ orderIds: [order.id], courierId: 'courier-1' });
+
+    expect(() => order.changeAddress(Address.create('Rua Outra, 1'), clock.now())).toThrow(
+      OrderNotPendingError,
+    );
   });
 });

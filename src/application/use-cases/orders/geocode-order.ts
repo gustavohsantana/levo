@@ -1,5 +1,11 @@
-import { NotFoundError, type Clock, type Geocoder, type UnitOfWork } from '@/core';
-import { Coordinates } from '@/core';
+import {
+  Address,
+  Coordinates,
+  NotFoundError,
+  type Clock,
+  type Geocoder,
+  type UnitOfWork,
+} from '@/core';
 
 /**
  * Segunda chance para um pedido que entrou sem coordenada: ou o dono corrigiu
@@ -12,9 +18,28 @@ export class GeocodeOrder {
     private readonly clock: Clock,
   ) {}
 
-  async execute(orderId: string, manual?: { lat: number; lng: number }): Promise<boolean> {
+  async execute(
+    orderId: string,
+    manual?: { lat: number; lng: number },
+    novoEndereco?: string,
+  ): Promise<boolean> {
     const order = await this.uow.run((repos) => repos.orders.findById(orderId));
     if (!order) throw new NotFoundError('Pedido', orderId);
+
+    /*
+     * Endereço corrigido é gravado mesmo que o mapa continue não achando: o
+     * texto certo vai para o link de rastreio do cliente e para a tela do
+     * motoboy, e serve mesmo sem coordenada.
+     */
+    if (novoEndereco?.trim()) {
+      const endereco = Address.create(novoEndereco, order.address.reference);
+      order.changeAddress(endereco, this.clock.now());
+
+      await this.uow.run(async (repos) => {
+        await repos.orders.save(order);
+        await repos.events.append(order.pullEvents());
+      });
+    }
 
     const coordinates = manual
       ? Coordinates.create(manual.lat, manual.lng)

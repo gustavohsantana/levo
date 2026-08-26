@@ -115,6 +115,26 @@ export class Order extends AggregateRoot {
   }
 
   /**
+   * Corrige o endereço quando o mapa não o encontrou.
+   *
+   * Endereço brasileiro é bagunçado — condomínio sem número, rua nova, "depois
+   * da igreja". Corrigir o texto é mais honesto que arrastar um alfinete: o
+   * endereço certo também vai no link de rastreio do cliente e na tela do
+   * motoboy, e um pino certo com endereço errado engana os dois.
+   */
+  changeAddress(address: Address, at: Date): void {
+    if (this.props.status !== OrderStatus.New) {
+      throw new OrderNotPendingError(this.id, this.props.status);
+    }
+
+    this.props.address = address;
+    this.props.coordinates = null;
+    this.record(OrderEvents.AddressChanged, this.props.establishmentId, {
+      address: address.raw,
+    }, at);
+  }
+
+  /**
    * O lojista aceitou o pedido.
    *
    * Idempotente de propósito: o evento `CFM` do iFood pode chegar depois de o
