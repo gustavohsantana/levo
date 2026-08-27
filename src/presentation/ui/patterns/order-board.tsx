@@ -17,6 +17,7 @@ import type { OrderView, RouteView } from '@/presentation/queries';
 import { Button } from '../primitives';
 import { clockTime, currency } from '../format';
 import { PinPickerDialog } from './pin-picker-dialog';
+import { OrderDetailDialog } from './order-detail-dialog';
 import { SourceTag } from './source-tag';
 import { StartRouteButton } from './start-route-button';
 
@@ -271,18 +272,38 @@ function OrderCard({
           />
         ) : null}
 
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <p className="truncate text-sm font-medium text-ink">{pedido.customerName}</p>
-            <SourceTag source={pedido.source} />
-          </div>
-          <p className="truncate text-xs text-ink-faint">{pedido.address}</p>
-        </div>
+        {/*
+          O cartão inteiro abre o pedido. Um botão "ver detalhes" competiria por
+          espaço com as ações que movem o pedido — e o alvo maior é o certo para
+          quem está com o telefone tocando.
+        */}
+        <OrderDetailDialog
+          pedido={pedido}
+          trigger={
+            <button type="button" className="min-w-0 flex-1 text-left">
+              <div className="flex items-center gap-1.5">
+                <p className="truncate text-sm font-medium text-ink">{pedido.customerName}</p>
+                <SourceTag source={pedido.source} />
+              </div>
+              <p className="truncate text-xs text-ink-faint">{pedido.address}</p>
+            </button>
+          }
+        />
 
         <span className="numeric shrink-0 text-xs text-ink-faint">
           {clockTime(pedido.createdAt)}
         </span>
       </div>
+
+      {/*
+        O resumo dos itens no cartão: com o telefone tocando, saber que são duas
+        pizzas e uma coca vale mais que abrir o pedido para descobrir.
+      */}
+      {pedido.items.length > 0 ? (
+        <p className="mt-1.5 line-clamp-2 text-xs leading-snug text-ink-muted">
+          {pedido.items.map((item) => `${item.quantity}× ${item.name}`).join(' · ')}
+        </p>
+      ) : null}
 
       <div className="mt-2 flex items-center gap-2">
         {pedido.amountCents > 0 ? (

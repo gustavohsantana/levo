@@ -118,8 +118,15 @@ export class PrismaOrderRepository extends TenantScoped implements OrderReposito
   }
 
   async listPending(): Promise<Order[]> {
+    /*
+     * Com os itens: o painel precisa mostrar o que tem dentro do pedido, e sem
+     * isto o dono via nome, endereço e valor sem saber o que preparar. A fila
+     * pendente tem dezenas de linhas, não milhares — o custo do `include` aqui
+     * é irrelevante perto de não poder ver o pedido.
+     */
     const rows = await this.tx.order.findMany({
       where: this.scoped({ status: PENDING_ORDER }),
+      include: { items: true },
       orderBy: { createdAt: 'asc' },
     });
     return rows.map(OrderMapper.toDomain);

@@ -29,6 +29,12 @@ export interface OrderView {
   stage: 'NOVO' | 'MONTANDO' | 'PRONTO' | 'EM_ROTA' | 'FINALIZADO';
   confirmedAt: string | null;
   readyAt: string | null;
+  items: Array<{
+    name: string;
+    quantity: number;
+    unitPriceCents: number;
+    discountCents: number;
+  }>;
   isGeocoded: boolean;
   coordinates: { lat: number; lng: number } | null;
   createdAt: string;
@@ -85,6 +91,12 @@ function toOrderView(order: Order, whatsapp: string | null, trackingUrl: string)
     isGeocoded: order.isGeocoded,
     coordinates: order.coordinates?.toJSON() ?? null,
     stage: order.stage,
+    items: order.items.map((item) => ({
+      name: item.name,
+      quantity: item.quantity,
+      unitPriceCents: item.unitPrice.cents,
+      discountCents: item.discount.cents,
+    })),
     confirmedAt: order.confirmedAt?.toISOString() ?? null,
     readyAt: order.readyAt?.toISOString() ?? null,
     createdAt: order.createdAt.toISOString(),
