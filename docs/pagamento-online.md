@@ -128,6 +128,88 @@ Loja sem integração vê exatamente o cardápio de hoje.
 
 ---
 
+## E cartão? Sim, e é a mesma conexão
+
+Vale deixar registrado porque a pergunta aparece na hora errada, no meio da
+implementação do Pix: **cartão pelo Mercado Pago, caindo direto na conta da
+loja, funciona — e não exige nada de novo do lojista.**
+
+A autorização OAuth devolve `access_token` **e** `public_key` da conta dele. É a
+mesma credencial que o `CredentialStore` já vai guardar para o Pix. O lojista
+conecta uma vez; aceitar cartão vira uma chave na tela de configurações, não uma
+segunda integração. O dinheiro cai na conta dele, no prazo que ele escolheu lá
+(D+0, D+14 ou D+30), com a taxa que ele negociou — o Levô não entra no meio em
+nenhum ponto disso.
+
+Dado de cartão nunca toca o servidor do Levô. O navegador tokeniza com o SDK do
+Mercado Pago (Secure Fields ou o Brick de cartão), o que chega ao backend é um
+`card_token` descartável, e o backend cria a order com o token da loja. O PCI
+fica com o Mercado Pago. A regra que não pode ser quebrada: **número de cartão e
+CVV não passam por `application/`, não vão para log, não entram no banco.**
+
+### Por que cartão mesmo assim é a fase 4, e não a fase 2
+
+Não é dificuldade de chamar o endpoint — é quase o mesmo `POST /v1/orders`. É
+que Pix tem dois desfechos e cartão tem sete, e cinco deles aparecem depois que
+o motoboy já saiu.
+
+| | Pix | Cartão |
+|---|---|---|
+| Desfechos | pago / não pago | aprovado, em análise, recusado (dezenas de `status_detail`), desafio 3DS, estornado, contestado |
+| Quando se sabe | segundos | segundos, **ou horas** (`in_process`) |
+| Reversível | não | sim, semanas depois (`charged_back`) |
+| Custo p/ a loja | ~0,99% | ~3,98% (D+30) a ~4,98% (D+0) |
+| Antifraude | não se aplica | obrigatório fazer direito, ou a recusa vira pedido perdido |
+
+Os três que dão trabalho de verdade:
+
+- **`in_process`.** O pagamento fica em análise. O pedido não pode entrar em
+  rota nem ser recusado — precisa de um terceiro estado no painel, com o dono
+  sabendo o que fazer enquanto espera.
+- **3DS 2.0.** Quando exigido, a resposta vem `pending_challenge` com um
+  `external_resource_url` que precisa ser aberto em iframe no checkout. Sem
+  tratar isso, uma fatia dos cartões simplesmente não paga, e o cliente vê uma
+  tela travada.
+- **`charged_back`.** Chega semanas depois, com a comida entregue. O prejuízo é
+  da loja, não do Levô — mas o painel precisa mostrar, senão o dono descobre
+  pelo extrato. E há prazo para enviar documentação de defesa.
+
+### Device ID não é opcional
+
+O script de segurança do Mercado Pago cria a variável global
+`MP_DEVICE_SESSION_ID` no navegador. Esse valor tem que ir no header
+`X-meli-session-id` da criação do pagamento **e** no campo `device.fingerprint`
+da criação do `card_token`. Pular isso não quebra nada de forma visível: só
+derruba a taxa de aprovação. E recusa em checkout de delivery não é um erro, é
+um pedido perdido — o cliente vai pedir no iFood.
+
+### A ambiguidade que precisa ser resolvida em sandbox
+
+A documentação do Mercado Pago se contradiz sobre **qual `public_key` usar no
+front** quando o pagamento é processado com o token do vendedor:
+
+- A página de split 1:1 diz para usar a `public_key` **do integrador**.
+- As páginas de "integrar checkout em marketplace" dizem para usar a
+  `public_key` **do vendedor**, junto com o `access_token` dele.
+
+Como não vamos usar split, a combinação coerente é **as duas credenciais da
+mesma conta: `public_key` e `access_token` do vendedor**, ambas vindas do OAuth.
+Mas isso é exatamente o tipo de coisa que só falha em produção — testar com
+usuário de teste antes de prometer cartão para alguém.
+
+### O atalho, se cartão virar urgente
+
+Checkout Pro com o `access_token` da loja: redireciona o cliente para a página
+do Mercado Pago, que resolve formulário, 3DS, device ID e antifraude, e devolve
+o cliente ao site. O dinheiro vai para a conta da loja do mesmo jeito. Custa
+muito menos código e zera a superfície de PCI; paga-se com conversão, porque
+sair do site no celular no meio do pedido derruba parte dos clientes. É um
+caminho legítimo para validar demanda antes de construir o checkout
+transparente — e a decisão pode ser tomada depois, porque a conexão OAuth é a
+mesma.
+
+---
+
 ## O que muda no schema
 
 Um enum, uma tabela e um campo. Nada em `Order` além de um status.
@@ -140,11 +222,17 @@ enum IntegrationProvider {
 }
 
 enum PaymentStatus {
-  PENDING     // cobrança criada, QR na tela, ninguém pagou ainda
-  PAID        // webhook confirmou
-  EXPIRED     // o Pix venceu sem pagamento
-  CANCELLED   // pedido cancelado antes de pagar
-  REFUNDED    // estornado (loja fechada, item em falta)
+  PENDING      // cobrança criada, QR na tela, ninguém pagou ainda
+  PAID         // webhook confirmou
+  EXPIRED      // o Pix venceu sem pagamento
+  CANCELLED    // pedido cancelado antes de pagar
+  REFUNDED     // estornado (loja fechada, item em falta)
+  // Só acontecem com cartão. Nascem aqui, sem uso, porque acrescentar valor a
+  // enum depois é migration em tabela de dinheiro — e porque o painel precisa
+  // saber que esses estados existem antes de o primeiro aparecer.
+  IN_REVIEW    // em análise do antifraude; não entra em rota, não é recusado
+  REJECTED     // recusado pelo emissor ou pelo antifraude
+  CHARGED_BACK // contestado depois da entrega
 }
 
 model Payment {
@@ -399,8 +487,11 @@ Vale a pena começar pela preguiçosa: funciona nos dois deploys.
   conciliação. Se a integração for isso, não vale o código.
 - **Guardar chave Pix da loja num campo de texto.** Convida o desenho A pela
   porta dos fundos e não dá confirmação automática.
-- **Cartão online na primeira versão.** Chargeback em delivery é dor
-  desproporcional ao ganho.
+- **Cartão online na primeira versão.** É possível e usa a mesma conexão (ver
+  acima), mas é onde estão os estados que aparecem depois da entrega. Entra
+  quando Pix estiver de pé.
+- **Guardar número de cartão ou CVV em qualquer lugar.** Tokenização no
+  navegador não é sugestão de arquitetura, é o que mantém PCI fora do projeto.
 - **Confiar no corpo do webhook.** Vale a consulta à API, sempre.
 - **Split porque o gateway oferece.** O produto cobra mensalidade. Comissão por
   pedido é outra decisão de negócio, e não deve entrar de contrabando junto com
@@ -420,9 +511,14 @@ Vale a pena começar pela preguiçosa: funciona nos dois deploys.
 4. **Operar.** Estorno no painel, faixa "aguardando pagamento", pedido pago
    destacado para o motoboy (não cobrar de novo na porta é o erro óbvio a
    evitar), e o valor recebido no `/admin/piloto`.
+5. **Cartão, se pedirem.** Chave por estabelecimento, tokenização no navegador,
+   device ID, 3DS em iframe, e os estados `IN_REVIEW` / `REJECTED` /
+   `CHARGED_BACK` no painel. Sem conexão nova: a credencial é a mesma da fase 1.
 
 Fases 1 a 3 são o mínimo para valer a pena. A 4 é o que separa "funciona na
-demo" de "funciona no sábado à noite".
+demo" de "funciona no sábado à noite". A 5 só depois que as quatro estiverem de
+pé — cartão é onde mora a cauda longa de estados, e não é lugar de descobrir que
+o webhook estava com problema.
 
 ---
 
@@ -450,9 +546,14 @@ demo" de "funciona no sábado à noite".
   <https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/integration-model>
 - Mercado Pago — notificações e validação de `x-signature`:
   <https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/notifications>
-- Mercado Pago — split 1:1 / marketplace (não usado, referência do que foi
-  descartado):
+- Mercado Pago — split 1:1 / marketplace (não usado; é também uma das duas
+  páginas que se contradizem sobre a `public_key`):
   <https://www.mercadopago.com.br/developers/pt/docs/split-payments/split-1-1/integration-configuration/integrate-marketplace>
+- Mercado Pago — integrar checkout em marketplace, a outra página da
+  contradição (diz `public_key` do vendedor):
+  <https://www.mercadopago.com.br/developers/pt/docs/checkout-pro/how-tos/integrate-marketplace>
+- Mercado Pago — device ID, fingerprint e recomendações de aprovação de cartão:
+  <https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/payment-management/improve-payment-approval/recommendations>
 - Asaas — criação de subcontas e split:
   <https://docs.asaas.com/docs/criacao-de-subcontas> ·
   <https://docs.asaas.com/docs/split-de-pagamentos>
