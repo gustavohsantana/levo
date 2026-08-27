@@ -31,6 +31,58 @@ já foi construída duas vezes neste repositório. Pagamento é a terceira.
 
 ---
 
+## Antes de tudo: por que não basta cadastrar a chave Pix da loja
+
+É a primeira ideia que ocorre, e é a mais barata de implementar: um campo de
+texto nas configurações, o dono cola a chave dele, o cardápio mostra a chave no
+checkout, o cliente paga, o dinheiro cai na conta dele. Zero taxa, zero OAuth,
+zero webhook. Uma tarde de trabalho.
+
+Só que a chave Pix é um **endereço para receber**, não uma interface para
+consultar. O dinheiro entra na conta bancária da loja, e nada no mundo avisa o
+Levô disso. Para saber que chegou, é preciso ler o extrato daquela conta — e
+acesso a extrato é exatamente o que uma chave Pix não dá. Não existe, e não vai
+existir, uma API do tipo "me diga o que caiu nesta chave".
+
+O problema, porém, é maior do que a automação, e essa parte costuma passar
+despercebida: **a chave estática também não identifica o pedido.** Mesmo que
+alguém olhasse o extrato, o que se vê é uma lista de transferências com nome de
+pessoa física. Dois pedidos de R$ 78,90 na mesma noite são indistinguíveis um do
+outro. Quem resolve isso é o Pix *dinâmico*, com uma cobrança por pedido e um
+identificador próprio — e cobrança dinâmica se cria por API, que é justamente o
+que não se tem partindo de uma chave avulsa.
+
+Sem os dois, o fluxo real vira: o cliente manda print no WhatsApp e alguém
+confere. Print é falsificável com um aplicativo de celular, a conferência
+acontece no sábado à noite com a cozinha cheia, e o pedido fica parado até
+alguém olhar. É precisamente o trabalho manual que o produto existe para
+eliminar — implementá-lo dentro do produto seria construir o problema.
+
+### As saídas reais, e o que cada uma custa
+
+| Caminho | Confirma sozinho? | Custo p/ a loja | O que exige dela |
+|---|---|---|---|
+| Chave Pix no checkout | Não | 0% | Nada — e conferência manual para sempre |
+| API Pix do banco dela (padrão BCB) | Sim | ~0% | Contrato de API Pix com o banco, certificado mTLS, onboarding diferente em cada banco |
+| Instituição de pagamento (Mercado Pago) | Sim | ~0,99% | Clicar em "conectar" |
+
+A opção do meio é tecnicamente a melhor e comercialmente a pior: os endpoints
+de cobrança são padronizados pelo Banco Central, mas credencial e certificado
+são de cada banco, um a um, e quem tem que pedir isso ao gerente é o dono da
+pizzaria. Vale conhecer para o dia em que um cliente grande já tiver esse
+contrato; não vale como ponto de partida.
+
+Ou seja, o ~1% do Mercado Pago não está pagando pelo Pix — Pix é de graça. Está
+pagando pela confirmação automática e pela identificação do pedido. Em uma
+comanda de R$ 60, são sessenta centavos para ninguém precisar conferir print.
+
+E nada disso tira a chave Pix do produto: **"Pix na entrega" continua existindo
+como forma de pagamento**, como já existe hoje no enum `PaymentMethod`. A loja
+que não quiser conectar nada segue funcionando exatamente como funciona agora. O
+que a integração acrescenta é uma opção a mais no checkout, não uma troca.
+
+---
+
 ## A decisão que define todo o resto: de quem é a conta que recebe
 
 Existem dois desenhos possíveis, e eles não são variações do mesmo tema.
