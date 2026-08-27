@@ -515,6 +515,60 @@ Vale a pena começar pela preguiçosa: funciona nos dois deploys.
 
 ---
 
+## A tela do parceiro
+
+Do lado do lojista, configurar é um botão. Vale escrever o fluxo inteiro para
+ver o tamanho:
+
+1. **Dashboard → Integrações → Mercado Pago → "Conectar conta".**
+2. Cai na tela do Mercado Pago, faz login na conta que ele **já tem** — a mesma
+   da maquininha Point e do aplicativo — e vê a tela de consentimento.
+3. Autoriza, volta para Integrações, e o card mostra "conectado" com o nome da
+   conta.
+4. Uma chave: **"aceitar Pix online no cardápio"**.
+
+Acabou. Ele não copia chave, não cola token, não gera certificado, não manda
+documento, não abre conta nova. É menos trabalho do que conectar o iFood, que
+já está no produto. E conectar não interfere na maquininha dele: a conta segue
+funcionando igual, o Levô só passa a poder criar cobrança nela.
+
+O trabalho de verdade é seu, e é **uma vez só para todos os parceiros**: criar a
+aplicação no painel de developers do Mercado Pago, cadastrar o `redirect_uri` e
+a URL do webhook, e guardar `client_id`, `client_secret` e o segredo do webhook
+como variáveis de ambiente. Nenhum parceiro repete nada disso.
+
+### Os estados do card, que é onde a facilidade se perde
+
+Um botão que só sabe dizer "conectar" é fácil de escrever e ruim de operar. O
+card precisa de quatro estados, e três deles existem por causa de coisas que
+acontecem depois:
+
+| Estado | Quando | O que a tela faz |
+|---|---|---|
+| Não conectado | padrão | Botão "conectar"; a chave de aceitar Pix fica desabilitada |
+| Conectado | tudo certo | Nome da conta, data da conexão, botão "desconectar" |
+| Conectado em teste | `live_mode: false` | Aviso explícito — senão alguém vende de verdade em sandbox |
+| Precisa reconectar | refresh falhou, ou o dono revogou o acesso no Mercado Pago | Aviso no topo do dashboard, não só no card, e Pix online sai do cardápio |
+
+O quarto é o que mais importa e o mais fácil de esquecer. O token vale ~180 dias
+e se renova sozinho, mas o lojista pode revogar o acesso dentro da conta dele a
+qualquer momento, sem avisar ninguém. Se isso passar despercebido, o cardápio
+para de oferecer Pix e o dono só descobre quando alguém reclamar — ou nem
+descobre, e culpa o movimento fraco. **Conexão quebrada tem que gritar.**
+
+### Duas validações no momento de conectar
+
+Ambas evitam que o erro apareça no pior lugar possível — na tela do cliente, na
+hora do pedido:
+
+- **A conta tem chave Pix cadastrada?** Sem chave, a conexão funciona e a
+  cobrança falha depois. Melhor recusar na hora, com a instrução do que fazer.
+- **É a conta certa?** Mostrar o nome/e-mail da conta autorizada no card. O
+  lojista com conta pessoal e conta da empresa vai conectar a errada uma vez, e
+  precisa conseguir perceber isso sozinho.
+
+---
+
 ## Armadilhas específicas deste projeto
 
 - **`PUBLIC_BASE_URL` precisa estar certo em produção.** O `redirect_uri` do
@@ -565,8 +619,12 @@ Vale a pena começar pela preguiçosa: funciona nos dois deploys.
 ## Entrega em fases
 
 1. **Conectar.** `IntegrationProvider.MERCADO_PAGO`, OAuth connect/callback,
-   card na tela de Integrações mostrando conectado/desconectado. Sem cobrar
-   nada ainda. Fecha sozinha e é testável de ponta a ponta.
+   card na tela de Integrações com os quatro estados descritos em "A tela do
+   parceiro". Sem cobrar nada ainda. Fecha sozinha e é testável de ponta a
+   ponta — e é a única fase que não dá para validar com fake, porque depende de
+   aplicação criada no painel, `redirect_uri` batendo e uma conta real
+   autorizando. Descobrir que o `redirect_uri` está errado aqui custa nada;
+   descobrir depois de escrever cobrança, webhook e tela de QR custa a tarde.
 2. **Cobrar.** Migration de `Payment`, port `PaymentGateway`, adapter,
    `CreatePayment`, tela de QR no cardápio, polling. Pedido nasce `PENDING`.
 3. **Confirmar.** Webhook assinado, `ConfirmPayment` idempotente com consulta à
