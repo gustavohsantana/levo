@@ -556,16 +556,28 @@ qualquer momento, sem avisar ninguém. Se isso passar despercebido, o cardápio
 para de oferecer Pix e o dono só descobre quando alguém reclamar — ou nem
 descobre, e culpa o movimento fraco. **Conexão quebrada tem que gritar.**
 
-### Duas validações no momento de conectar
+### Duas verificações no momento de conectar
 
 Ambas evitam que o erro apareça no pior lugar possível — na tela do cliente, na
-hora do pedido:
+hora do pedido. Uma é exata, a outra não é, e a diferença importa:
 
-- **A conta tem chave Pix cadastrada?** Sem chave, a conexão funciona e a
-  cobrança falha depois. Melhor recusar na hora, com a instrução do que fazer.
-- **É a conta certa?** Mostrar o nome/e-mail da conta autorizada no card. O
-  lojista com conta pessoal e conta da empresa vai conectar a errada uma vez, e
-  precisa conseguir perceber isso sozinho.
+- **É a conta certa?** Tem resposta exata: `GET /users/me` devolve nome e
+  e-mail, e os dois aparecem no card. O lojista com conta pessoal e conta da
+  empresa vai conectar a errada uma vez, e precisa conseguir perceber sozinho.
+- **A conta consegue receber Pix?** **Não tem resposta exata.** O Mercado Pago
+  não expõe endpoint para consultar as chaves Pix de uma conta — o que existe é
+  o erro `Collector user without key enabled for QR render`, que só aparece na
+  primeira cobrança. O melhor disponível é olhar `GET /v1/payment_methods`, que
+  é indício e não garantia.
+
+Por isso o resultado do Pix é tri-estado, e não booleano: `false` recusa a
+conexão e diz ao lojista para cadastrar uma chave (aleatória serve), `null`
+passa. Tratar "não sei" como "não" recusaria a conexão de uma loja que
+funcionaria — o pior erro possível numa tela de onboarding.
+
+Consequência que sobra para a fase 3: quando a primeira cobrança falhar por
+falta de chave, essa mensagem precisa chegar ao painel do dono em português, e
+não morrer num log.
 
 ---
 
@@ -618,13 +630,20 @@ hora do pedido:
 
 ## Entrega em fases
 
-1. **Conectar.** `IntegrationProvider.MERCADO_PAGO`, OAuth connect/callback,
-   card na tela de Integrações com os quatro estados descritos em "A tela do
-   parceiro". Sem cobrar nada ainda. Fecha sozinha e é testável de ponta a
-   ponta — e é a única fase que não dá para validar com fake, porque depende de
-   aplicação criada no painel, `redirect_uri` batendo e uma conta real
-   autorizando. Descobrir que o `redirect_uri` está errado aqui custa nada;
-   descobrir depois de escrever cobrança, webhook e tela de QR custa a tarde.
+1. **Conectar.** ✅ Feito. `IntegrationProvider.MERCADO_PAGO`, OAuth
+   connect/callback, card na tela de Integrações com os quatro estados
+   descritos em "A tela do parceiro". Sem cobrar nada ainda.
+
+   Foi a primeira porque é a única fase que não dá para validar só com fake:
+   depende de aplicação criada no painel, `redirect_uri` batendo e uma conta
+   real autorizando. Descobrir que o `redirect_uri` está errado aqui custa
+   nada; descobrir depois de escrever cobrança, webhook e tela de QR custa a
+   tarde.
+
+   Falta o que só existe fora do código: criar a aplicação no painel de
+   developers do Mercado Pago, cadastrar o `redirect_uri` como
+   `{PUBLIC_BASE_URL}/api/integrations/mercadopago/callback` e preencher
+   `MERCADO_PAGO_CLIENT_ID` e `MERCADO_PAGO_CLIENT_SECRET`.
 2. **Cobrar.** Migration de `Payment`, port `PaymentGateway`, adapter,
    `CreatePayment`, tela de QR no cardápio, polling. Pedido nasce `PENDING`.
 3. **Confirmar.** Webhook assinado, `ConfirmPayment` idempotente com consulta à
