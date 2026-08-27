@@ -81,6 +81,13 @@ export interface ProductRepository {
   findManyByIds(ids: string[]): Promise<Product[]>;
   save(product: Product): Promise<void>;
   delete(id: string): Promise<void>;
+  /**
+   * Renomeia a categoria em todos os produtos dela.
+   *
+   * Renomear para uma que já existe funde as duas — e isso é recurso, não
+   * acidente: é assim que se conserta "Bebida" e "Bebidas" convivendo.
+   */
+  renameCategory(de: string, para: string): Promise<number>;
 }
 
 export interface EventStore {

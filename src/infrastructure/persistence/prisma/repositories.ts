@@ -443,6 +443,15 @@ export class PrismaProductRepository implements ProductRepository {
     // outro estabelecimento se um id vazasse.
     await this.tx.product.deleteMany({ where: { id, establishmentId: this.establishmentId } });
   }
+
+  async renameCategory(de: string, para: string): Promise<number> {
+    const { count } = await this.tx.product.updateMany({
+      where: { establishmentId: this.establishmentId, category: de },
+      data: { category: para },
+    });
+
+    return count;
+  }
 }
 
 function toProduct(row: {

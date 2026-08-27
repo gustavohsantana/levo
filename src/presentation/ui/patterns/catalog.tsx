@@ -1,9 +1,10 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
-import { BookOpen, LoaderCircle, Pencil, Plus, Trash2 } from 'lucide-react';
+import { BookOpen, Check, LoaderCircle, Pencil, Plus, Trash2 } from 'lucide-react';
 import {
   alternarProdutoAction,
+  renomearCategoriaAction,
   removerProdutoAction,
   salvarProdutoAction,
 } from '@/presentation/catalog-actions';
@@ -105,9 +106,7 @@ export function Catalog({ produtos }: { produtos: ProductView[] }) {
         <div className="flex flex-col gap-6">
           {porCategoria.map(([categoria, itens]) => (
             <section key={categoria}>
-              <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-faint">
-                {categoria}
-              </h2>
+              <CategoryHeader categoria={categoria} quantidade={itens.length} />
 
               <ul className="overflow-hidden rounded-lg bg-surface hairline">
                 {itens.map((produto) => (
@@ -118,6 +117,111 @@ export function Catalog({ produtos }: { produtos: ProductView[] }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * O nome da categoria, editável no lugar.
+ *
+ * Corrigir "Bebida" para "Bebidas" exigia abrir cada produto — e ninguém faz
+ * isso com quinze itens, então as duas ficavam convivendo e a tela do cliente
+ * mostrava dois grupos do mesmo.
+ *
+ * "Sem categoria" não é editável: é o balde dos que não têm nenhuma, não uma
+ * categoria de verdade. Renomeá-lo criaria uma chamada "Sem categoria".
+ */
+function CategoryHeader({
+  categoria,
+  quantidade,
+}: {
+  categoria: string;
+  quantidade: number;
+}) {
+  const [editando, setEditando] = useState(false);
+  const [nome, setNome] = useState(categoria);
+  const [erro, setErro] = useState<string | null>(null);
+  const [pendente, startTransition] = useTransition();
+
+  const editavel = categoria !== 'Sem categoria';
+
+  function salvar() {
+    const destino = nome.trim();
+
+    if (!destino || destino === categoria) {
+      setEditando(false);
+      setNome(categoria);
+      return;
+    }
+
+    setErro(null);
+    startTransition(async () => {
+      const resultado = await renomearCategoriaAction(categoria, destino);
+      if (resultado.ok) setEditando(false);
+      else setErro(resultado.error);
+    });
+  }
+
+  if (editando) {
+    return (
+      <div className="mb-2">
+        <div className="flex items-center gap-2">
+          <Input
+            value={nome}
+            onChange={(evento) => setNome(evento.target.value)}
+            onKeyDown={(evento) => {
+              if (evento.key === 'Enter') salvar();
+              if (evento.key === 'Escape') {
+                setNome(categoria);
+                setEditando(false);
+              }
+            }}
+            autoFocus
+            className="h-8 w-56 text-sm"
+            aria-label={`Novo nome para ${categoria}`}
+          />
+
+          <Button size="sm" variant="outline" onClick={salvar} disabled={pendente}>
+            {pendente ? <LoaderCircle className="animate-spin" /> : <Check />}
+            Renomear
+          </Button>
+
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setNome(categoria);
+              setEditando(false);
+            }}
+          >
+            Cancelar
+          </Button>
+        </div>
+
+        <p className="mt-1 text-xs text-ink-faint">
+          Vale para os {quantidade} itens. Usar o nome de outra categoria funde as duas.
+        </p>
+        {erro ? <p className="mt-1 text-xs text-danger">{erro}</p> : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-2 flex items-center gap-1.5">
+      <h2 className="text-xs font-medium uppercase tracking-wide text-ink-faint">
+        {categoria}
+      </h2>
+
+      {editavel ? (
+        <button
+          type="button"
+          onClick={() => setEditando(true)}
+          aria-label={`Renomear ${categoria}`}
+          className="rounded p-0.5 text-ink-faint opacity-0 transition hover:bg-raised hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 sm:opacity-60"
+        >
+          <Pencil className="size-3" aria-hidden />
+        </button>
+      ) : null}
     </div>
   );
 }

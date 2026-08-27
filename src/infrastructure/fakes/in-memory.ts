@@ -215,6 +215,15 @@ function buildRepositories(db: InMemoryDatabase): Repositories {
     async delete(id) {
       db.products.delete(id);
     },
+    async renameCategory(de, para) {
+      let contados = 0;
+      for (const produto of db.products.values()) {
+        if (produto.category !== de) continue;
+        produto.edit({ category: para });
+        contados += 1;
+      }
+      return contados;
+    },
   };
 
   const geocodeCache: GeocodeCacheRepository = {

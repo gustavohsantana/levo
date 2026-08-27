@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { SaveProduct } from '@/application/use-cases/catalog/save-product';
 import { SetProductActive } from '@/application/use-cases/catalog/set-product-active';
+import { RenameCategory } from '@/application/use-cases/catalog/rename-category';
 import { RemoveProduct } from '@/application/use-cases/catalog/remove-product';
 import {
   InMemoryDatabase,
@@ -20,6 +21,7 @@ let db: InMemoryDatabase;
 let salvar: SaveProduct;
 let alternar: SetProductActive;
 let remover: RemoveProduct;
+let renomear: RenameCategory;
 
 beforeEach(() => {
   db = newDatabase();
@@ -27,6 +29,7 @@ beforeEach(() => {
   salvar = new SaveProduct(uow, new SequentialIds('p'), 'est-1');
   alternar = new SetProductActive(uow);
   remover = new RemoveProduct(uow);
+  renomear = new RenameCategory(uow);
 });
 
 describe('catálogo', () => {
@@ -154,5 +157,50 @@ describe('catálogo', () => {
     const lista = await uow.run((repos) => repos.products.list({ onlyActive: true }));
 
     expect(lista.map((p) => p.id)).toEqual([a.id]);
+  });
+});
+
+/**
+ * Corrigir "Bebida" para "Bebidas" exigia abrir cada produto — e ninguém faz
+ * isso com quinze itens, então as duas ficavam convivendo e a tela do cliente
+ * mostrava dois grupos do mesmo.
+ */
+describe('renomear categoria', () => {
+  it('renomeia todos os produtos da categoria', async () => {
+    await salvar.execute({ name: 'Coca', priceReais: 12, category: 'Bebida' });
+    await salvar.execute({ name: 'Água', priceReais: 4, category: 'Bebida' });
+    await salvar.execute({ name: 'Pizza', priceReais: 50, category: 'Pizzas' });
+
+    const alterados = await renomear.execute('Bebida', 'Bebidas');
+
+    expect(alterados).toBe(2);
+    expect([...db.products.values()].filter((p) => p.category === 'Bebidas')).toHaveLength(2);
+    expect([...db.products.values()].find((p) => p.name === 'Pizza')!.category).toBe('Pizzas');
+  });
+
+  it('funde quando o destino já existe', async () => {
+    // É assim que se conserta a duplicata: renomear para o nome certo junta
+    // tudo num grupo só.
+    await salvar.execute({ name: 'Coca', priceReais: 12, category: 'Bebida' });
+    await salvar.execute({ name: 'Suco', priceReais: 9, category: 'Bebidas' });
+
+    await renomear.execute('Bebida', 'Bebidas');
+
+    expect([...db.products.values()].every((p) => p.category === 'Bebidas')).toBe(true);
+  });
+
+  it('recusa nome vazio', async () => {
+    await salvar.execute({ name: 'Coca', priceReais: 12, category: 'Bebidas' });
+
+    await expect(renomear.execute('Bebidas', '  ')).rejects.toThrow(ValidationError);
+  });
+
+  it('não mexe em quem não é da categoria', async () => {
+    await salvar.execute({ name: 'Sem grupo', priceReais: 10 });
+
+    const alterados = await renomear.execute('Bebidas', 'Líquidos');
+
+    expect(alterados).toBe(0);
+    expect([...db.products.values()][0].category).toBeNull();
   });
 });

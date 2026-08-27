@@ -75,3 +75,19 @@ export async function removerProdutoAction(id: string): Promise<ActionResult> {
     return { ok: false, error: toFormError(cause) };
   }
 }
+
+export async function renomearCategoriaAction(
+  de: string,
+  para: string,
+): Promise<ActionResult> {
+  try {
+    const session = await requireSession();
+    await containerFor(session.establishmentId).useCases.renameCategory.execute(de, para);
+
+    revalidatePath('/dashboard/catalogo');
+    revalidatePath('/dashboard');
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}

@@ -16,6 +16,7 @@ import { StartRoute } from './application/use-cases/routes/start-route';
 import { SaveCourier } from '@/application/use-cases/couriers/save-courier';
 import { SetCourierActive } from '@/application/use-cases/couriers/set-courier-active';
 import { AdvanceOrderStage } from '@/application/use-cases/orders/advance-order-stage';
+import { RenameCategory } from '@/application/use-cases/catalog/rename-category';
 import { SaveProduct } from '@/application/use-cases/catalog/save-product';
 import { SetProductActive } from '@/application/use-cases/catalog/set-product-active';
 import { RemoveProduct } from '@/application/use-cases/catalog/remove-product';
@@ -51,6 +52,7 @@ export interface Container {
     saveProduct: SaveProduct;
     setProductActive: SetProductActive;
     removeProduct: RemoveProduct;
+    renameCategory: RenameCategory;
     advanceOrderStage: AdvanceOrderStage;
     saveCourier: SaveCourier;
     setCourierActive: SetCourierActive;
@@ -108,6 +110,7 @@ export function containerFor(establishmentId: string): Container {
       saveProduct: new SaveProduct(uow, ids, establishmentId),
       setProductActive: new SetProductActive(uow),
       removeProduct: new RemoveProduct(uow),
+      renameCategory: new RenameCategory(uow),
       advanceOrderStage: new AdvanceOrderStage(uow, clock),
       saveCourier: new SaveCourier(uow, ids, establishmentId),
       setCourierActive: new SetCourierActive(uow),
