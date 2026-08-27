@@ -7,6 +7,7 @@ import {
   removerProdutoAction,
   salvarProdutoAction,
 } from '@/presentation/catalog-actions';
+import { enviarImagemAction } from '@/presentation/upload-actions';
 import type { ProductView } from '@/presentation/queries';
 import { Button, EmptyState, Field, Input, Textarea } from '../primitives';
 import { currency } from '../format';
@@ -214,6 +215,22 @@ function ProductForm({
 }) {
   const [erro, setErro] = useState<string | null>(null);
   const [pendente, submit] = useTransition();
+  const [imagem, setImagem] = useState(produto?.imageUrl ?? '');
+  const [enviando, enviar] = useTransition();
+
+  function escolherArquivo(arquivo: File | undefined) {
+    if (!arquivo) return;
+    setErro(null);
+
+    const dados = new FormData();
+    dados.set('file', arquivo);
+
+    enviar(async () => {
+      const resultado = await enviarImagemAction(dados);
+      if (resultado.ok) setImagem(resultado.url);
+      else setErro(resultado.error);
+    });
+  }
 
   function handleSubmit(formData: FormData) {
     setErro(null);
@@ -280,16 +297,41 @@ function ProductForm({
           <Textarea name="description" rows={2} defaultValue={produto?.description ?? ''} />
         </Field>
 
-        <Field
-          label="Foto"
-          hint="cole o endereço de uma imagem — a importação preenche sozinha"
-        >
-          <Input
-            name="imageUrl"
-            type="url"
-            defaultValue={produto?.imageUrl ?? ''}
-            placeholder="https://…"
-          />
+        <Field label="Foto" hint="envie do computador ou cole um endereço">
+          <div className="flex items-center gap-3">
+            {imagem ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={imagem} alt="" className="size-14 shrink-0 rounded object-cover" />
+            ) : null}
+
+            <div className="min-w-0 flex-1">
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/avif"
+                onChange={(evento) => escolherArquivo(evento.target.files?.[0])}
+                disabled={enviando}
+                className="block w-full text-xs text-ink-muted file:mr-2 file:rounded file:border file:bg-raised file:px-2 file:py-1 file:text-xs file:text-ink"
+              />
+
+              {/*
+                O campo de endereço fica: a importação do iFood preenche ele
+                sozinha, e nem todo mundo tem o arquivo à mão — às vezes a foto
+                já está no Instagram.
+              */}
+              <Input
+                name="imageUrl"
+                type="url"
+                value={imagem}
+                onChange={(evento) => setImagem(evento.target.value)}
+                placeholder="https://…"
+                className="mt-1.5"
+              />
+            </div>
+
+            {enviando ? (
+              <LoaderCircle className="size-4 shrink-0 animate-spin text-ink-faint" />
+            ) : null}
+          </div>
         </Field>
       </div>
 

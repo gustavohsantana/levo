@@ -37,6 +37,8 @@ const schema = z.object({
   AIQFOME_TOKEN_URL: z.string().url().optional(),
   AIQFOME_SCOPE: z.string().optional(),
   AIQFOME_BASE_URL: z.string().url().optional(),
+  /** Vem do Vercel Blob quando a loja de imagens está ligada ao projeto. */
+  BLOB_READ_WRITE_TOKEN: z.string().optional(),
 
   WEBHOOK_SECRET: z.string().optional(),
 
