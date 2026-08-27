@@ -60,11 +60,21 @@ eliminar — implementá-lo dentro do produto seria construir o problema.
 
 ### As saídas reais, e o que cada uma custa
 
+Em todas elas o dinheiro é da loja e o custo é dela. **O Levô não paga nem
+recebe nada por transação em nenhuma das três** — não há mensalidade de gateway,
+e não cobrar comissão é só omitir `application_fee`.
+
 | Caminho | Confirma sozinho? | Custo p/ a loja | O que exige dela |
 |---|---|---|---|
-| Chave Pix no checkout | Não | 0% | Nada — e conferência manual para sempre |
-| API Pix do banco dela (padrão BCB) | Sim | ~0% | Contrato de API Pix com o banco, certificado mTLS, onboarding diferente em cada banco |
-| Instituição de pagamento (Mercado Pago) | Sim | ~0,99% | Clicar em "conectar" |
+| Chave Pix no checkout | Não | Tarifa do banco dela | Nada — e conferência manual para sempre |
+| API Pix do banco dela (padrão BCB) | Sim | Tarifa do banco dela | Contrato de API Pix com o banco, certificado mTLS, onboarding diferente em cada banco |
+| Instituição de pagamento (Mercado Pago) | Sim | ~0,99%, negociável | Clicar em "conectar" |
+
+"Tarifa do banco" não é sinônimo de zero: Pix recebido é gratuito para pessoa
+física, mas em conta PJ boa parte dos bancos cobra — percentual ou valor fixo
+por recebimento. A diferença real para os 0,99% costuma ser menor do que
+parece, e em alguns bancos é quase nenhuma. Vale o dono olhar a tarifa dele
+antes de concluir que está pagando caro pela automação.
 
 A opção do meio é tecnicamente a melhor e comercialmente a pior: os endpoints
 de cobrança são padronizados pelo Banco Central, mas credencial e certificado
@@ -72,9 +82,10 @@ são de cada banco, um a um, e quem tem que pedir isso ao gerente é o dono da
 pizzaria. Vale conhecer para o dia em que um cliente grande já tiver esse
 contrato; não vale como ponto de partida.
 
-Ou seja, o ~1% do Mercado Pago não está pagando pelo Pix — Pix é de graça. Está
-pagando pela confirmação automática e pela identificação do pedido. Em uma
-comanda de R$ 60, são sessenta centavos para ninguém precisar conferir print.
+Ou seja, o ~1% do Mercado Pago não está pagando pelo Pix — o Pix em si não custa
+isso. Está pagando pela confirmação automática e pela identificação do pedido.
+Em uma comanda de R$ 60, são sessenta centavos para ninguém precisar conferir
+print no sábado à noite.
 
 E nada disso tira a chave Pix do produto: **"Pix na entrega" continua existindo
 como forma de pagamento**, como já existe hoje no enum `PaymentMethod`. A loja
