@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { Link2, LoaderCircle, MapPin } from 'lucide-react';
 import { salvarRegiaoAction } from '@/presentation/actions';
+import { DeliveryFeeBands, type Faixa } from './delivery-fee-bands';
 import { Button, Field, Input } from '../primitives';
 
 /**
@@ -15,7 +16,9 @@ import { Button, Field, Input } from '../primitives';
  */
 export function Settings({
   establishment,
+  faixas,
 }: {
+  faixas: Faixa[];
   establishment: {
     name: string;
     address: string;
@@ -139,6 +142,8 @@ export function Settings({
         </Button>
       </section>
       </form>
+
+      <DeliveryFeeBands inicial={faixas} />
     </div>
   );
 }

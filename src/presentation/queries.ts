@@ -308,6 +308,7 @@ export async function getDashboard() {
      * erro sob carga, sim.
      */
     const establishment = await repos.establishments.current();
+    const feeBands = await repos.establishments.deliveryFeeBands();
     const pending = await repos.orders.listPending();
     const todayOrders = await repos.orders.listOfDay(new Date());
     const activeRoutes = await repos.routes.listActive();
@@ -338,6 +339,7 @@ export async function getDashboard() {
         name: establishment.name,
         coordinates: establishment.coordinates.toJSON(),
         deliveryFeeReais: establishment.deliveryFee.reais,
+        feeBands: feeBands.map((b) => ({ km: b.uptoMeters / 1000, reais: b.fee.reais })),
       },
       pending: pending.map((order) =>
         toOrderView(

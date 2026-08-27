@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { LoaderCircle, X } from 'lucide-react';
 import { createOrderAction } from '@/presentation/actions';
 import type { ProductView } from '@/presentation/queries';
+import type { Faixa } from './delivery-fee-bands';
 import { OrderItemsPicker, type ItemEscolhido } from './order-items-picker';
 import { Button, Field, Input, Select, Textarea } from '../primitives';
 
@@ -13,9 +14,11 @@ export function NewOrderDialog({
   trigger,
   produtos = [],
   taxaPadraoReais = 0,
+  faixas = [],
 }: {
   trigger: React.ReactNode;
   produtos?: ProductView[];
+  faixas?: Faixa[];
   /** Vem das Configurações. O dono muda no pedido quando for diferente. */
   taxaPadraoReais?: number;
 }) {
@@ -25,7 +28,11 @@ export function NewOrderDialog({
   const [pending, submit] = useTransition();
   const [itens, setItens] = useState<ItemEscolhido[]>([]);
   const [totalCents, setTotalCents] = useState(0);
-  const [taxa, setTaxa] = useState(taxaPadraoReais ? taxaPadraoReais.toFixed(2) : '');
+  /*
+   * Vazio significa automático: o servidor calcula pela distância depois de
+   * geocodificar o endereço, que é a única hora em que ela existe.
+   */
+  const [taxa, setTaxa] = useState('');
 
   /**
    * Sem `useEffect` observando o resultado: a ação já devolve se deu certo,
@@ -123,7 +130,11 @@ export function NewOrderDialog({
                   readOnly={itens.length > 0}
                   value={
                     itens.length > 0
-                      ? ((totalCents + Math.round(Number(taxa || 0) * 100)) / 100).toFixed(2)
+                      ? (
+                          (totalCents +
+                            Math.round(Number(taxa || taxaPadraoReais || 0) * 100)) /
+                          100
+                        ).toFixed(2)
                       : undefined
                   }
                   onChange={itens.length > 0 ? () => undefined : undefined}
@@ -140,14 +151,42 @@ export function NewOrderDialog({
             />
 
             <div className="grid grid-cols-2 gap-3.5">
-              <Field label="Taxa de entrega" hint="vem das Configurações">
-                <Input
-                  name="deliveryFeeReais"
-                  inputMode="decimal"
-                  value={taxa}
-                  onChange={(evento) => setTaxa(evento.target.value)}
-                  placeholder="0,00"
-                />
+              <Field
+                label="Taxa de entrega"
+                hint={taxa === '' ? 'calculada pela distância' : 'valor fixo'}
+              >
+                <div className="flex gap-1.5">
+                  {/*
+                    O seletor existe para o caso comum — escolher uma faixa sem
+                    digitar. O campo ao lado continua aceitando qualquer valor:
+                    bairro complicado, cliente conhecido, promoção. A regra
+                    poupa digitação, não discorda de quem está atendendo.
+                  */}
+                  {faixas.length > 0 ? (
+                    <Select
+                      value={taxa}
+                      onChange={(evento) => setTaxa(evento.target.value)}
+                      aria-label="Faixa de entrega"
+                      className="min-w-0 flex-1"
+                    >
+                      <option value="">Automático</option>
+                      {faixas.map((faixa) => (
+                        <option key={faixa.km} value={faixa.reais.toFixed(2)}>
+                          até {faixa.km} km — {faixa.reais.toFixed(2)}
+                        </option>
+                      ))}
+                    </Select>
+                  ) : null}
+
+                  <Input
+                    name="deliveryFeeReais"
+                    inputMode="decimal"
+                    value={taxa}
+                    onChange={(evento) => setTaxa(evento.target.value)}
+                    placeholder={taxaPadraoReais ? taxaPadraoReais.toFixed(2) : '0,00'}
+                    className={faixas.length > 0 ? 'w-20' : undefined}
+                  />
+                </div>
               </Field>
 
               <Field label="Pagamento">

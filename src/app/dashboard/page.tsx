@@ -25,6 +25,7 @@ export default async function DashboardPage() {
         establishment={data.establishment}
         produtos={produtos}
         taxaPadraoReais={data.establishment.deliveryFeeReais}
+        faixas={data.establishment.feeBands}
         rotasAtivas={data.activeRoutes}
       />
 

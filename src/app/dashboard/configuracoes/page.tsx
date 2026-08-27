@@ -9,9 +9,12 @@ export const dynamic = 'force-dynamic';
 export default async function ConfiguracoesPage() {
   const { container } = await currentContainer();
 
-  const establishment = await container.read(async (repos) => {
+  const { establishment, faixas } = await container.read(async (repos) => {
     const atual = await repos.establishments.current();
+    const bands = await repos.establishments.deliveryFeeBands();
     return {
+      faixas: bands.map((b) => ({ km: b.uptoMeters / 1000, reais: b.fee.reais })),
+      establishment: {
       name: atual.name,
       address: atual.address.raw,
       city: atual.city,
@@ -19,8 +22,9 @@ export default async function ConfiguracoesPage() {
       deliveryFeeReais: atual.deliveryFee.reais,
       slug: atual.slug,
       baseUrl: env().PUBLIC_BASE_URL,
+      },
     };
   });
 
-  return <Settings establishment={establishment} />;
+  return <Settings establishment={establishment} faixas={faixas} />;
 }

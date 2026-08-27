@@ -6,6 +6,7 @@ import type {
   Product,
   Route,
 } from '../../entities';
+import type { DeliveryFeeBand } from '../../services/delivery-fee';
 import type { DomainEvent } from '../../events/domain-event';
 import type { Coordinates } from '../../value-objects';
 
@@ -48,6 +49,9 @@ export interface CourierRepository {
 
 export interface EstablishmentRepository {
   current(): Promise<Establishment>;
+  /** Faixas de taxa por distância, da menor para a maior. */
+  deliveryFeeBands(): Promise<DeliveryFeeBand[]>;
+  saveDeliveryFeeBands(bands: DeliveryFeeBand[]): Promise<void>;
   /** O que a tela de configurações edita. */
   saveSettings(
     city: string | null,

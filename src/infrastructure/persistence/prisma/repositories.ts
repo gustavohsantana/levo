@@ -22,6 +22,7 @@ import {
   type RouteRepository,
   type MarketplaceOutbox,
   type MarketplaceCommandEntry,
+  type DeliveryFeeBand,
   Money,
   Product,
   type ProductRepository,
@@ -251,6 +252,38 @@ export class PrismaEstablishmentRepository extends TenantScoped implements Estab
     await this.tx.establishment.update({
       where: { id: this.establishmentId },
       data: { city, state, deliveryFeeCents, slug },
+    });
+  }
+  async deliveryFeeBands(): Promise<DeliveryFeeBand[]> {
+    const rows = await this.tx.deliveryFeeRule.findMany({
+      where: { establishmentId: this.establishmentId },
+      orderBy: { uptoMeters: 'asc' },
+    });
+
+    return rows.map((row) => ({
+      uptoMeters: row.uptoMeters,
+      fee: Money.fromCents(row.feeCents),
+    }));
+  }
+
+  async saveDeliveryFeeBands(bands: DeliveryFeeBand[]): Promise<void> {
+    /*
+     * Reescreve tudo em vez de comparar faixa a faixa. A lista tem meia dúzia
+     * de linhas e é editada de uma vez na tela — sincronizar seria mais código
+     * e mais chance de deixar faixa órfã para o mesmo resultado.
+     */
+    await this.tx.deliveryFeeRule.deleteMany({
+      where: { establishmentId: this.establishmentId },
+    });
+
+    if (bands.length === 0) return;
+
+    await this.tx.deliveryFeeRule.createMany({
+      data: bands.map((band) => ({
+        establishmentId: this.establishmentId,
+        uptoMeters: band.uptoMeters,
+        feeCents: band.fee.cents,
+      })),
     });
   }
 }

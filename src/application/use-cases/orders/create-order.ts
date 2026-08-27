@@ -1,5 +1,9 @@
 import {
   Address,
+  type Coordinates,
+  type DeliveryFeeBand,
+  type Establishment,
+  taxaPorDistancia,
   NotFoundError,
   type OrderItem,
   type PaymentMethod,
@@ -70,6 +74,7 @@ export class CreateOrder {
 
     return this.uow.run(async (repos) => {
       const itens = await this.resolverItens(repos, input.items ?? []);
+      const taxa = await this.taxaDeEntrega(repos, estabelecimento, coordinates, input);
 
       const order = Order.create({
         id: this.ids.next(),
@@ -83,10 +88,7 @@ export class CreateOrder {
         address,
         coordinates,
         amount: Money.fromReais(input.amountReais ?? 0),
-        deliveryFee:
-          input.deliveryFeeReais === undefined || input.deliveryFeeReais === null
-            ? estabelecimento.deliveryFee
-            : Money.fromReais(input.deliveryFeeReais),
+        deliveryFee: taxa,
         paymentMethod: input.paymentMethod,
         items: itens,
         notes: input.notes,
@@ -100,6 +102,35 @@ export class CreateOrder {
 
       return order;
     });
+  }
+
+  /**
+   * Quanto cobrar de entrega.
+   *
+   * Ordem de preferência: o que o dono digitou, a faixa da distância, a taxa
+   * fixa. O valor digitado ganha sempre — bairro complicado, cliente conhecido,
+   * promoção: a regra existe para poupar digitação, não para discordar de quem
+   * está atendendo.
+   *
+   * Sem coordenada não há distância, e aí a faixa não se aplica: um endereço
+   * que o mapa não achou cobraria a faixa mais cara por acidente.
+   */
+  private async taxaDeEntrega(
+    repos: { establishments: { deliveryFeeBands(): Promise<DeliveryFeeBand[]> } },
+    estabelecimento: Establishment,
+    coordinates: Coordinates | null,
+    input: Input,
+  ): Promise<Money> {
+    if (input.deliveryFeeReais !== undefined && input.deliveryFeeReais !== null) {
+      return Money.fromReais(input.deliveryFeeReais);
+    }
+
+    if (!coordinates) return estabelecimento.deliveryFee;
+
+    const faixas = await repos.establishments.deliveryFeeBands();
+    const metros = estabelecimento.coordinates.distanceTo(coordinates);
+
+    return taxaPorDistancia(metros, faixas, estabelecimento.deliveryFee);
   }
 
   /**

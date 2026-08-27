@@ -20,6 +20,7 @@ import {
   type UnitOfWork,
   type MarketplaceOutbox,
   type MarketplaceCommandEntry,
+  type DeliveryFeeBand,
   Product,
   type ProductRepository,
 } from '@/core';
@@ -41,6 +42,7 @@ export class InMemoryDatabase {
   /** Avisos enfileirados para o marketplace, por (provedor, pedido, comando). */
   marketplace = new Map<string, MarketplaceCommandEntry>();
   products = new Map<string, Product>();
+  deliveryFeeBands: DeliveryFeeBand[] = [];
   events: DomainEvent[] = [];
 
   constructor(readonly establishment: Establishment) {}
@@ -142,6 +144,12 @@ function buildRepositories(db: InMemoryDatabase): Repositories {
       return db.establishment;
     },
 
+    async deliveryFeeBands() {
+      return db.deliveryFeeBands;
+    },
+    async saveDeliveryFeeBands(bands) {
+      db.deliveryFeeBands = bands;
+    },
     async saveSettings() {
       // O fake guarda o estabelecimento imutável; a região não é lida em
       // nenhum teste de regra, e fingir persistência aqui só criaria estado.

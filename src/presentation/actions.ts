@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { containerFor } from '@/composition-root';
-import { Address } from '@/core';
+import { Address, Money } from '@/core';
 import { createOrderSchema, credentialsSchema, planRouteSchema } from '@/application/dto/schemas';
 import { createSession, destroySession, requireSession } from './http/session';
 import { toFormError } from './http/error-mapper';
@@ -263,4 +263,43 @@ export async function salvarRegiaoAction(formData: FormData): Promise<ActionResu
 
   revalidatePath('/dashboard/configuracoes');
   return { ok: true };
+}
+
+/**
+ * As faixas de taxa por distância.
+ *
+ * Chegam como JSON porque são uma lista de tamanho variável, e `FormData` não
+ * representa isso sem inventar convenção de nome de campo.
+ */
+export async function salvarFaixasAction(bruto: string): Promise<ActionResult> {
+  try {
+    const lista = JSON.parse(bruto) as Array<{ km: number; reais: number }>;
+
+    if (!Array.isArray(lista)) return { ok: false, error: 'Faixas inválidas' };
+
+    for (const faixa of lista) {
+      if (!Number.isFinite(faixa.km) || faixa.km <= 0) {
+        return { ok: false, error: 'Cada faixa precisa de uma distância maior que zero' };
+      }
+      if (!Number.isFinite(faixa.reais) || faixa.reais < 0) {
+        return { ok: false, error: 'Valor de taxa inválido' };
+      }
+    }
+
+    const session = await requireSession();
+    await containerFor(session.establishmentId).read((repos) =>
+      repos.establishments.saveDeliveryFeeBands(
+        lista.map((faixa) => ({
+          uptoMeters: Math.round(faixa.km * 1000),
+          fee: Money.fromReais(faixa.reais),
+        })),
+      ),
+    );
+
+    revalidatePath('/dashboard/configuracoes');
+    revalidatePath('/dashboard');
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
 }

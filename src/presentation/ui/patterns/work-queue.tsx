@@ -18,6 +18,7 @@ import type { OrderView, RouteView } from '@/presentation/queries';
 import { Button, EmptyState, Select } from '../primitives';
 import { OrderBoard } from './order-board';
 import type { ProductView } from '@/presentation/queries';
+import type { Faixa } from './delivery-fee-bands';
 import { NewOrderDialog } from './new-order-dialog';
 import { PinPickerDialog } from './pin-picker-dialog';
 
@@ -41,6 +42,7 @@ export function WorkQueue({
   establishment,
   produtos = [],
   taxaPadraoReais = 0,
+  faixas = [],
 }: {
   pending: OrderView[];
   /** As rotas na rua, para a quarta coluna. */
@@ -50,6 +52,7 @@ export function WorkQueue({
   /** Catálogo, para montar o pedido sem digitar preço. */
   produtos?: ProductView[];
   taxaPadraoReais?: number;
+  faixas?: Faixa[];
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -161,6 +164,7 @@ export function WorkQueue({
         <NewOrderDialog
           produtos={produtos}
           taxaPadraoReais={taxaPadraoReais}
+          faixas={faixas}
           trigger={
             <Button size="sm" className="ml-auto">
               <Plus />
@@ -210,6 +214,7 @@ export function WorkQueue({
             <NewOrderDialog
               produtos={produtos}
               taxaPadraoReais={taxaPadraoReais}
+              faixas={faixas}
               trigger={
                 <Button size="sm" variant="primary">
                   Lançar o primeiro pedido

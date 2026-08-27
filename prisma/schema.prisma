@@ -78,6 +78,7 @@ model Establishment {
   credentials         IntegrationCredential[]
   marketplaceCommands MarketplaceCommand[]
   products            Product[]
+  deliveryFeeRules    DeliveryFeeRule[]
 }
 
 model User {
@@ -418,4 +419,26 @@ enum PaymentMethod {
   PIX
   /// Pago no aplicativo do marketplace — nao ha o que receber na porta.
   ONLINE
+}
+
+/// Faixa de taxa de entrega por distancia.
+///
+/// "Ate 3 km, R$ 5. Ate 6 km, R$ 8. Acima disso, R$ 12." E como o setor
+/// precifica frete, e hoje isso vive na cabeca de quem atende — que erra no
+/// sabado cheio, sempre para menos.
+///
+/// A distancia e em LINHA RETA a partir do estabelecimento, nao pela rua. E o
+/// que os aplicativos usam para faixa de frete, e a alternativa custaria uma
+/// chamada de roteirizacao por pedido para mudar quase nada no valor.
+model DeliveryFeeRule {
+  id              String @id @default(uuid())
+  establishmentId String
+  /// Limite superior da faixa, em metros. A ultima faixa cobre o resto.
+  uptoMeters      Int
+  feeCents        Int
+
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+
+  @@unique([establishmentId, uptoMeters])
+  @@index([establishmentId, uptoMeters])
 }
