@@ -5,7 +5,10 @@ import { createLogger } from '../src/infrastructure/observability/logger';
 import { getPrismaClient } from '../src/infrastructure/persistence/prisma/client';
 import { IfoodOrderSource } from '../src/infrastructure/integrations/ifood/adapter';
 import { IfoodAuth } from '../src/infrastructure/integrations/ifood/auth';
-import { CredentialStore } from '../src/infrastructure/integrations/credential-store';
+import {
+  CredentialStore,
+  type Provider,
+} from '../src/infrastructure/integrations/credential-store';
 import { AiqfomeOrderSource } from '../src/infrastructure/integrations/aiqfome/adapter';
 import { aiqfomeAccessTokenFor } from '../src/infrastructure/integrations/aiqfome/factory';
 import type { MarketplaceCommands, OrderSource } from '../src/core';
@@ -139,8 +142,16 @@ async function aiqfomeSourceFor(establishmentId: string): Promise<OrderSource | 
  */
 async function commandsFor(
   establishmentId: string,
-  provider: 'IFOOD' | 'AIQFOME',
+  provider: Provider,
 ): Promise<MarketplaceCommands | null> {
+  /*
+   * Mercado Pago compartilha a tabela de credenciais com os marketplaces, mas
+   * não é um: ele não traz pedido para dentro, então não existe status para
+   * mandar de volta. `null` aqui faz o aviso ser marcado como resolvido em vez
+   * de ficar numa fila que nunca esvazia.
+   */
+  if (provider === 'MERCADO_PAGO') return null;
+
   const store = new CredentialStore(getPrismaClient(config.DATABASE_URL), config.AUTH_SECRET);
   const credencial = await store.read(establishmentId, provider);
   if (!credencial?.merchantId) return null;

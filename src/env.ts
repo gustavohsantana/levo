@@ -37,6 +37,20 @@ const schema = z.object({
   AIQFOME_TOKEN_URL: z.string().url().optional(),
   AIQFOME_SCOPE: z.string().optional(),
   AIQFOME_BASE_URL: z.string().url().optional(),
+
+  /*
+   * Aplicação do Levô em "Suas integrações", no painel de developers do Mercado
+   * Pago. Uma só, para todos os estabelecimentos: o que separa uma loja da outra
+   * é o token que **ela** autoriza, guardado no `IntegrationCredential`.
+   *
+   * Sem `_ENABLED` de propósito, ao contrário do iFood e do aiqfome. Aqueles
+   * têm polling que precisa ser desligado; aqui não há processo nenhum rodando,
+   * e uma variável a mais só criaria o estado em que a credencial existe e a
+   * integração está desligada — sem ninguém saber por quê.
+   */
+  MERCADO_PAGO_CLIENT_ID: z.string().optional(),
+  MERCADO_PAGO_CLIENT_SECRET: z.string().optional(),
+
   /** Vem do Vercel Blob quando a loja de imagens está ligada ao projeto. */
   BLOB_READ_WRITE_TOKEN: z.string().optional(),
 
@@ -71,6 +85,10 @@ function load() {
     ...parsed.data,
     ifoodEnabled: parsed.data.IFOOD_ENABLED === 'true',
     aiqfomeEnabled: parsed.data.AIQFOME_ENABLED === 'true',
+    // Ter a credencial da aplicação *é* estar ligado. Ver o comentário no schema.
+    mercadoPagoEnabled: Boolean(
+      parsed.data.MERCADO_PAGO_CLIENT_ID && parsed.data.MERCADO_PAGO_CLIENT_SECRET,
+    ),
     isProduction: parsed.data.NODE_ENV === 'production',
   };
 }

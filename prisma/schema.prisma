@@ -245,6 +245,9 @@ model GeocodeCache {
 enum IntegrationProvider {
   IFOOD
   AIQFOME
+  /// Recebimento no cardápio público. Não traz pedido para dentro como os
+  /// outros dois — traz dinheiro para a conta do lojista.
+  MERCADO_PAGO
 }
 
 // Credencial de integração obtida por OAuth, uma por estabelecimento e provedor.
@@ -266,6 +269,14 @@ model IntegrationCredential {
   // A loja que o lojista autorizou. Vem da própria autorização, não de
   // variável de ambiente: com dois estabelecimentos, cada um tem a sua.
   merchantId      String?
+  // Chave publicável do provedor, quando ele tem uma. Fica em claro de
+  // propósito: ela é feita para aparecer no navegador, e cifrar o que é público
+  // só esconderia do próprio código.
+  publicKey       String?
+  // Falso quando a autorização foi feita contra o ambiente de testes. Sem isto,
+  // uma loja conectada em sandbox parece conectada de verdade — e a descoberta
+  // vem pelo primeiro cliente que paga e não é cobrado.
+  liveMode        Boolean?
   expiresAt       DateTime?
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt

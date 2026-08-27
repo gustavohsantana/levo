@@ -5,7 +5,12 @@ import { getPrismaClient } from '@/infrastructure/persistence/prisma/client';
 import { requireSession } from '@/presentation/http/session';
 import { IfoodConnect } from '@/presentation/ui/patterns/ifood-connect';
 import { AiqfomeConnect } from '@/presentation/ui/patterns/aiqfome-connect';
+import {
+  MercadoPagoConnect,
+  type EstadoMercadoPago,
+} from '@/presentation/ui/patterns/mercadopago-connect';
 import { listarLojasAiqfome } from '@/infrastructure/integrations/aiqfome/stores';
+import { lerContaMercadoPago } from '@/infrastructure/payments/mercadopago/account';
 
 export const metadata: Metadata = { title: 'Integrações · Levô' };
 export const dynamic = 'force-dynamic';
@@ -17,8 +22,13 @@ export const dynamic = 'force-dynamic';
  * na prática significava que só quem escreveu o sistema conseguia colocar um
  * cliente para funcionar.
  */
-export default async function IntegracoesPage() {
+export default async function IntegracoesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ mercadopago?: string }>;
+}) {
   const session = await requireSession();
+  const { mercadopago: resultadoMp } = await searchParams;
   const prisma = getPrismaClient(env().DATABASE_URL);
   const store = new CredentialStore(prisma, env().AUTH_SECRET);
 
@@ -41,10 +51,31 @@ export default async function IntegracoesPage() {
     return null;
   };
 
-  const [ifood, aiqfome] = await Promise.all([
+  const [ifood, aiqfome, mercadoPago] = await Promise.all([
     store.read(session.establishmentId, 'IFOOD').catch(ilegivel('IFOOD')),
     store.read(session.establishmentId, 'AIQFOME').catch(ilegivel('AIQFOME')),
+    store.read(session.establishmentId, 'MERCADO_PAGO').catch(ilegivel('MERCADO_PAGO')),
   ]);
+
+  /*
+   * A conexão do Mercado Pago é conferida contra a API, não deduzida da
+   * existência da linha no banco.
+   *
+   * Credencial guardada só prova que um dia alguém autorizou. O lojista pode ter
+   * revogado o acesso na conta dele ontem, e a diferença entre os dois casos é
+   * dinheiro: com a autorização morta o cardápio deixa de oferecer Pix, e nada
+   * na tela diria por quê. Uma chamada com timeout curto, numa página que já é
+   * `force-dynamic` e já faz o mesmo pelo iFood.
+   */
+  const contaMp = mercadoPago ? await lerContaMercadoPago(mercadoPago.accessToken) : null;
+
+  const estadoMp: EstadoMercadoPago = !mercadoPago
+    ? 'desconectado'
+    : !contaMp
+      ? 'reconectar'
+      : mercadoPago.liveMode === false
+        ? 'teste'
+        : 'conectado';
 
   const nomeDaLoja = ifood?.merchantId ? await buscarNome(ifood) : null;
 
@@ -67,7 +98,8 @@ export default async function IntegracoesPage() {
       <div>
         <h1 className="text-xl font-semibold tracking-tight text-ink">Integrações</h1>
         <p className="mt-1 text-sm text-ink-muted">
-          Conecte as plataformas onde você recebe pedidos. Eles entram aqui sem digitação.
+          Conecte as plataformas onde você recebe pedidos — eles entram aqui sem digitação — e a
+          conta que recebe o pagamento do seu cardápio.
         </p>
       </div>
 
@@ -80,6 +112,13 @@ export default async function IntegracoesPage() {
         conectado={Boolean(aiqfome)}
         lojaAtual={aiqfome ? { id: aiqfome.merchantId ?? '', nome: nomeAiq } : null}
         lojas={lojasAiq}
+      />
+
+      <MercadoPagoConnect
+        estado={estadoMp}
+        conta={contaMp ? { nome: contaMp.nome, email: contaMp.email } : null}
+        disponivel={env().mercadoPagoEnabled}
+        aviso={resultadoMp ?? null}
       />
     </div>
   );

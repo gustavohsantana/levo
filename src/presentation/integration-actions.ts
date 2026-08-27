@@ -294,3 +294,30 @@ export async function desconectarAiqfome(): Promise<{ ok: boolean; error?: strin
     return { ok: false, error: toFormError(cause) };
   }
 }
+
+/**
+ * O Mercado Pago segue a forma do aiqfome — redireciona, consente e volta — mas
+ * desconectar aqui não é a mesma coisa que nos marketplaces.
+ *
+ * Lá, desconectar para de importar pedido. Aqui, tira a opção de pagar online do
+ * cardápio no mesmo instante. Por isso a ação apaga a credencial e nada mais:
+ * pedido já pago continua pago, e o histórico não some junto.
+ *
+ * Apagar não revoga a autorização do lado do Mercado Pago. Quem quiser cortar de
+ * verdade faz isso na conta dele; do lado do Levô, sem credencial não há como
+ * cobrar, que é o efeito que o dono espera do botão.
+ */
+export async function desconectarMercadoPago(): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const session = await requireSession();
+
+    await getPrismaClient(env().DATABASE_URL).integrationCredential.deleteMany({
+      where: { establishmentId: session.establishmentId, provider: 'MERCADO_PAGO' },
+    });
+
+    revalidatePath('/dashboard/integracoes');
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}

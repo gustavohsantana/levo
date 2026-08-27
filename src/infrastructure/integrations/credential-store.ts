@@ -11,7 +11,7 @@ import { ConfigurationError } from '@/core';
  * gravar nenhum dos dois em claro. Ligar um terceiro marketplace amanhã custa
  * um `provider` a mais, não uma segunda implementação disto.
  */
-export type Provider = 'IFOOD' | 'AIQFOME';
+export type Provider = 'IFOOD' | 'AIQFOME' | 'MERCADO_PAGO';
 
 export interface StoredTokens {
   accessToken: string;
@@ -19,6 +19,10 @@ export interface StoredTokens {
   expiresAt: Date | null;
   merchantId?: string | null;
   scope?: string | null;
+  /** Só o Mercado Pago tem. Em claro: ela nasce para ir ao navegador. */
+  publicKey?: string | null;
+  /** `null` nos provedores que não distinguem teste de produção. */
+  liveMode?: boolean | null;
 }
 
 /**
@@ -44,6 +48,8 @@ export class CredentialStore {
       expiresAt: tokens.expiresAt,
       merchantId: tokens.merchantId ?? null,
       scope: tokens.scope ?? null,
+      publicKey: tokens.publicKey ?? null,
+      liveMode: tokens.liveMode ?? null,
     };
 
     await this.prisma.integrationCredential.upsert({
@@ -67,6 +73,8 @@ export class CredentialStore {
         expiresAt: row.expiresAt,
         merchantId: row.merchantId,
         scope: row.scope,
+        publicKey: row.publicKey,
+        liveMode: row.liveMode,
       };
     } catch {
       /*
@@ -126,6 +134,8 @@ export class CredentialStore {
       refreshToken: renewed.refreshToken ?? current.refreshToken,
       merchantId: renewed.merchantId ?? current.merchantId,
       scope: renewed.scope ?? current.scope,
+      publicKey: renewed.publicKey ?? current.publicKey,
+      liveMode: renewed.liveMode ?? current.liveMode,
     });
 
     return renewed.accessToken;
