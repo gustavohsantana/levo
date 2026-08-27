@@ -281,6 +281,9 @@ E que seriam caras demais para consertar depois.
 Pagamento, app nativo, múltiplas lojas por conta, janelas de entrega, atribuição
 automática de motoboy e relatórios financeiros.
 
+Pagamento tem decisão e plano prontos em
+[`docs/pagamento-online.md`](docs/pagamento-online.md) — falta escrever.
+
 ### Limites conhecidos
 
 - **A trava de força bruta do login conta em memória do processo.** Na
