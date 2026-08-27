@@ -113,10 +113,23 @@ describe('MercadoPagoOAuth', () => {
       expect(String(fetchMock.mock.calls[0][1].body)).not.toContain('marketplace_fee');
     });
 
-    it('trata ausência de live_mode como teste', async () => {
-      // Conectar em sandbox achando que é produção custa vendas que ninguém
-      // cobra. O inverso custa um aviso a mais na tela.
+    it('não inventa live_mode quando a resposta não diz', async () => {
+      /*
+       * `null`, e não `false`. A diferença parece preciosismo e não é: a
+       * renovação preserva o valor guardado com `??`, então um `false`
+       * inventado aqui transformaria uma conta de produção em "conta de teste"
+       * na primeira renovação cuja resposta viesse sem `live_mode`. O padrão
+       * seguro é escolhido no callback, que é onde ele significa alguma coisa.
+       */
       respondWith({ access_token: 'token' });
+
+      const tokens = await new MercadoPagoOAuth(options).exchangeCode('codigo-xyz');
+
+      expect(tokens.liveMode).toBeNull();
+    });
+
+    it('preserva live_mode falso quando a resposta diz', async () => {
+      respondWith({ access_token: 'token', live_mode: false });
 
       const tokens = await new MercadoPagoOAuth(options).exchangeCode('codigo-xyz');
 

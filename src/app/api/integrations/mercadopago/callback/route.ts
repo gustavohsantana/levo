@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { env } from '@/env';
 import { CredentialStore } from '@/infrastructure/integrations/credential-store';
-import { lerContaMercadoPago } from '@/infrastructure/payments/mercadopago/account';
+import {
+  contaAceitaPix,
+  lerContaMercadoPago,
+} from '@/infrastructure/payments/mercadopago/account';
 import { mercadoPagoOAuth } from '@/infrastructure/payments/mercadopago/factory';
 import { getPrismaClient } from '@/infrastructure/persistence/prisma/client';
 import { toErrorResponse } from '@/presentation/http/error-mapper';
@@ -43,7 +46,10 @@ export async function GET(request: Request) {
      * nome e e-mail na tela, para o lojista que tem conta pessoal e conta da
      * empresa perceber sozinho que conectou a errada.
      */
-    const conta = await lerContaMercadoPago(tokens.accessToken);
+    const [conta, aceitaPix] = await Promise.all([
+      lerContaMercadoPago(tokens.accessToken),
+      contaAceitaPix(tokens.accessToken),
+    ]);
 
     /*
      * Conta sem Pix habilitado é recusada aqui, e não na hora do pedido.
@@ -56,7 +62,7 @@ export async function GET(request: Request) {
      * `null` passa: significa que a consulta não respondeu, não que a conta é
      * incapaz. Recusar por desconhecimento seria barrar quem funcionaria.
      */
-    if (conta?.aceitaPix === false) return backToPanel('sem-chave-pix');
+    if (aceitaPix === false) return backToPanel('sem-chave-pix');
 
     // Cifra, `upsert` e renovação vivem no store — um caminho só para gravar
     // credencial, compartilhado com iFood e aiqfome.
@@ -67,7 +73,14 @@ export async function GET(request: Request) {
       expiresAt: tokens.expiresAt,
       scope: tokens.scope,
       publicKey: tokens.publicKey,
-      liveMode: tokens.liveMode,
+      /*
+       * Resposta sem `live_mode` é tratada como teste. Conectar em sandbox
+       * achando que é produção custa vendas que ninguém cobra; o contrário
+       * custa um aviso a mais na tela. O padrão seguro fica aqui, e não no
+       * adapter, porque é aqui que a informação vem de fora pela primeira vez —
+       * lá ele apagaria o valor certo na renovação.
+       */
+      liveMode: tokens.liveMode ?? false,
       merchantId: conta?.id ?? tokens.merchantId,
     });
 

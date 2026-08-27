@@ -49,9 +49,17 @@ export function mercadoPagoAccessTokenFor(
   },
   establishmentId: string,
 ): () => Promise<string> {
-  const oauth = mercadoPagoOAuth();
-  return () =>
+  /*
+   * O cliente OAuth é montado dentro da função, e não aqui fora, porque
+   * `mercadoPagoOAuth()` lança quando faltam as credenciais do ambiente. Lá
+   * fora, isso seria uma exceção **síncrona** na montagem — que escapa do
+   * `.catch()` de quem chama e derruba a tela de Integrações inteira por causa
+   * de uma variável não preenchida. Dentro, vira uma promise rejeitada, que é
+   * o que todo mundo já sabe tratar. E o cliente só é preciso quando há
+   * renovação de verdade, que é raro.
+   */
+  return async () =>
     store.accessTokenFor(establishmentId, 'MERCADO_PAGO', (refreshToken) =>
-      oauth.refresh(refreshToken),
+      mercadoPagoOAuth().refresh(refreshToken),
     );
 }

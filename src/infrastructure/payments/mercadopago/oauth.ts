@@ -36,8 +36,18 @@ export interface MercadoPagoTokens {
   publicKey: string | null;
   /** `user_id` do vendedor: quem recebe o dinheiro. */
   merchantId: string | null;
-  /** `false` quando a autorização foi feita com credencial de teste. */
-  liveMode: boolean;
+  /**
+   * `false` quando a autorização foi feita com credencial de teste, `null`
+   * quando a resposta não disse.
+   *
+   * A distinção entre `false` e `null` não é preciosismo — é o que impede uma
+   * conta de produção de virar "conta de teste" sozinha. A renovação preserva o
+   * que já estava guardado com `??`, e um `false` inventado aqui apagaria o
+   * valor certo na primeira renovação cuja resposta viesse sem `live_mode`.
+   * Quem escolhe o padrão seguro é o consentimento, que é onde ele significa
+   * alguma coisa.
+   */
+  liveMode: boolean | null;
 }
 
 interface TokenResponse {
@@ -137,12 +147,7 @@ export class MercadoPagoOAuth {
       refreshToken: payload.refresh_token ?? null,
       publicKey: payload.public_key ?? null,
       merchantId: payload.user_id != null ? String(payload.user_id) : null,
-      /*
-       * Ausente é tratado como teste, não como produção. O erro de conectar em
-       * sandbox achando que é produção custa vendas que ninguém cobra; o
-       * inverso custa um aviso a mais na tela.
-       */
-      liveMode: payload.live_mode === true,
+      liveMode: typeof payload.live_mode === 'boolean' ? payload.live_mode : null,
       scope: payload.scope ?? null,
       expiresAt:
         typeof payload.expires_in === 'number'

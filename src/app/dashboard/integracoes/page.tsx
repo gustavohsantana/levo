@@ -11,6 +11,7 @@ import {
 } from '@/presentation/ui/patterns/mercadopago-connect';
 import { listarLojasAiqfome } from '@/infrastructure/integrations/aiqfome/stores';
 import { lerContaMercadoPago } from '@/infrastructure/payments/mercadopago/account';
+import { mercadoPagoAccessTokenFor } from '@/infrastructure/payments/mercadopago/factory';
 
 export const metadata: Metadata = { title: 'Integrações · Levô' };
 export const dynamic = 'force-dynamic';
@@ -66,8 +67,33 @@ export default async function IntegracoesPage({
    * dinheiro: com a autorização morta o cardápio deixa de oferecer Pix, e nada
    * na tela diria por quê. Uma chamada com timeout curto, numa página que já é
    * `force-dynamic` e já faz o mesmo pelo iFood.
+   *
+   * O token sai do `accessTokenFor`, e não do `read`, porque o do Mercado Pago
+   * vale cerca de 180 dias: ler o valor cru faria a tela anunciar "precisa
+   * reconectar" a cada semestre para todo lojista, com o refresh token parado
+   * ao lado resolvendo sozinho. Fora da margem de renovação isto é o mesmo que
+   * ler.
    */
-  const contaMp = mercadoPago ? await lerContaMercadoPago(mercadoPago.accessToken) : null;
+  const tokenMp =
+    mercadoPago && env().mercadoPagoEnabled
+      ? await mercadoPagoAccessTokenFor(store, session.establishmentId)().catch(
+          (cause: unknown) => {
+            /*
+             * Credencial ilegível, token vencido sem refresh, ou renovação
+             * recusada. Para o dono os três dizem a mesma coisa — reconecte —
+             * mas o log precisa distinguir, porque só um deles é problema de
+             * configuração nossa.
+             */
+            console.error('[integracoes] Mercado Pago sem token válido', {
+              establishmentId: session.establishmentId,
+              cause: String(cause),
+            });
+            return null;
+          },
+        )
+      : null;
+
+  const contaMp = tokenMp ? await lerContaMercadoPago(tokenMp) : null;
 
   const estadoMp: EstadoMercadoPago = !mercadoPago
     ? 'desconectado'

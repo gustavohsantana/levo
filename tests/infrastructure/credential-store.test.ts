@@ -105,6 +105,37 @@ describe('CredentialStore', () => {
     expect(upsert.mock.calls[0][0].update.merchantId).toBe('loja-1');
   });
 
+  it('preserva a chave publicável e o ambiente quando a renovação não os repete', async () => {
+    /*
+     * O ambiente é o que mais dói perder aqui. A renovação do Mercado Pago nem
+     * sempre repete `live_mode`, e uma conta de produção que voltasse como
+     * `false` faria a tela anunciar "conta de teste" para quem está vendendo de
+     * verdade — sem nada ter mudado do lado do lojista.
+     */
+    const { client, upsert } = fakePrisma(
+      storedRow({
+        provider: 'MERCADO_PAGO',
+        expiresAt: new Date(Date.now() + 60 * 1000),
+        publicKey: 'APP_USR-chave-publica',
+        liveMode: true,
+      }),
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const store = new CredentialStore(client as any, SECRET);
+
+    await store.accessTokenFor('est-1', 'MERCADO_PAGO', async () => ({
+      accessToken: 'token-novo',
+      refreshToken: 'refresh-novo',
+      expiresAt: new Date(Date.now() + 3600_000),
+      publicKey: null,
+      liveMode: null,
+    }));
+
+    const gravado = upsert.mock.calls[0][0].update;
+    expect(gravado.publicKey).toBe('APP_USR-chave-publica');
+    expect(gravado.liveMode).toBe(true);
+  });
+
   it('não renova quando não há validade declarada', async () => {
     const { client } = fakePrisma(storedRow({ expiresAt: null }));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

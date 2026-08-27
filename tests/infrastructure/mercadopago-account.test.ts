@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { lerContaMercadoPago } from '@/infrastructure/payments/mercadopago/account';
+import {
+  contaAceitaPix,
+  lerContaMercadoPago,
+} from '@/infrastructure/payments/mercadopago/account';
 
 /**
  * Duas perguntas com confiabilidade diferente: qual é a conta (exato) e se ela
@@ -49,8 +52,24 @@ describe('lerContaMercadoPago', () => {
       id: '987654321',
       nome: 'Maria Souza',
       email: 'maria@pizzaria.com.br',
-      aceitaPix: true,
     });
+  });
+
+  it('não gasta chamada perguntando pelo Pix', async () => {
+    /*
+     * Quem identifica a conta é a tela de Integrações, a cada abertura. Se o
+     * Pix fosse consultado junto, toda carga da página pagaria por uma segunda
+     * ida à rede cujo resultado só interessa uma vez, no consentimento.
+     */
+    const fetchMock = stubRespostas({
+      '/users/me': { ok: true, body: { id: 1, nickname: 'LOJA' } },
+      '/v1/payment_methods': { ok: true, body: [{ id: 'pix' }] },
+    });
+
+    await lerContaMercadoPago('token');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/users/me');
   });
 
   it('cai para o apelido quando não há nome', async () => {
@@ -70,41 +89,6 @@ describe('lerContaMercadoPago', () => {
     expect(await lerContaMercadoPago('token-revogado')).toBeNull();
   });
 
-  it('acusa a conta sem Pix habilitado', async () => {
-    stubRespostas({
-      '/users/me': { ok: true, body: { id: 1 } },
-      '/v1/payment_methods': {
-        ok: true,
-        body: [{ id: 'master' }, { id: 'visa' }],
-      },
-    });
-
-    expect((await lerContaMercadoPago('token'))?.aceitaPix).toBe(false);
-  });
-
-  it('trata Pix desativado como ausente', async () => {
-    stubRespostas({
-      '/users/me': { ok: true, body: { id: 1 } },
-      '/v1/payment_methods': { ok: true, body: [{ id: 'pix', status: 'deactive' }] },
-    });
-
-    expect((await lerContaMercadoPago('token'))?.aceitaPix).toBe(false);
-  });
-
-  it('não confunde consulta falhada com conta incapaz', async () => {
-    /*
-     * `null` é desconhecido, não "não". Quem chama deixa passar com aviso, em
-     * vez de recusar a conexão — a rede fora do ar não pode barrar um lojista
-     * cuja conta está perfeita.
-     */
-    stubRespostas({
-      '/users/me': { ok: true, body: { id: 1 } },
-      '/v1/payment_methods': { ok: false, body: {} },
-    });
-
-    expect((await lerContaMercadoPago('token'))?.aceitaPix).toBeNull();
-  });
-
   it('sobrevive à rede fora do ar', async () => {
     vi.stubGlobal(
       'fetch',
@@ -115,5 +99,42 @@ describe('lerContaMercadoPago', () => {
 
     // Sem conta não há como afirmar nada; o que importa é não derrubar a tela.
     expect(await lerContaMercadoPago('token')).toBeNull();
+  });
+});
+
+describe('contaAceitaPix', () => {
+  it('reconhece a conta habilitada', async () => {
+    stubRespostas({
+      '/v1/payment_methods': { ok: true, body: [{ id: 'pix', status: 'active' }] },
+    });
+
+    expect(await contaAceitaPix('token')).toBe(true);
+  });
+
+  it('acusa a conta sem Pix na lista', async () => {
+    stubRespostas({
+      '/v1/payment_methods': { ok: true, body: [{ id: 'master' }, { id: 'visa' }] },
+    });
+
+    expect(await contaAceitaPix('token')).toBe(false);
+  });
+
+  it('trata Pix desativado como ausente', async () => {
+    stubRespostas({
+      '/v1/payment_methods': { ok: true, body: [{ id: 'pix', status: 'deactive' }] },
+    });
+
+    expect(await contaAceitaPix('token')).toBe(false);
+  });
+
+  it('não confunde consulta falhada com conta incapaz', async () => {
+    /*
+     * `null` é desconhecido, não "não". Quem chama deixa passar, em vez de
+     * recusar a conexão — a rede fora do ar não pode barrar um lojista cuja
+     * conta está perfeita.
+     */
+    stubRespostas({ '/v1/payment_methods': { ok: false, body: {} } });
+
+    expect(await contaAceitaPix('token')).toBeNull();
   });
 });
