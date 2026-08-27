@@ -9,6 +9,7 @@ import {
   LoaderCircle,
   MapPinOff,
   MessageCircle,
+  MoreVertical,
   Package,
   Truck,
 } from 'lucide-react';
@@ -272,27 +273,35 @@ function OrderCard({
           />
         ) : null}
 
-        {/*
-          O cartão inteiro abre o pedido. Um botão "ver detalhes" competiria por
-          espaço com as ações que movem o pedido — e o alvo maior é o certo para
-          quem está com o telefone tocando.
-        */}
-        <OrderDetailDialog
-          pedido={pedido}
-          trigger={
-            <button type="button" className="min-w-0 flex-1 text-left">
-              <div className="flex items-center gap-1.5">
-                <p className="truncate text-sm font-medium text-ink">{pedido.customerName}</p>
-                <SourceTag source={pedido.source} />
-              </div>
-              <p className="truncate text-xs text-ink-faint">{pedido.address}</p>
-            </button>
-          }
-        />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <p className="truncate text-sm font-medium text-ink">{pedido.customerName}</p>
+            <SourceTag source={pedido.source} />
+          </div>
+          <p className="truncate text-xs text-ink-faint">{pedido.address}</p>
+        </div>
 
         <span className="numeric shrink-0 text-xs text-ink-faint">
           {clockTime(pedido.createdAt)}
         </span>
+
+        {/*
+          Botão próprio para abrir o pedido, e não o cartão inteiro clicável.
+          Com um checkbox ao lado, clicar no cartão é ambíguo — parece que vai
+          selecionar. Um alvo explícito diz o que faz.
+        */}
+        <OrderDetailDialog
+          pedido={pedido}
+          trigger={
+            <button
+              type="button"
+              aria-label={`Ver o pedido de ${pedido.customerName}`}
+              className="-mr-1 shrink-0 rounded p-1 text-ink-faint hover:bg-raised hover:text-ink"
+            >
+              <MoreVertical className="size-4" aria-hidden />
+            </button>
+          }
+        />
       </div>
 
       {/*
