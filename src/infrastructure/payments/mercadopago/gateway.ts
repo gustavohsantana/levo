@@ -4,65 +4,45 @@ import type { PaymentGateway } from '@/core/ports/services';
 const ORDERS_URL = 'https://api.mercadopago.com/v1/orders';
 const PAYMENTS_URL = 'https://api.mercadopago.com/v1/payments';
 
-interface MpPaymentMethod {
-  id?: string;
-  qr_code?: string;
-  qr_code_base64?: string;
-  ticket_url?: string;
-}
-
-interface MpPayment {
-  id?: string;
-  /** Id interno da Orders API — não serve em GET /v1/payments. */
-  reference_id?: string | number;
-  status?: string;
-  status_detail?: string;
-  amount?: string;
-  payment_method?: MpPaymentMethod;
-}
-
-interface MpOrderResponse {
-  id?: string;
-  status?: string;
-  status_detail?: string;
-  transactions?: { payments?: MpPayment[] | MpPayment };
-}
-
 interface MpPaymentBody {
+  id?: string | number;
   status?: string;
   status_detail?: string;
   transaction_amount?: number;
   date_approved?: string;
   message?: string;
+  point_of_interaction?: {
+    transaction_data?: {
+      qr_code?: string;
+      qr_code_base64?: string;
+      ticket_url?: string;
+    };
+  };
 }
 
-function centsToAmount(cents: number): string {
-  return (cents / 100).toFixed(2);
+interface MpOrderResponse {
+  id?: string;
+  external_reference?: string;
+  transactions?: {
+    payments?: Array<{
+      id?: string;
+      payment_method?: { qr_code?: string; ticket_url?: string };
+    }>;
+  };
 }
 
-function parsePayments(body: MpOrderResponse): MpPayment | null {
-  const raw = body.transactions?.payments;
-  if (!raw) return null;
-  return Array.isArray(raw) ? (raw[0] ?? null) : raw;
+function centsToAmountNumber(cents: number): number {
+  return Math.round(cents) / 100;
 }
 
-/** GET /v1/payments/{id} só aceita o id numérico longo. */
 function isNumericPaymentId(id: string | undefined | null): id is string {
   return !!id && /^\d{8,}$/.test(id);
 }
 
-function idNumericoNaResposta(payment: MpPayment | null, body: MpOrderResponse): string | null {
-  const ticket = payment?.payment_method?.ticket_url;
+function idNumericoNoQrOuTicket(qr?: string, ticket?: string): string | null {
   const fromTicket = ticket?.match(/\/payments\/(\d{8,})/)?.[1];
-  const fromQr = payment?.payment_method?.qr_code?.match(/mpqrinter(\d{8,})/)?.[1];
-
-  for (const candidate of [payment?.id, body.id, fromTicket, fromQr]) {
-    if (isNumericPaymentId(candidate != null ? String(candidate) : null)) {
-      return String(candidate);
-    }
-  }
-
-  return null;
+  const fromQr = qr?.match(/mpqrinter(\d{8,})/)?.[1];
+  return fromTicket ?? fromQr ?? null;
 }
 
 async function buscarIdNumerico(
@@ -94,6 +74,36 @@ async function lerPagamento(
   return { ok: response.ok, status: response.status, body };
 }
 
+export async function resolverIdPagamentoMp(
+  accessToken: string,
+  resourceId: string,
+): Promise<{ paymentId: string; orderId?: string }> {
+  if (isNumericPaymentId(resourceId)) {
+    return { paymentId: resourceId };
+  }
+
+  if (resourceId.startsWith('ORD')) {
+    const response = await fetch(`${ORDERS_URL}/${resourceId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const body = (await response.json().catch(() => ({}))) as MpOrderResponse;
+    const payment = Array.isArray(body.transactions?.payments)
+      ? body.transactions.payments[0]
+      : undefined;
+    const numerico =
+      idNumericoNoQrOuTicket(payment?.payment_method?.qr_code, payment?.payment_method?.ticket_url)
+      ?? (body.external_reference
+        ? await buscarIdNumerico(accessToken, body.external_reference)
+        : null);
+
+    if (numerico) {
+      return { paymentId: numerico, orderId: body.external_reference };
+    }
+  }
+
+  return { paymentId: resourceId };
+}
+
 export class MercadoPagoGateway implements PaymentGateway {
   async createPixCharge(input: {
     accessToken: string;
@@ -103,10 +113,15 @@ export class MercadoPagoGateway implements PaymentGateway {
     expiresInMinutes: number;
     sandbox?: boolean;
   }) {
-    const amount = centsToAmount(input.amountCents);
-    const expiration = `PT${input.expiresInMinutes}M`;
+    const expiresAt = new Date(Date.now() + input.expiresInMinutes * 60_000);
+    const baseUrl = process.env.PUBLIC_BASE_URL?.replace(/\/$/, '');
 
-    const response = await fetch(ORDERS_URL, {
+    /*
+     * Payments API — o id já vem numérico e o Pix do banco casa com a cobrança.
+     * A Orders API gerava QR (PAY01 / reference_id curto) que o banco pagava e
+     * a cobrança seguia `pending_waiting_transfer`.
+     */
+    const response = await fetch(PAYMENTS_URL, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${input.accessToken}`,
@@ -114,54 +129,44 @@ export class MercadoPagoGateway implements PaymentGateway {
         'X-Idempotency-Key': input.orderId,
       },
       body: JSON.stringify({
-        type: 'online',
-        processing_mode: 'automatic',
-        total_amount: amount,
+        transaction_amount: centsToAmountNumber(input.amountCents),
+        description: `Pedido ${input.orderId}`,
+        payment_method_id: 'pix',
+        date_of_expiration: expiresAt.toISOString(),
         external_reference: input.orderId,
-        transactions: {
-          payments: [{
-            amount,
-            payment_method: { id: 'pix', type: 'bank_transfer' },
-            expiration_time: expiration,
-          }],
+        ...(baseUrl
+          ? { notification_url: `${baseUrl}/api/webhooks/payments/mercadopago` }
+          : {}),
+        payer: {
+          email: input.payerEmail ?? `pedido-${input.orderId.slice(0, 8)}@levoentregas.app`,
+          ...(input.sandbox ? { first_name: 'APRO' } : {}),
         },
-        payer: input.payerEmail
-          ? {
-              email: input.payerEmail,
-              ...(input.sandbox ? { first_name: 'APRO' } : {}),
-            }
-          : undefined,
       }),
     });
 
-    const body = (await response.json().catch(() => ({}))) as MpOrderResponse & {
-      message?: string;
+    const body = (await response.json().catch(() => ({}))) as MpPaymentBody & {
       error?: string;
-      errors?: Array<{ message?: string; code?: string }>;
+      cause?: Array<{ description?: string; code?: string }>;
     };
 
     if (!response.ok) {
       const detalhe =
-        body.errors?.[0]?.message
+        body.cause?.[0]?.description
         ?? body.message
         ?? body.error
         ?? `HTTP ${response.status}`;
       throw new ExternalServiceError(
         'Mercado Pago',
         detalhe,
-        { orderId: input.orderId, status: response.status, errors: body.errors },
+        { orderId: input.orderId, status: response.status, cause: body.cause },
       );
     }
 
-    const payment = parsePayments(body);
-    const qrCode = payment?.payment_method?.qr_code;
+    const tx = body.point_of_interaction?.transaction_data;
+    const qrCode = tx?.qr_code;
+    const externalId = body.id != null ? String(body.id) : null;
 
-    let externalId = idNumericoNaResposta(payment, body);
-    if (!externalId) {
-      externalId = await buscarIdNumerico(input.accessToken, input.orderId);
-    }
-
-    if (!externalId || !qrCode) {
+    if (!externalId || !isNumericPaymentId(externalId) || !qrCode) {
       throw new ExternalServiceError(
         'Mercado Pago',
         'Resposta sem QR Code Pix',
@@ -169,21 +174,20 @@ export class MercadoPagoGateway implements PaymentGateway {
       );
     }
 
-    const expiresAt = new Date(Date.now() + input.expiresInMinutes * 60_000);
-
     return {
       externalId,
       qrCode,
-      qrCodeBase64: payment?.payment_method?.qr_code_base64 ?? null,
-      ticketUrl: payment?.payment_method?.ticket_url ?? null,
+      qrCodeBase64: tx?.qr_code_base64 ?? null,
+      ticketUrl: tx?.ticket_url ?? null,
       expiresAt,
     };
   }
 
   async getCharge(input: { accessToken: string; externalId: string; orderId?: string }) {
-    let resolvedExternalId = input.externalId;
-    let consulta = isNumericPaymentId(input.externalId)
-      ? await lerPagamento(input.accessToken, input.externalId)
+    const resolvido = await resolverIdPagamentoMp(input.accessToken, input.externalId);
+    let resolvedExternalId = resolvido.paymentId;
+    let consulta = isNumericPaymentId(resolvedExternalId)
+      ? await lerPagamento(input.accessToken, resolvedExternalId)
       : { ok: false, status: 404, body: {} as MpPaymentBody };
 
     if (!consulta.ok && input.orderId) {

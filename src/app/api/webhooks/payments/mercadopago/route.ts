@@ -3,6 +3,7 @@ import { ForbiddenError } from '@/core';
 import { containerFor } from '@/composition-root';
 import { env } from '@/env';
 import { verifyMercadoPagoWebhookSignature } from '@/infrastructure/payments/mercadopago/webhook-signature';
+import { resolverIdPagamentoMp } from '@/infrastructure/payments/mercadopago/gateway';
 import { getPrismaClient } from '@/infrastructure/persistence/prisma/client';
 import { toErrorResponse } from '@/presentation/http/error-mapper';
 
@@ -81,10 +82,29 @@ export async function POST(request: Request) {
         select: { establishmentId: true },
       });
 
-      if (!registro) {
-        const token = env().MERCADO_PAGO_ACCESS_TOKEN;
-        if (token) {
-          const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${resourceId}`, {
+      const token = env().MERCADO_PAGO_ACCESS_TOKEN;
+      let paymentId = resourceId;
+
+      if (!registro && token) {
+        const resolvido = await resolverIdPagamentoMp(token, resourceId);
+        paymentId = resolvido.paymentId;
+
+        registro = await prisma.payment.findUnique({
+          where: {
+            provider_externalId: { provider: 'MERCADO_PAGO', externalId: paymentId },
+          },
+          select: { establishmentId: true },
+        });
+
+        if (!registro && resolvido.orderId) {
+          registro = await prisma.payment.findFirst({
+            where: { orderId: resolvido.orderId, provider: 'MERCADO_PAGO' },
+            select: { establishmentId: true },
+          });
+        }
+
+        if (!registro) {
+          const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (mpRes.ok) {
@@ -101,7 +121,7 @@ export async function POST(request: Request) {
 
       if (registro) {
         containerFor(registro.establishmentId)
-          .useCases.confirmPayment.execute({ externalId: resourceId })
+          .useCases.confirmPayment.execute({ externalId: paymentId })
           .catch((cause) => {
             console.error('[mercadopago/webhook] falha ao confirmar pagamento', cause);
           });
