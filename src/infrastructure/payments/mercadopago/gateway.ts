@@ -35,7 +35,7 @@ function centsToAmountNumber(cents: number): number {
   return Math.round(cents) / 100;
 }
 
-function isNumericPaymentId(id: string | undefined | null): id is string {
+function isNumericPaymentId(id: string | undefined | null): boolean {
   return !!id && /^\d{8,}$/.test(id);
 }
 
