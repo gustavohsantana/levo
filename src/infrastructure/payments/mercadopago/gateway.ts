@@ -148,9 +148,10 @@ export class MercadoPagoGateway implements PaymentGateway {
     const webhook = webhookHttps();
 
     /*
-     * Payments API — o id já vem numérico e o Pix do banco casa com a cobrança.
-     * A Orders API gerava QR (PAY01 / reference_id curto) que o banco pagava e
-     * a cobrança seguia `pending_waiting_transfer`.
+     * Payments API — o id já vem numérico. Sem `point_of_interaction: CHECKOUT`
+     * o MP grava o Pix como OPENPLATFORM: o banco lê o QR, mas a cobrança
+     * fica `pending_waiting_transfer` e depois estorna. CHECKOUT é o mesmo
+     * canal do cartão na tela.
      */
     const response = await fetch(PAYMENTS_URL, {
       method: 'POST',
@@ -165,6 +166,7 @@ export class MercadoPagoGateway implements PaymentGateway {
         payment_method_id: 'pix',
         date_of_expiration: expiresAt.toISOString(),
         external_reference: input.orderId,
+        point_of_interaction: { type: 'CHECKOUT' },
         ...(webhook ? { notification_url: webhook } : {}),
         payer: {
           email: input.payerEmail ?? `pedido-${input.orderId.slice(0, 8)}@levoentregas.app`,

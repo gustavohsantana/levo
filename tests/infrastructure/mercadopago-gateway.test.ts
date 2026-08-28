@@ -42,6 +42,7 @@ describe('MercadoPagoGateway', () => {
     expect(url).toBe('https://api.mercadopago.com/v1/payments');
     const body = JSON.parse(String(init?.body));
     expect(body.payment_method_id).toBe('pix');
+    expect(body.point_of_interaction).toEqual({ type: 'CHECKOUT' });
     expect(body.transaction_amount).toBe(78.9);
     expect(body.external_reference).toBe('pedido-1');
     if (body.notification_url) {
