@@ -258,7 +258,15 @@ export async function consultarPagamentoAction(
 
     return { ok: true, status: 'PENDING', trackingUrl };
   } catch (cause) {
-    return { ok: false, error: toFormError(cause) };
+    const mensagem = toFormError(cause);
+    if (/mercadolibre|resource not found|consultar o pagamento/i.test(mensagem)) {
+      return {
+        ok: false,
+        error:
+          'Ainda não identificamos o pagamento. Confira no banco e tente de novo em alguns segundos.',
+      };
+    }
+    return { ok: false, error: mensagem };
   }
 }
 

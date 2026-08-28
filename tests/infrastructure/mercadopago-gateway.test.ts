@@ -4,7 +4,7 @@ import { MercadoPagoGateway } from '@/infrastructure/payments/mercadopago/gatewa
 afterEach(() => vi.unstubAllGlobals());
 
 describe('MercadoPagoGateway', () => {
-  it('cria cobrança Pix e guarda id numérico do pagamento', async () => {
+  it('cria cobrança Pix e guarda id numérico extraído da ticket_url', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValueOnce({
@@ -15,11 +15,12 @@ describe('MercadoPagoGateway', () => {
           transactions: {
             payments: [{
               id: 'PAY01ABC',
-              reference_id: '175108590393',
+              reference_id: '000f2x4yod',
               payment_method: {
                 id: 'pix',
                 qr_code: '00020126pix',
                 qr_code_base64: 'abc123',
+                ticket_url: 'https://www.mercadopago.com.br/payments/175108590393/ticket',
               },
             }],
           },
@@ -39,7 +40,9 @@ describe('MercadoPagoGateway', () => {
     expect(charge.externalId).toBe('175108590393');
     expect(charge.qrCode).toBe('00020126pix');
     expect(charge.qrCodeBase64).toBe('abc123');
-    expect(charge.ticketUrl).toBeNull();
+    expect(charge.ticketUrl).toBe(
+      'https://www.mercadopago.com.br/payments/175108590393/ticket',
+    );
   });
 
   it('busca id numérico quando Orders API só devolve PAY01', async () => {
@@ -98,21 +101,20 @@ describe('MercadoPagoGateway', () => {
     expect(charge.resolvedExternalId).toBe('175108590393');
   });
 
-  it('resolve PAY01 antigo via external_reference na consulta', async () => {
+  it('resolve reference_id curto via external_reference na consulta', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn()
-        .mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({}) })
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => ({ results: [{ id: 175108590393 }] }),
+          json: async () => ({ results: [{ id: 176063985562 }] }),
         })
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
           json: async () => ({
             status: 'approved',
-            transaction_amount: 1.51,
+            transaction_amount: 1.01,
             date_approved: '2026-08-28T13:00:00.000Z',
           }),
         }),
@@ -121,12 +123,12 @@ describe('MercadoPagoGateway', () => {
     const gateway = new MercadoPagoGateway();
     const charge = await gateway.getCharge({
       accessToken: 'token',
-      externalId: 'PAY01OLD',
+      externalId: '000f2x4yod',
       orderId: 'pedido-antigo',
     });
 
     expect(charge.status).toBe('PAID');
-    expect(charge.amountCents).toBe(151);
-    expect(charge.resolvedExternalId).toBe('175108590393');
+    expect(charge.amountCents).toBe(101);
+    expect(charge.resolvedExternalId).toBe('176063985562');
   });
 });

@@ -13,7 +13,7 @@ interface MpPaymentMethod {
 
 interface MpPayment {
   id?: string;
-  /** Id numérico usado em GET /v1/payments/{id} e nos webhooks. */
+  /** Id interno da Orders API — não serve em GET /v1/payments. */
   reference_id?: string | number;
   status?: string;
   status_detail?: string;
@@ -46,8 +46,23 @@ function parsePayments(body: MpOrderResponse): MpPayment | null {
   return Array.isArray(raw) ? (raw[0] ?? null) : raw;
 }
 
-function isOrdersPaymentId(id: string): boolean {
-  return id.startsWith('PAY');
+/** GET /v1/payments/{id} só aceita o id numérico longo. */
+function isNumericPaymentId(id: string | undefined | null): id is string {
+  return !!id && /^\d{8,}$/.test(id);
+}
+
+function idNumericoNaResposta(payment: MpPayment | null, body: MpOrderResponse): string | null {
+  const ticket = payment?.payment_method?.ticket_url;
+  const fromTicket = ticket?.match(/\/payments\/(\d{8,})/)?.[1];
+  const fromQr = payment?.payment_method?.qr_code?.match(/mpqrinter(\d{8,})/)?.[1];
+
+  for (const candidate of [payment?.id, body.id, fromTicket, fromQr]) {
+    if (isNumericPaymentId(candidate != null ? String(candidate) : null)) {
+      return String(candidate);
+    }
+  }
+
+  return null;
 }
 
 async function buscarIdNumerico(
@@ -113,7 +128,6 @@ export class MercadoPagoGateway implements PaymentGateway {
         payer: input.payerEmail
           ? {
               email: input.payerEmail,
-              // Sandbox: APRO aprova o Pix automaticamente (doc MP — não paga no banco).
               ...(input.sandbox ? { first_name: 'APRO' } : {}),
             }
           : undefined,
@@ -142,18 +156,9 @@ export class MercadoPagoGateway implements PaymentGateway {
     const payment = parsePayments(body);
     const qrCode = payment?.payment_method?.qr_code;
 
-    let externalId =
-      payment?.reference_id != null
-        ? String(payment.reference_id)
-        : payment?.id ?? body.id;
-
-    /*
-     * Orders API devolve id PAY01…; consulta e webhook usam o numérico
-     * (175108590393). Sem o reference_id, buscamos pelo external_reference.
-     */
-    if (!externalId || isOrdersPaymentId(externalId)) {
-      const numerico = await buscarIdNumerico(input.accessToken, input.orderId);
-      if (numerico) externalId = numerico;
+    let externalId = idNumericoNaResposta(payment, body);
+    if (!externalId) {
+      externalId = await buscarIdNumerico(input.accessToken, input.orderId);
     }
 
     if (!externalId || !qrCode) {
@@ -177,13 +182,11 @@ export class MercadoPagoGateway implements PaymentGateway {
 
   async getCharge(input: { accessToken: string; externalId: string; orderId?: string }) {
     let resolvedExternalId = input.externalId;
-    let consulta = await lerPagamento(input.accessToken, input.externalId);
+    let consulta = isNumericPaymentId(input.externalId)
+      ? await lerPagamento(input.accessToken, input.externalId)
+      : { ok: false, status: 404, body: {} as MpPaymentBody };
 
-    if (
-      !consulta.ok
-      && input.orderId
-      && isOrdersPaymentId(input.externalId)
-    ) {
+    if (!consulta.ok && input.orderId) {
       const numerico = await buscarIdNumerico(input.accessToken, input.orderId);
       if (numerico) {
         resolvedExternalId = numerico;
@@ -196,7 +199,7 @@ export class MercadoPagoGateway implements PaymentGateway {
     if (!ok) {
       throw new ExternalServiceError(
         'Mercado Pago',
-        body.message ?? `HTTP ${status}`,
+        'Não foi possível consultar o pagamento. Tente de novo em instantes.',
         { externalId: input.externalId, status },
       );
     }
