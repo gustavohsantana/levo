@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
-import { getMenuPublico } from '@/presentation/public-menu';
-import { CardCheckoutReturn } from '@/presentation/ui/patterns/card-checkout-return';
+import { getMenuPublico, getPagamentoPublico } from '@/presentation/public-menu';
+import { PagamentoPublico } from '@/presentation/ui/patterns/pagamento-publico';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,12 +37,26 @@ export default async function PagamentoCardapioPage({
     );
   }
 
+  const pagamento = await getPagamentoPublico(slug, orderId);
+  if (!pagamento) {
+    return (
+      <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-3 px-5 text-center">
+        <h1 className="text-xl font-semibold text-ink">Pagamento não encontrado</h1>
+        <p className="text-sm text-ink-muted">Volte ao pedido e tente de novo.</p>
+        <a href={`/cardapio/${slug}/pedido`} className="text-sm font-medium text-accent-ink underline">
+          Voltar ao pedido
+        </a>
+      </main>
+    );
+  }
+
   return (
-    <CardCheckoutReturn
+    <PagamentoPublico
       slug={slug}
       orderId={orderId}
       paymentId={paymentId}
       nomeLoja={menu.establishment.name}
+      inicial={pagamento}
     />
   );
 }

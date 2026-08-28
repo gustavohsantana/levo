@@ -149,6 +149,80 @@ describe('MercadoPagoGateway', () => {
     expect(body.auto_return).toBe('approved');
   });
 
+  it('cobra cartão na Payments API com o token do Brick, nunca com o número do cartão', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        json: async () => ({
+          id: 176099999001,
+          status: 'approved',
+          date_approved: '2026-08-28T18:01:00.000-03:00',
+          transaction_amount: 45,
+        }),
+      }),
+    );
+
+    const gateway = new MercadoPagoGateway();
+    const charge = await gateway.createCardCharge({
+      accessToken: 'token-loja',
+      orderId: 'pedido-card',
+      amountCents: 4500,
+      token: 'tok_abc123xyz',
+      installments: 1,
+      paymentMethodId: 'master',
+      issuerId: '24',
+      payerEmail: 'cliente@teste.com',
+      identification: { type: 'CPF', number: '12345678909' },
+    });
+
+    expect(charge.externalId).toBe('176099999001');
+    expect(charge.status).toBe('PAID');
+
+    const [, init] = vi.mocked(fetch).mock.calls[0];
+    const body = JSON.parse(String(init?.body));
+    expect(body.token).toBe('tok_abc123xyz');
+    expect(body.transaction_amount).toBe(45);
+    expect(body.external_reference).toBe('pedido-card');
+    expect(body.binary_mode).toBe(true);
+    expect(JSON.stringify(body)).not.toMatch(/5031|card_number|cvv/i);
+    expect(body.notification_url).toBeUndefined();
+  });
+
+  it('só manda webhook quando a URL pública é https', async () => {
+    const anterior = process.env.PUBLIC_BASE_URL;
+    process.env.PUBLIC_BASE_URL = 'https://levoentregas.vercel.app';
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        json: async () => ({ id: 176099999002, status: 'approved', transaction_amount: 10 }),
+      }),
+    );
+
+    try {
+      await new MercadoPagoGateway().createCardCharge({
+        accessToken: 'token-loja',
+        orderId: 'pedido-https',
+        amountCents: 1000,
+        token: 'tok_https',
+        installments: 1,
+        paymentMethodId: 'visa',
+      });
+    } finally {
+      if (anterior === undefined) delete process.env.PUBLIC_BASE_URL;
+      else process.env.PUBLIC_BASE_URL = anterior;
+    }
+
+    const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body));
+    expect(body.notification_url).toBe(
+      'https://levoentregas.vercel.app/api/webhooks/payments/mercadopago',
+    );
+  });
+
   it('cartão recusado vira REJECTED; preferência ainda sem pagamento fica PENDING', async () => {
     vi.stubGlobal(
       'fetch',

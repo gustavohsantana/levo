@@ -85,6 +85,19 @@ export class Payment extends AggregateRoot {
     this.props.externalId = id;
   }
 
+  /**
+   * Nova tentativa no mesmo pedido (cartão recusado, token novo).
+   * Não mexe em pagamento já aprovado.
+   */
+  reattempt(input: { externalId: string; now: Date }): void {
+    if (this.props.status === PaymentStatus.Paid) return;
+    this.props.externalId = input.externalId;
+    this.props.status = PaymentStatus.Pending;
+    this.props.paidAt = null;
+    this.props.checkoutUrl = null;
+    this.props.updatedAt = input.now;
+  }
+
   markPaid(at: Date): void {
     if (this.props.status === PaymentStatus.Paid) return;
     this.props.status = PaymentStatus.Paid;

@@ -54,6 +54,18 @@ function centsToAmountNumber(cents: number): number {
   return Math.round(cents) / 100;
 }
 
+/**
+ * O Mercado Pago recusa `notification_url` que não seja https. Em localhost
+ * (http://localhost:3000) mandar o campo faz a cobrança inteira falhar — o
+ * mesmo erro do Pix. Cartão na tela não precisa do webhook para confirmar:
+ * a Payments API já devolve approved/rejected na hora.
+ */
+function webhookHttps(): string | undefined {
+  const base = process.env.PUBLIC_BASE_URL?.replace(/\/$/, '');
+  if (!base?.startsWith('https://')) return undefined;
+  return `${base}/api/webhooks/payments/mercadopago`;
+}
+
 function isNumericPaymentId(id: string | undefined | null): boolean {
   return !!id && /^\d{8,}$/.test(id);
 }
@@ -133,7 +145,7 @@ export class MercadoPagoGateway implements PaymentGateway {
     sandbox?: boolean;
   }) {
     const expiresAt = new Date(Date.now() + input.expiresInMinutes * 60_000);
-    const baseUrl = process.env.PUBLIC_BASE_URL?.replace(/\/$/, '');
+    const webhook = webhookHttps();
 
     /*
      * Payments API — o id já vem numérico e o Pix do banco casa com a cobrança.
@@ -153,9 +165,7 @@ export class MercadoPagoGateway implements PaymentGateway {
         payment_method_id: 'pix',
         date_of_expiration: expiresAt.toISOString(),
         external_reference: input.orderId,
-        ...(baseUrl
-          ? { notification_url: `${baseUrl}/api/webhooks/payments/mercadopago` }
-          : {}),
+        ...(webhook ? { notification_url: webhook } : {}),
         payer: {
           email: input.payerEmail ?? `pedido-${input.orderId.slice(0, 8)}@levoentregas.app`,
           ...(input.sandbox ? { first_name: 'APRO' } : {}),
@@ -214,7 +224,7 @@ export class MercadoPagoGateway implements PaymentGateway {
     sandbox?: boolean;
   }) {
     const expiresAt = new Date(Date.now() + input.expiresInMinutes * 60_000);
-    const baseUrl = process.env.PUBLIC_BASE_URL?.replace(/\/$/, '');
+    const webhook = webhookHttps();
     const backUrl = input.backUrl?.startsWith('https://') ? input.backUrl : undefined;
 
     const response = await fetch('https://api.mercadopago.com/checkout/preferences', {
@@ -248,9 +258,7 @@ export class MercadoPagoGateway implements PaymentGateway {
         expires: true,
         expiration_date_from: new Date().toISOString(),
         expiration_date_to: expiresAt.toISOString(),
-        ...(baseUrl
-          ? { notification_url: `${baseUrl}/api/webhooks/payments/mercadopago` }
-          : {}),
+        ...(webhook ? { notification_url: webhook } : {}),
         ...(backUrl
           ? {
               back_urls: { success: backUrl, failure: backUrl, pending: backUrl },
@@ -295,6 +303,84 @@ export class MercadoPagoGateway implements PaymentGateway {
     }
 
     return { externalId: body.id, checkoutUrl, expiresAt };
+  }
+
+  async createCardCharge(input: {
+    accessToken: string;
+    orderId: string;
+    amountCents: number;
+    token: string;
+    installments: number;
+    paymentMethodId: string;
+    issuerId?: string;
+    payerEmail?: string;
+    identification?: { type: string; number: string };
+    description?: string;
+    sandbox?: boolean;
+  }) {
+    const webhook = webhookHttps();
+    const idempotency = `card-${input.orderId}-${input.token.slice(0, 24)}`;
+    const documento = input.identification?.number.replace(/\D/g, '') ?? '';
+
+    const response = await fetch(PAYMENTS_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${input.accessToken}`,
+        'Content-Type': 'application/json',
+        'X-Idempotency-Key': idempotency,
+      },
+      body: JSON.stringify({
+        transaction_amount: centsToAmountNumber(input.amountCents),
+        token: input.token,
+        description: (input.description ?? `Pedido ${input.orderId}`).slice(0, 127),
+        installments: input.installments,
+        payment_method_id: input.paymentMethodId,
+        ...(input.issuerId ? { issuer_id: input.issuerId } : {}),
+        binary_mode: true,
+        external_reference: input.orderId,
+        ...(webhook ? { notification_url: webhook } : {}),
+        payer: {
+          email: input.payerEmail ?? `pedido-${input.orderId.slice(0, 8)}@levoentregas.app`,
+          ...(input.identification && documento
+            ? { identification: { type: input.identification.type, number: documento } }
+            : {}),
+          ...(input.sandbox ? { first_name: 'APRO' } : {}),
+        },
+      }),
+    });
+
+    const body = (await response.json().catch(() => ({}))) as MpPaymentBody & {
+      error?: string;
+      cause?: Array<{ description?: string; code?: string }>;
+    };
+
+    if (!response.ok) {
+      const detalhe =
+        body.cause?.[0]?.description
+        ?? body.message
+        ?? body.error
+        ?? `HTTP ${response.status}`;
+      throw new ExternalServiceError(
+        'Mercado Pago',
+        detalhe,
+        { orderId: input.orderId, status: response.status, cause: body.cause },
+      );
+    }
+
+    const externalId = body.id != null ? String(body.id) : null;
+    if (!externalId || !isNumericPaymentId(externalId)) {
+      throw new ExternalServiceError(
+        'Mercado Pago',
+        'Resposta sem id de pagamento no cartão',
+        { orderId: input.orderId, body },
+      );
+    }
+
+    return {
+      externalId,
+      status: mapMercadoPagoStatus(body.status ?? '', body.status_detail ?? ''),
+      paidAt: body.date_approved ? new Date(body.date_approved) : null,
+    };
   }
 
   async getCharge(input: { accessToken: string; externalId: string; orderId?: string }) {

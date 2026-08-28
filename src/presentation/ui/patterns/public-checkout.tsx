@@ -1,0 +1,376 @@
+'use client';
+
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { LoaderCircle } from 'lucide-react';
+import {
+  criarPedidoPublicoAction,
+  sugerirCidadeAction,
+  type MenuPublico,
+} from '@/presentation/public-menu';
+import {
+  gravarPagamentoPendente,
+  gravarRascunho,
+  lerCarrinho,
+  lerPagamentoPendente,
+  lerRascunho,
+  type RascunhoPedido,
+} from '@/presentation/menu-session';
+import { Button, Field, Input, Select, Textarea } from '../primitives';
+import { currency } from '../format';
+
+/**
+ * Segunda etapa: dados, endereço e forma de pagamento.
+ *
+ * O carrinho veio do cardápio via sessionStorage — esta URL é um link de
+ * verdade, então o voltar do celular devolve o cliente ao cardápio sem perder
+ * os itens.
+ */
+export function PublicCheckout({ menu }: { menu: MenuPublico }) {
+  const router = useRouter();
+  const slug = menu.establishment.slug;
+  const [pronto, setPronto] = useState(false);
+  const [quantidades, setQuantidades] = useState<Record<string, number>>({});
+  const [rascunho, setRascunho] = useState<RascunhoPedido | null>(null);
+  const [pagamentoAberto, setPagamentoAberto] = useState<string | null>(null);
+  const [modoPagamento, setModoPagamento] = useState<
+    'entrega' | 'pix_online' | 'cartao_online'
+  >('entrega');
+  const [erro, setErro] = useState<string | null>(null);
+  const [enviando, enviar] = useTransition();
+  const [cidade, setCidade] = useState(menu.establishment.city);
+  const cidadeEditada = useRef(false);
+  const gpsPedido = useRef(false);
+
+  useEffect(() => {
+    const rascunhoSalvo = lerRascunho(slug);
+    setQuantidades(lerCarrinho(slug));
+    setRascunho(rascunhoSalvo);
+    setPagamentoAberto(lerPagamentoPendente(slug)?.orderId ?? null);
+    if (rascunhoSalvo?.modoPagamento) setModoPagamento(rascunhoSalvo.modoPagamento);
+    if (rascunhoSalvo?.city) {
+      cidadeEditada.current = true;
+      setCidade(rascunhoSalvo.city);
+    }
+    setPronto(true);
+  }, [slug]);
+
+  const produtos = useMemo(
+    () => menu.categorias.flatMap((categoria) => categoria.produtos),
+    [menu],
+  );
+
+  const itens = Object.entries(quantidades).filter(([, q]) => q > 0);
+  const subtotal = itens.reduce((total, [id, quantidade]) => {
+    const produto = produtos.find((p) => p.id === id);
+    return total + (produto?.priceCents ?? 0) * quantidade;
+  }, 0);
+
+  const taxa = Math.round(menu.establishment.deliveryFeeReais * 100);
+  const total = subtotal + (subtotal > 0 ? taxa : 0);
+
+  useEffect(() => {
+    if (gpsPedido.current) return;
+    if (!navigator.geolocation) return;
+    gpsPedido.current = true;
+
+    navigator.geolocation.getCurrentPosition(
+      (posicao) => {
+        void sugerirCidadeAction(posicao.coords.latitude, posicao.coords.longitude).then(
+          (resultado) => {
+            if (!resultado.ok || cidadeEditada.current) return;
+            setCidade(resultado.cidade);
+          },
+        );
+      },
+      () => {
+        /* Recusou ou o GPS falhou: fica a cidade da loja. */
+      },
+      { enableHighAccuracy: false, timeout: 8_000, maximumAge: 300_000 },
+    );
+  }, []);
+
+  function enviarPedido(formData: FormData) {
+    setErro(null);
+
+    const rascunhoAtual: RascunhoPedido = {
+      customerName: String(formData.get('customerName') ?? ''),
+      customerPhone: String(formData.get('customerPhone') ?? ''),
+      city: String(formData.get('city') ?? ''),
+      neighborhood: String(formData.get('neighborhood') ?? ''),
+      street: String(formData.get('street') ?? ''),
+      number: String(formData.get('number') ?? ''),
+      reference: String(formData.get('reference') ?? ''),
+      notes: String(formData.get('notes') ?? ''),
+      modoPagamento,
+      paymentMethod: String(formData.get('paymentMethod') ?? ''),
+    };
+    gravarRascunho(slug, rascunhoAtual);
+
+    formData.set(
+      'items',
+      JSON.stringify(itens.map(([productId, quantity]) => ({ productId, quantity }))),
+    );
+    formData.set('modoPagamento', modoPagamento);
+
+    enviar(async () => {
+      const resultado = await criarPedidoPublicoAction(slug, formData);
+      if (!resultado.ok) {
+        setErro(resultado.error);
+        return;
+      }
+
+      if (resultado.modo === 'entrega') {
+        gravarPagamentoPendente(slug, { trackingToken: resultado.trackingToken });
+        router.push(`/t/${resultado.trackingToken}`);
+        return;
+      }
+
+      gravarPagamentoPendente(slug, {
+        orderId: resultado.orderId,
+        trackingToken: resultado.trackingToken,
+      });
+
+      if (resultado.modo === 'cartao') {
+        if (resultado.checkoutUrl) {
+          window.location.href = resultado.checkoutUrl;
+          return;
+        }
+        router.push(`/cardapio/${slug}/pagamento?pedido=${resultado.orderId}`);
+        return;
+      }
+
+      router.push(`/cardapio/${slug}/pagamento?pedido=${resultado.orderId}`);
+    });
+  }
+
+  if (!pronto) {
+    return (
+      <main className="mx-auto max-w-md px-5 py-16 text-sm text-ink-muted">Carregando pedido…</main>
+    );
+  }
+
+  if (itens.length === 0) {
+    return (
+      <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-3 px-5 text-center">
+        <h1 className="text-xl font-semibold text-ink">Carrinho vazio</h1>
+        <p className="text-sm text-ink-muted">Volte ao cardápio e escolha os itens.</p>
+        <Link href={`/cardapio/${slug}`} className="text-sm font-medium text-accent-ink underline">
+          Abrir cardápio
+        </Link>
+      </main>
+    );
+  }
+
+  return (
+    <main className="mx-auto max-w-md px-5 pb-10 pt-6">
+      <form
+        onSubmit={(evento) => {
+          evento.preventDefault();
+          enviarPedido(new FormData(evento.currentTarget));
+        }}
+        className="flex flex-col gap-3.5"
+      >
+        <Link
+          href={`/cardapio/${slug}`}
+          className="self-start text-sm text-ink-muted hover:underline"
+        >
+          ← Voltar ao cardápio
+        </Link>
+
+        <h1 className="text-xl font-semibold tracking-tight text-ink">{menu.establishment.name}</h1>
+
+        {pagamentoAberto ? (
+          <p className="rounded-md bg-accent-soft/50 px-3 py-2 text-sm text-accent-ink hairline">
+            Tem um Pix ou cartão esperando.{' '}
+            <Link href={`/cardapio/${slug}/pagamento?pedido=${pagamentoAberto}`} className="font-medium underline">
+              Voltar a pagar
+            </Link>
+            {' · '}pode mandar outro pedido se mudou alguma coisa.
+          </p>
+        ) : null}
+        <div className="rounded-lg bg-raised p-3">
+          {itens.map(([id, quantidade]) => {
+            const produto = produtos.find((p) => p.id === id)!;
+            return (
+              <div key={id} className="flex justify-between py-0.5 text-sm">
+                <span className="min-w-0 truncate text-ink">
+                  {quantidade}× {produto.name}
+                </span>
+                <span className="numeric shrink-0 text-ink-muted">
+                  {currency(produto.priceCents * quantidade)}
+                </span>
+              </div>
+            );
+          })}
+
+          {taxa > 0 ? (
+            <div className="mt-1 flex justify-between border-t pt-1 text-sm">
+              <span className="text-ink-muted">Entrega</span>
+              <span className="numeric text-ink-muted">{currency(taxa)}</span>
+            </div>
+          ) : null}
+
+          <div className="mt-1 flex justify-between border-t pt-1 font-semibold">
+            <span className="text-ink">Total</span>
+            <span className="numeric text-ink">{currency(total)}</span>
+          </div>
+        </div>
+
+        <Field label="Seu nome">
+          <Input name="customerName" required autoFocus defaultValue={rascunho?.customerName} />
+        </Field>
+
+        <Field label="WhatsApp" hint="para você acompanhar a entrega">
+          <Input
+            name="customerPhone"
+            inputMode="tel"
+            placeholder="(35) 99999-9999"
+            required
+            defaultValue={rascunho?.customerPhone}
+          />
+        </Field>
+
+        <Field label="Cidade">
+          <Input
+            name="city"
+            required
+            autoComplete="address-level2"
+            value={cidade}
+            onChange={(evento) => {
+              cidadeEditada.current = true;
+              setCidade(evento.target.value);
+            }}
+          />
+        </Field>
+
+        <Field label="Bairro">
+          <Input
+            name="neighborhood"
+            required
+            autoComplete="address-level3"
+            defaultValue={rascunho?.neighborhood}
+          />
+        </Field>
+
+        <div className="grid grid-cols-[1fr_5.75rem] gap-2">
+          <Field label="Rua">
+            <Input
+              name="street"
+              required
+              autoComplete="address-line1"
+              defaultValue={rascunho?.street}
+            />
+          </Field>
+          <Field label="Número">
+            <Input
+              name="number"
+              required
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="s/n"
+              defaultValue={rascunho?.number}
+            />
+          </Field>
+        </div>
+
+        <Field label="Complemento" hint="apartamento, portão, referência">
+          <Input name="reference" autoComplete="address-line2" defaultValue={rascunho?.reference} />
+        </Field>
+
+        <fieldset className="flex flex-col gap-2">
+          <legend className="text-sm font-medium text-ink">Pagamento</legend>
+
+          {menu.pixOnlineDisponivel ? (
+            <>
+              <label className="flex cursor-pointer items-start gap-2 rounded-lg border p-3 has-checked:border-accent has-checked:bg-accent-soft/30">
+                <input
+                  type="radio"
+                  name="modoPagamentoUi"
+                  className="mt-0.5"
+                  checked={modoPagamento === 'pix_online'}
+                  onChange={() => setModoPagamento('pix_online')}
+                />
+                <span>
+                  <span className="block text-sm font-medium text-ink">Pagar agora (Pix)</span>
+                  <span className="block text-xs text-ink-muted">
+                    QR Code na próxima tela — confirmação automática
+                  </span>
+                </span>
+              </label>
+
+              <label className="flex cursor-pointer items-start gap-2 rounded-lg border p-3 has-checked:border-accent has-checked:bg-accent-soft/30">
+                <input
+                  type="radio"
+                  name="modoPagamentoUi"
+                  className="mt-0.5"
+                  checked={modoPagamento === 'cartao_online'}
+                  onChange={() => setModoPagamento('cartao_online')}
+                />
+                <span>
+                  <span className="block text-sm font-medium text-ink">Pagar agora (cartão)</span>
+                  <span className="block text-xs text-ink-muted">
+                    Crédito ou débito na próxima tela — o dinheiro cai na conta da loja
+                  </span>
+                </span>
+              </label>
+            </>
+          ) : null}
+
+          <label className="flex cursor-pointer items-start gap-2 rounded-lg border p-3 has-checked:border-accent has-checked:bg-accent-soft/30">
+            <input
+              type="radio"
+              name="modoPagamentoUi"
+              className="mt-0.5"
+              checked={modoPagamento === 'entrega'}
+              onChange={() => setModoPagamento('entrega')}
+            />
+            <span>
+              <span className="block text-sm font-medium text-ink">Pagar na entrega</span>
+              <span className="block text-xs text-ink-muted">
+                Dinheiro, cartão ou Pix com o entregador
+              </span>
+            </span>
+          </label>
+        </fieldset>
+
+        {modoPagamento === 'entrega' ? (
+          <Field label="Como vai pagar na entrega" hint="o entregador leva a maquininha">
+            <Select name="paymentMethod" defaultValue={rascunho?.paymentMethod ?? ''}>
+              <option value="">Escolha</option>
+              <option value="CASH">Dinheiro</option>
+              <option value="PIX">Pix</option>
+              <option value="CREDIT">Cartão de crédito</option>
+              <option value="DEBIT">Cartão de débito</option>
+            </Select>
+          </Field>
+        ) : null}
+
+        <Field label="Observações">
+          <Textarea
+            name="notes"
+            rows={2}
+            placeholder="Sem cebola, troco para R$ 100…"
+            defaultValue={rascunho?.notes}
+          />
+        </Field>
+
+        {erro ? (
+          <p role="alert" className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
+            {erro}
+          </p>
+        ) : null}
+
+        <Button type="submit" variant="primary" disabled={enviando}>
+          {enviando ? <LoaderCircle className="animate-spin" /> : null}
+          {modoPagamento === 'pix_online'
+            ? 'Ir para o Pix'
+            : modoPagamento === 'cartao_online'
+              ? 'Pagar com cartão'
+              : 'Enviar pedido'}
+        </Button>
+      </form>
+    </main>
+  );
+}

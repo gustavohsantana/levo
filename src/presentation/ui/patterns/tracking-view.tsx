@@ -5,6 +5,8 @@ import dynamic from 'next/dynamic';
 import { Check, ChefHat, Bike, TriangleAlert } from 'lucide-react';
 import type { TrackingSnapshot } from '@/application/use-cases/tracking/get-tracking-snapshot';
 import type { MapMarker } from './route-map';
+import { PedidoPassos } from './pedido-passos';
+import { lerLojaDoFluxo } from '@/presentation/menu-session';
 import { clockTime, timeAgo } from '../format';
 
 // Leaflet mexe em `window` na importação: só carrega no navegador.
@@ -34,6 +36,11 @@ export function TrackingView({
   initial: TrackingSnapshot;
 }) {
   const [snapshot, setSnapshot] = useState(initial);
+  const [slug, setSlug] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSlug(lerLojaDoFluxo());
+  }, []);
 
   useEffect(() => {
     if (snapshot.status === 'DELIVERED' || snapshot.status === 'FAILED') return;
@@ -66,7 +73,9 @@ export function TrackingView({
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col">
+    <>
+      {slug ? <PedidoPassos slug={slug} atual="acompanhar" /> : null}
+      <main className="mx-auto flex min-h-dvh max-w-md flex-col">
       <header className="px-5 pb-4 pt-8">
         <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">
           {snapshot.establishmentName}
@@ -99,6 +108,7 @@ export function TrackingView({
         <div className="pb-8" />
       )}
     </main>
+    </>
   );
 }
 

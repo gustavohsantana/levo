@@ -101,11 +101,12 @@ export async function getMenuPublico(slug: string): Promise<MenuPublico | null> 
 }
 
 export type PedidoPublicoResult =
-  | { ok: true; modo: 'entrega'; trackingUrl: string }
+  | { ok: true; modo: 'entrega'; trackingUrl: string; trackingToken: string }
   | {
       ok: true;
       modo: 'pix';
       trackingUrl: string;
+      trackingToken: string;
       orderId: string;
       qrCode: string;
       qrCodeBase64: string | null;
@@ -118,8 +119,10 @@ export type PedidoPublicoResult =
       ok: true;
       modo: 'cartao';
       trackingUrl: string;
+      trackingToken: string;
       orderId: string;
-      checkoutUrl: string;
+      /** Só no fallback Checkout Pro, quando a loja não tem chave pública. */
+      checkoutUrl: string | null;
     }
   | { ok: false; error: string };
 
@@ -134,8 +137,23 @@ export type StatusPagamentoOnline =
   | 'CANCELLED';
 
 export type ConsultaPagamentoResult =
-  | { ok: true; status: StatusPagamentoOnline; trackingUrl: string }
+  | { ok: true; status: StatusPagamentoOnline; trackingUrl: string; trackingToken: string }
   | { ok: false; error: string };
+
+export type PagamentoPublico = {
+  metodo: 'pix' | 'cartao';
+  status: StatusPagamentoOnline;
+  trackingUrl: string;
+  trackingToken: string;
+  amountCents: number;
+  qrCode: string | null;
+  qrCodeBase64: string | null;
+  expiresAt: string | null;
+  contaTeste: boolean;
+  checkoutUrl: string | null;
+  /** Chave pública da loja — o Brick do cartão roda no navegador com ela. */
+  publicKey: string | null;
+};
 
 function modoDoForm(valor: FormDataEntryValue | null): 'entrega' | 'pix_online' | 'cartao_online' {
   if (valor === 'pix_online' || valor === 'cartao_online') return valor;
@@ -194,7 +212,7 @@ export async function criarPedidoPublicoAction(
     return { ok: false, error: 'Escolha ao menos um item.' };
   }
 
-  let credencialMp: { liveMode: boolean | null } | null = null;
+  let credencialMp: { liveMode: boolean | null; publicKey: string | null } | null = null;
 
   if (online) {
     credencialMp = await prisma.integrationCredential.findUnique({
@@ -204,7 +222,7 @@ export async function criarPedidoPublicoAction(
           provider: 'MERCADO_PAGO',
         },
       },
-      select: { liveMode: true },
+      select: { liveMode: true, publicKey: true },
     });
 
     if (!credencialMp) {
@@ -229,10 +247,11 @@ export async function criarPedidoPublicoAction(
     });
 
     const baseUrl = env().PUBLIC_BASE_URL.replace(/\/$/, '');
-    const trackingUrl = `${baseUrl}/t/${order.trackingToken.value}`;
+    const trackingToken = order.trackingToken.value;
+    const trackingUrl = `${baseUrl}/t/${trackingToken}`;
 
     if (modoPagamento === 'entrega') {
-      return { ok: true, modo: 'entrega', trackingUrl };
+      return { ok: true, modo: 'entrega', trackingUrl, trackingToken };
     }
 
     const establishmentRow = await prisma.establishment.findUnique({
@@ -243,6 +262,17 @@ export async function criarPedidoPublicoAction(
     const basePagamento = `${baseUrl}/cardapio/${slug}/pagamento?pedido=${order.id}`;
 
     if (modoPagamento === 'cartao_online') {
+      if (credencialMp?.publicKey) {
+        return {
+          ok: true,
+          modo: 'cartao',
+          trackingUrl,
+          trackingToken,
+          orderId: order.id,
+          checkoutUrl: null,
+        };
+      }
+
       const payment = await container.useCases.createPayment.execute({
         orderId: order.id,
         method: 'card',
@@ -265,6 +295,7 @@ export async function criarPedidoPublicoAction(
         ok: true,
         modo: 'cartao',
         trackingUrl,
+        trackingToken,
         orderId: order.id,
         checkoutUrl: payment.checkoutUrl,
       };
@@ -284,6 +315,7 @@ export async function criarPedidoPublicoAction(
       ok: true,
       modo: 'pix',
       trackingUrl,
+      trackingToken,
       orderId: order.id,
       qrCode: payment.qrCode ?? '',
       qrCodeBase64: payment.qrCodeBase64,
@@ -321,10 +353,11 @@ export async function consultarPagamentoAction(
     if (!order) return { ok: false, error: 'Pedido não encontrado.' };
 
     const baseUrl = env().PUBLIC_BASE_URL.replace(/\/$/, '');
-    const trackingUrl = `${baseUrl}/t/${order.trackingToken.value}`;
+    const trackingToken = order.trackingToken.value;
+    const trackingUrl = `${baseUrl}/t/${trackingToken}`;
 
     if (payment.status === 'PAID' || order.paymentStatus === 'PAID') {
-      if (!forcarConsulta) return { ok: true, status: 'PAID', trackingUrl };
+      if (!forcarConsulta) return { ok: true, status: 'PAID', trackingUrl, trackingToken };
     }
 
     if (
@@ -334,23 +367,33 @@ export async function consultarPagamentoAction(
       || payment.status === 'REFUNDED'
     ) {
       if (!forcarConsulta) {
-        return { ok: true, status: payment.status, trackingUrl };
+        return { ok: true, status: payment.status, trackingUrl, trackingToken };
       }
     }
 
     const now = Date.now();
     if (!payment.isPending(new Date(now)) && payment.status !== 'PAID') {
-      return { ok: true, status: payment.status === 'EXPIRED' ? 'EXPIRED' : payment.status, trackingUrl };
+      return {
+        ok: true,
+        status: payment.status === 'EXPIRED' ? 'EXPIRED' : payment.status,
+        trackingUrl,
+        trackingToken,
+      };
     }
 
     if (forcarConsulta) {
       const remoto = await container.useCases.confirmPayment.execute({
         externalId: paymentId || payment.externalId,
       });
-      return { ok: true, status: remoto, trackingUrl };
+      return { ok: true, status: remoto, trackingUrl, trackingToken };
     }
 
-    return { ok: true, status: payment.status === 'IN_REVIEW' ? 'IN_REVIEW' : 'PENDING', trackingUrl };
+    return {
+      ok: true,
+      status: payment.status === 'IN_REVIEW' ? 'IN_REVIEW' : 'PENDING',
+      trackingUrl,
+      trackingToken,
+    };
   } catch (cause) {
     const mensagem = toFormError(cause);
     if (/mercadolibre|resource not found|consultar o pagamento/i.test(mensagem)) {
@@ -361,6 +404,157 @@ export async function consultarPagamentoAction(
       };
     }
     return { ok: false, error: mensagem };
+  }
+}
+
+export async function getPagamentoPublico(
+  slug: string,
+  orderId: string,
+): Promise<PagamentoPublico | null> {
+  const prisma = getPrismaClient(env().DATABASE_URL);
+  const establishment = await prisma.establishment.findUnique({
+    where: { slug },
+    select: { id: true },
+  });
+  if (!establishment) return null;
+
+  const credencial = await prisma.integrationCredential.findUnique({
+    where: {
+      establishmentId_provider: {
+        establishmentId: establishment.id,
+        provider: 'MERCADO_PAGO',
+      },
+    },
+    select: { liveMode: true, publicKey: true },
+  });
+
+  const container = containerFor(establishment.id);
+  const payment = await container.read((repos) => repos.payments.findByOrderId(orderId));
+  const order = await container.read((repos) => repos.orders.findById(orderId));
+  if (!order) return null;
+  if (order.paymentStatus === null && !payment) return null;
+
+  const trackingToken = order.trackingToken.value;
+  const status: StatusPagamentoOnline =
+    payment?.status === 'PAID' || order.paymentStatus === 'PAID'
+      ? 'PAID'
+      : payment?.status === 'IN_REVIEW' || order.paymentStatus === 'IN_REVIEW'
+        ? 'IN_REVIEW'
+        : payment && !payment.isPending(new Date())
+          ? payment.status
+          : 'PENDING';
+
+  return {
+    metodo: payment?.qrCode ? 'pix' : 'cartao',
+    status,
+    trackingUrl: `${env().PUBLIC_BASE_URL.replace(/\/$/, '')}/t/${trackingToken}`,
+    trackingToken,
+    amountCents: payment?.amountCents ?? order.amount.cents,
+    qrCode: payment?.qrCode ?? null,
+    qrCodeBase64: payment?.qrCodeBase64 ?? null,
+    expiresAt: payment?.expiresAt?.toISOString() ?? null,
+    contaTeste: credencial?.liveMode === false,
+    checkoutUrl: payment?.checkoutUrl ?? null,
+    publicKey: credencial?.publicKey ?? null,
+  };
+}
+
+export type DadosCartaoBrick = {
+  token: string;
+  issuer_id?: string | number;
+  payment_method_id: string;
+  installments: number;
+  payer?: {
+    email?: string;
+    identification?: { type?: string; number?: string };
+  };
+};
+
+export async function pagarCartaoAction(
+  slug: string,
+  orderId: string,
+  dados: DadosCartaoBrick,
+): Promise<ConsultaPagamentoResult> {
+  const limite = checkRateLimit(`card:${slug}`, { max: 20, windowMs: 60_000 });
+  if (!limite.allowed) {
+    return { ok: false, error: 'Muitas tentativas. Espere um instante e tente de novo.' };
+  }
+
+  const token = dados.token?.trim() ?? '';
+  const paymentMethodId = dados.payment_method_id?.trim() ?? '';
+  const installments = Number(dados.installments);
+
+  if (token.length < 10) return { ok: false, error: 'Cartão inválido. Confira os dados e tente de novo.' };
+  if (!paymentMethodId) return { ok: false, error: 'Não identificamos a bandeira do cartão.' };
+  if (!Number.isInteger(installments) || installments < 1 || installments > 12) {
+    return { ok: false, error: 'Número de parcelas inválido.' };
+  }
+
+  const prisma = getPrismaClient(env().DATABASE_URL);
+  const establishment = await prisma.establishment.findUnique({
+    where: { slug },
+    select: { id: true },
+  });
+  if (!establishment) return { ok: false, error: 'Cardápio não encontrado.' };
+
+  const credencial = await prisma.integrationCredential.findUnique({
+    where: {
+      establishmentId_provider: {
+        establishmentId: establishment.id,
+        provider: 'MERCADO_PAGO',
+      },
+    },
+    select: { liveMode: true },
+  });
+
+  try {
+    const container = containerFor(establishment.id);
+    const order = await container.read((repos) => repos.orders.findById(orderId));
+    if (!order) return { ok: false, error: 'Pedido não encontrado.' };
+
+    const identification =
+      dados.payer?.identification?.type && dados.payer.identification.number
+        ? {
+            type: dados.payer.identification.type,
+            number: dados.payer.identification.number.replace(/\D/g, ''),
+          }
+        : undefined;
+
+    const payment = await container.useCases.createPayment.execute({
+      orderId,
+      method: 'card',
+      payerEmail: dados.payer?.email || emailPixDoCliente(
+        orderId,
+        order.customerPhone?.value,
+        credencial?.liveMode === false,
+      ),
+      sandbox: credencial?.liveMode === false,
+      description: `Pedido em ${slug}`,
+      card: {
+        token,
+        installments,
+        paymentMethodId,
+        issuerId: dados.issuer_id != null ? String(dados.issuer_id) : undefined,
+        identification,
+      },
+    });
+
+    const status =
+      payment.status === 'PAID' || payment.status === 'REJECTED' || payment.status === 'IN_REVIEW'
+        ? payment.status
+        : await container.useCases.confirmPayment.execute({
+            externalId: payment.externalId,
+          });
+
+    const baseUrl = env().PUBLIC_BASE_URL.replace(/\/$/, '');
+    return {
+      ok: true,
+      status,
+      trackingUrl: `${baseUrl}/t/${order.trackingToken.value}`,
+      trackingToken: order.trackingToken.value,
+    };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
   }
 }
 

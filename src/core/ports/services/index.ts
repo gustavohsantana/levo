@@ -152,7 +152,7 @@ export interface PaymentGateway {
 
   /**
    * Checkout Pro: o cliente paga cartão na página do Mercado Pago.
-   * 3DS, PCI e antifraude ficam lá; o Levô só guarda o id da preferência.
+   * Fica de reserva quando a loja não tem chave pública para o Brick.
    */
   createCardCheckout(input: {
     accessToken: string;
@@ -168,6 +168,28 @@ export interface PaymentGateway {
     externalId: string;
     checkoutUrl: string;
     expiresAt: Date;
+  }>;
+
+  /**
+   * Cartão na nossa tela: o Brick do Mercado Pago tokeniza o cartão no
+   * navegador (PCI deles) e mandamos só o token. O número nunca chega aqui.
+   */
+  createCardCharge(input: {
+    accessToken: string;
+    orderId: string;
+    amountCents: number;
+    token: string;
+    installments: number;
+    paymentMethodId: string;
+    issuerId?: string;
+    payerEmail?: string;
+    identification?: { type: string; number: string };
+    description?: string;
+    sandbox?: boolean;
+  }): Promise<{
+    externalId: string;
+    status: PaymentStatus;
+    paidAt: Date | null;
   }>;
 
   getCharge(input: {

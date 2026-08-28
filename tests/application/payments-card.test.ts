@@ -31,6 +31,9 @@ function gatewayFake(overrides: Partial<PaymentGateway> = {}): PaymentGateway {
     async createCardCheckout() {
       throw new Error('não deveria criar cartão neste teste');
     },
+    async createCardCharge() {
+      throw new Error('não deveria cobrar cartão transparente neste teste');
+    },
     async getCharge() {
       throw new Error('não deveria consultar neste teste');
     },
@@ -87,6 +90,42 @@ describe('CreatePayment cartão', () => {
     expect(payment.checkoutUrl).toContain('pref_id=pref-abc');
     expect(payment.qrCode).toBeNull();
     expect(db.payments.get('pay-1')?.checkoutUrl).toContain('mercadopago');
+  });
+
+  it('cobra com o token do Brick usando o valor do pedido, não o que o navegador mandou', async () => {
+    const db = new InMemoryDatabase(PIZZARIA);
+    db.orders.set('pedido-1', pedidoPendente());
+    const uow = new InMemoryUnitOfWork(db);
+    const clock = new FixedClock(new Date('2026-08-28T18:00:00Z'));
+    let amountEnviado = 0;
+
+    const useCase = new CreatePayment(
+      uow,
+      gatewayFake({
+        async createCardCharge(input) {
+          amountEnviado = input.amountCents;
+          expect(input.token).toBe('tok_brick');
+          expect(input.orderId).toBe('pedido-1');
+          return { externalId: '176099999001', status: PaymentStatus.Paid, paidAt: clock.now() };
+        },
+      }),
+      new SequentialIds('pay'),
+      clock,
+      PIZZARIA.id,
+      async () => 'token-loja',
+    );
+
+    const payment = await useCase.execute({
+      orderId: 'pedido-1',
+      method: 'card',
+      card: { token: 'tok_brick', installments: 1, paymentMethodId: 'master' },
+    });
+
+    expect(amountEnviado).toBe(4500);
+    expect(payment.externalId).toBe('176099999001');
+    expect(payment.checkoutUrl).toBeNull();
+    expect(payment.status).toBe('PAID');
+    expect(db.orders.get('pedido-1')?.paymentStatus).toBe('PAID');
   });
 });
 
