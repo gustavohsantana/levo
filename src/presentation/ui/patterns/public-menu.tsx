@@ -1,10 +1,23 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
-import { Check, LoaderCircle, Minus, Plus, ShoppingBag } from 'lucide-react';
-import { criarPedidoPublicoAction, type MenuPublico } from '@/presentation/public-menu';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { Check, Copy, LoaderCircle, Minus, Plus, ShoppingBag } from 'lucide-react';
+import {
+  consultarPagamentoAction,
+  criarPedidoPublicoAction,
+  type MenuPublico,
+} from '@/presentation/public-menu';
 import { Button, Field, Input, Select, Textarea } from '../primitives';
 import { currency } from '../format';
+
+type PixPendente = {
+  orderId: string;
+  trackingUrl: string;
+  qrCode: string;
+  qrCodeBase64: string | null;
+  expiresAt: string;
+  amountCents: number;
+};
 
 /**
  * O cardápio que o cliente vê.
@@ -20,9 +33,14 @@ import { currency } from '../format';
 export function PublicMenu({ menu }: { menu: MenuPublico }) {
   const [quantidades, setQuantidades] = useState<Record<string, number>>({});
   const [checkout, setCheckout] = useState(false);
+  const [modoPagamento, setModoPagamento] = useState<'entrega' | 'pix_online'>('entrega');
   const [erro, setErro] = useState<string | null>(null);
   const [feito, setFeito] = useState<string | null>(null);
+  const [pix, setPix] = useState<PixPendente | null>(null);
+  const [pixStatus, setPixStatus] = useState<'PENDING' | 'PAID' | 'EXPIRED'>('PENDING');
+  const [copiado, setCopiado] = useState(false);
   const [enviando, enviar] = useTransition();
+  const inicioPix = useRef<number | null>(null);
 
   const produtos = useMemo(
     () => menu.categorias.flatMap((categoria) => categoria.produtos),
@@ -37,6 +55,28 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
 
   const taxa = Math.round(menu.establishment.deliveryFeeReais * 100);
   const total = subtotal + (subtotal > 0 ? taxa : 0);
+
+  useEffect(() => {
+    if (!pix || pixStatus !== 'PENDING') return;
+
+    inicioPix.current ??= Date.now();
+
+    const intervalo = setInterval(async () => {
+      const forcar = inicioPix.current !== null && Date.now() - inicioPix.current > 20_000;
+      const resultado = await consultarPagamentoAction(
+        menu.establishment.slug,
+        pix.orderId,
+        forcar,
+      );
+
+      if (!resultado.ok) return;
+
+      setPixStatus(resultado.status);
+      if (resultado.status === 'PAID') setFeito(resultado.trackingUrl);
+    }, 3000);
+
+    return () => clearInterval(intervalo);
+  }, [menu.establishment.slug, pix, pixStatus]);
 
   function ajustar(id: string, delta: number) {
     setQuantidades((atual) => {
@@ -54,12 +94,38 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
       'items',
       JSON.stringify(itens.map(([productId, quantity]) => ({ productId, quantity }))),
     );
+    formData.set('modoPagamento', modoPagamento);
 
     enviar(async () => {
       const resultado = await criarPedidoPublicoAction(menu.establishment.slug, formData);
-      if (resultado.ok) setFeito(resultado.trackingUrl);
-      else setErro(resultado.error);
+      if (!resultado.ok) {
+        setErro(resultado.error);
+        return;
+      }
+
+      if (resultado.modo === 'entrega') {
+        setFeito(resultado.trackingUrl);
+        return;
+      }
+
+      setPix({
+        orderId: resultado.orderId,
+        trackingUrl: resultado.trackingUrl,
+        qrCode: resultado.qrCode,
+        qrCodeBase64: resultado.qrCodeBase64,
+        expiresAt: resultado.expiresAt,
+        amountCents: resultado.amountCents,
+      });
+      setPixStatus('PENDING');
+      inicioPix.current = Date.now();
     });
+  }
+
+  async function copiarCodigo() {
+    if (!pix?.qrCode) return;
+    await navigator.clipboard.writeText(pix.qrCode);
+    setCopiado(true);
+    setTimeout(() => setCopiado(false), 2000);
   }
 
   if (feito) {
@@ -78,6 +144,47 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
         <Button asChild variant="primary">
           <a href={feito}>Acompanhar meu pedido</a>
         </Button>
+      </main>
+    );
+  }
+
+  if (pix) {
+    return (
+      <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-4 px-5 py-8">
+        <header>
+          <h1 className="text-xl font-semibold text-ink">Pague com Pix</h1>
+          <p className="mt-1 text-sm text-ink-muted">
+            {pixStatus === 'EXPIRED'
+              ? 'O código expirou. Faça um novo pedido para gerar outro Pix.'
+              : 'Escaneie o QR Code ou copie o código no app do seu banco.'}
+          </p>
+        </header>
+
+        {pixStatus === 'PENDING' ? (
+          <>
+            <div className="rounded-lg bg-raised p-4 text-center">
+              <p className="numeric text-lg font-semibold text-ink">{currency(pix.amountCents)}</p>
+              {pix.qrCodeBase64 ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={`data:image/png;base64,${pix.qrCodeBase64}`}
+                  alt="QR Code Pix"
+                  className="mx-auto mt-4 size-56 rounded-md bg-white p-2"
+                />
+              ) : null}
+            </div>
+
+            <Button type="button" variant="outline" onClick={copiarCodigo}>
+              {copiado ? <Check /> : <Copy />}
+              {copiado ? 'Copiado!' : 'Copiar código Pix'}
+            </Button>
+
+            <p className="flex items-center justify-center gap-2 text-sm text-ink-muted">
+              <LoaderCircle className="size-4 animate-spin" aria-hidden />
+              Aguardando pagamento…
+            </p>
+          </>
+        ) : null}
       </main>
     );
   }
@@ -147,15 +254,55 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
             <Input name="reference" />
           </Field>
 
-          <Field label="Como vai pagar" hint="o entregador leva a maquininha">
-            <Select name="paymentMethod" defaultValue="">
-              <option value="">Escolha</option>
-              <option value="CASH">Dinheiro</option>
-              <option value="PIX">Pix</option>
-              <option value="CREDIT">Cartão de crédito</option>
-              <option value="DEBIT">Cartão de débito</option>
-            </Select>
-          </Field>
+          <fieldset className="flex flex-col gap-2">
+            <legend className="text-sm font-medium text-ink">Pagamento</legend>
+
+            {menu.pixOnlineDisponivel ? (
+              <label className="flex cursor-pointer items-start gap-2 rounded-lg border p-3 has-checked:border-accent has-checked:bg-accent-soft/30">
+                <input
+                  type="radio"
+                  name="modoPagamentoUi"
+                  className="mt-0.5"
+                  checked={modoPagamento === 'pix_online'}
+                  onChange={() => setModoPagamento('pix_online')}
+                />
+                <span>
+                  <span className="block text-sm font-medium text-ink">Pagar agora (Pix)</span>
+                  <span className="block text-xs text-ink-muted">
+                    QR Code na tela — confirmação automática
+                  </span>
+                </span>
+              </label>
+            ) : null}
+
+            <label className="flex cursor-pointer items-start gap-2 rounded-lg border p-3 has-checked:border-accent has-checked:bg-accent-soft/30">
+              <input
+                type="radio"
+                name="modoPagamentoUi"
+                className="mt-0.5"
+                checked={modoPagamento === 'entrega'}
+                onChange={() => setModoPagamento('entrega')}
+              />
+              <span>
+                <span className="block text-sm font-medium text-ink">Pagar na entrega</span>
+                <span className="block text-xs text-ink-muted">
+                  Dinheiro, cartão ou Pix com o entregador
+                </span>
+              </span>
+            </label>
+          </fieldset>
+
+          {modoPagamento === 'entrega' ? (
+            <Field label="Como vai pagar na entrega" hint="o entregador leva a maquininha">
+              <Select name="paymentMethod" defaultValue="">
+                <option value="">Escolha</option>
+                <option value="CASH">Dinheiro</option>
+                <option value="PIX">Pix</option>
+                <option value="CREDIT">Cartão de crédito</option>
+                <option value="DEBIT">Cartão de débito</option>
+              </Select>
+            </Field>
+          ) : null}
 
           <Field label="Observações">
             <Textarea name="notes" rows={2} placeholder="Sem cebola, troco para R$ 100…" />
@@ -169,7 +316,7 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
 
           <Button type="submit" variant="primary" disabled={enviando}>
             {enviando ? <LoaderCircle className="animate-spin" /> : null}
-            Enviar pedido
+            {modoPagamento === 'pix_online' ? 'Gerar Pix e pedir' : 'Enviar pedido'}
           </Button>
         </form>
       ) : (
@@ -250,10 +397,6 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
         </div>
       )}
 
-      {/*
-        O carrinho não some com a rolagem: num cardápio longo, quem escolheu no
-        começo precisa conseguir fechar sem voltar ao topo.
-      */}
       {!checkout && itens.length > 0 ? (
         <div className="fixed inset-x-0 bottom-0 border-t bg-surface p-4">
           <div className="mx-auto flex max-w-md items-center gap-3">

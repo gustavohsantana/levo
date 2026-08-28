@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { ForbiddenError } from '@/core';
+import { containerFor } from '@/composition-root';
 import { env } from '@/env';
 import { verifyMercadoPagoWebhookSignature } from '@/infrastructure/payments/mercadopago/webhook-signature';
 import { getPrismaClient } from '@/infrastructure/persistence/prisma/client';
@@ -72,6 +73,21 @@ export async function POST(request: Request) {
           payload,
         },
       });
+
+      const registro = await prisma.payment.findUnique({
+        where: {
+          provider_externalId: { provider: 'MERCADO_PAGO', externalId: resourceId },
+        },
+        select: { establishmentId: true },
+      });
+
+      if (registro) {
+        containerFor(registro.establishmentId)
+          .useCases.confirmPayment.execute({ externalId: resourceId })
+          .catch((cause) => {
+            console.error('[mercadopago/webhook] falha ao confirmar pagamento', cause);
+          });
+      }
     }
 
     return NextResponse.json({ received: true });

@@ -73,6 +73,7 @@ model Establishment {
   users               User[]
   couriers            Courier[]
   orders              Order[]
+  payments            Payment[]
   routes              Route[]
   events              DomainEventLog[]
   credentials         IntegrationCredential[]
@@ -124,6 +125,8 @@ model Order {
   /// acerto do dia separa o que e venda do que e frete.
   deliveryFeeCents Int             @default(0)
   paymentMethod    PaymentMethod?
+  /// Nulo = pagar na entrega. `PENDING` = Pix online aguardando pagamento.
+  paymentStatus    PaymentStatus?
   notes            String?
   status           OrderStatus     @default(NEW)
   trackingToken    String          @unique
@@ -140,6 +143,7 @@ model Order {
   establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
   stop          RouteStop?
   items         OrderItem[]
+  payment       Payment?
 
   // ⭐ A idempotência da importação, garantida pelo banco.
   //
@@ -430,6 +434,40 @@ enum PaymentMethod {
   PIX
   /// Pago no aplicativo do marketplace — nao ha o que receber na porta.
   ONLINE
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  EXPIRED
+  CANCELLED
+  REFUNDED
+  IN_REVIEW
+  REJECTED
+  CHARGED_BACK
+}
+
+model Payment {
+  id              String              @id @default(uuid())
+  establishmentId String
+  orderId         String              @unique
+  provider        IntegrationProvider
+  /// Id da cobrança no gateway. Idempotência do webhook.
+  externalId      String
+  status          PaymentStatus       @default(PENDING)
+  amountCents     Int
+  qrCode          String?
+  qrCodeBase64    String?
+  expiresAt       DateTime?
+  paidAt          DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, externalId])
+  @@index([establishmentId, status])
 }
 
 /// Faixa de taxa de entrega por distancia.

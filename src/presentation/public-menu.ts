@@ -19,6 +19,8 @@ import { checkRateLimit } from './http/rate-limit';
  */
 export interface MenuPublico {
   establishment: { name: string; slug: string; deliveryFeeReais: number };
+  /** Conta Mercado Pago conectada — habilita "Pagar agora (Pix)". */
+  pixOnlineDisponivel: boolean;
   categorias: Array<{
     nome: string;
     produtos: Array<{
@@ -40,6 +42,16 @@ export async function getMenuPublico(slug: string): Promise<MenuPublico | null> 
   });
 
   if (!establishment?.slug) return null;
+
+  const credencial = await prisma.integrationCredential.findUnique({
+    where: {
+      establishmentId_provider: {
+        establishmentId: establishment.id,
+        provider: 'MERCADO_PAGO',
+      },
+    },
+    select: { id: true },
+  });
 
   /*
    * Só produtos ativos. Item pausado é item que acabou — mostrá-lo ao cliente
@@ -73,26 +85,33 @@ export async function getMenuPublico(slug: string): Promise<MenuPublico | null> 
       slug: establishment.slug,
       deliveryFeeReais: establishment.deliveryFeeCents / 100,
     },
+    pixOnlineDisponivel: !!credencial,
     categorias: [...porCategoria.entries()].map(([nome, produtos]) => ({ nome, produtos })),
   };
 }
 
 export type PedidoPublicoResult =
-  | { ok: true; trackingUrl: string }
+  | { ok: true; modo: 'entrega'; trackingUrl: string }
+  | {
+      ok: true;
+      modo: 'pix';
+      trackingUrl: string;
+      orderId: string;
+      qrCode: string;
+      qrCodeBase64: string | null;
+      expiresAt: string;
+      amountCents: number;
+    }
+  | { ok: false; error: string };
+
+export type ConsultaPagamentoResult =
+  | { ok: true; status: 'PENDING' | 'PAID' | 'EXPIRED'; trackingUrl: string }
   | { ok: false; error: string };
 
 export async function criarPedidoPublicoAction(
   slug: string,
   formData: FormData,
 ): Promise<PedidoPublicoResult> {
-  /*
-   * Freio por estabelecimento.
-   *
-   * Endpoint público que escreve no banco é convite para script — e o estrago
-   * aqui não é técnico, é operacional: cinquenta pedidos falsos entrando no
-   * painel no meio do sábado tiram o dono do ar sozinhos. Vinte por minuto
-   * cobre a casa cheia e barra a brincadeira.
-   */
   const limite = checkRateLimit(`menu:${slug}`, { max: 20, windowMs: 60_000 });
   if (!limite.allowed) {
     return { ok: false, error: 'Muitos pedidos agora. Tente de novo em instantes.' };
@@ -106,6 +125,8 @@ export async function criarPedidoPublicoAction(
 
   if (!establishment) return { ok: false, error: 'Cardápio não encontrado.' };
 
+  const modoPagamento = formData.get('modoPagamento') === 'pix_online' ? 'pix_online' : 'entrega';
+
   const parsed = createOrderSchema.safeParse({
     customerName: formData.get('customerName'),
     customerPhone: formData.get('customerPhone'),
@@ -114,43 +135,125 @@ export async function criarPedidoPublicoAction(
     amountReais: 0,
     notes: formData.get('notes'),
     items: parseItens(formData.get('items')),
-    paymentMethod: formData.get('paymentMethod') || undefined,
+    paymentMethod:
+      modoPagamento === 'pix_online'
+        ? 'ONLINE'
+        : (formData.get('paymentMethod') as string) || undefined,
   });
 
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos' };
   }
 
-  /*
-   * Pedido sem item é pedido vazio. No painel manual o dono às vezes lança só o
-   * valor; aqui não existe esse caso, e aceitar geraria uma parada sem conteúdo.
-   */
   if (!parsed.data.items?.length) {
     return { ok: false, error: 'Escolha ao menos um item.' };
   }
 
+  if (modoPagamento === 'pix_online') {
+    const credencial = await prisma.integrationCredential.findUnique({
+      where: {
+        establishmentId_provider: {
+          establishmentId: establishment.id,
+          provider: 'MERCADO_PAGO',
+        },
+      },
+      select: { id: true },
+    });
+
+    if (!credencial) {
+      return { ok: false, error: 'Pix online indisponível nesta loja. Escolha pagar na entrega.' };
+    }
+  }
+
   try {
-    const order = await containerFor(establishment.id).useCases.createOrder.execute({
+    const container = containerFor(establishment.id);
+    const order = await container.useCases.createOrder.execute({
       ...parsed.data,
       source: 'SITE',
-      /*
-       * O preço vem do catálogo, sempre. O carrinho manda só produto e
-       * quantidade — se mandasse valor, bastaria editar a requisição para
-       * comprar pizza por um real.
-       */
+      paymentStatus: modoPagamento === 'pix_online' ? 'PENDING' : null,
       items: parsed.data.items.map((item) => ({
         productId: item.productId,
         quantity: item.quantity,
       })),
     });
 
+    const baseUrl = env().PUBLIC_BASE_URL.replace(/\/$/, '');
+    const trackingUrl = `${baseUrl}/t/${order.trackingToken.value}`;
+
+    if (modoPagamento === 'entrega') {
+      return { ok: true, modo: 'entrega', trackingUrl };
+    }
+
+    const payment = await container.useCases.createPayment.execute({
+      orderId: order.id,
+      payerEmail: emailPixDoCliente(order.id, parsed.data.customerPhone),
+    });
+
     return {
       ok: true,
-      trackingUrl: `${env().PUBLIC_BASE_URL.replace(/\/$/, '')}/t/${order.trackingToken.value}`,
+      modo: 'pix',
+      trackingUrl,
+      orderId: order.id,
+      qrCode: payment.qrCode ?? '',
+      qrCodeBase64: payment.qrCodeBase64,
+      expiresAt: payment.expiresAt?.toISOString() ?? new Date().toISOString(),
+      amountCents: payment.amountCents,
     };
   } catch (cause) {
     return { ok: false, error: toFormError(cause) };
   }
+}
+
+export async function consultarPagamentoAction(
+  slug: string,
+  orderId: string,
+  forcarConsulta = false,
+): Promise<ConsultaPagamentoResult> {
+  const prisma = getPrismaClient(env().DATABASE_URL);
+  const establishment = await prisma.establishment.findUnique({
+    where: { slug },
+    select: { id: true },
+  });
+
+  if (!establishment) return { ok: false, error: 'Cardápio não encontrado.' };
+
+  try {
+    const container = containerFor(establishment.id);
+    const payment = await container.read((repos) => repos.payments.findByOrderId(orderId));
+
+    if (!payment) return { ok: false, error: 'Pagamento não encontrado.' };
+
+    const order = await container.read((repos) => repos.orders.findById(orderId));
+    if (!order) return { ok: false, error: 'Pedido não encontrado.' };
+
+    const baseUrl = env().PUBLIC_BASE_URL.replace(/\/$/, '');
+    const trackingUrl = `${baseUrl}/t/${order.trackingToken.value}`;
+
+    if (payment.status === 'PAID' || order.paymentStatus === 'PAID') {
+      return { ok: true, status: 'PAID', trackingUrl };
+    }
+
+    const now = Date.now();
+    if (!payment.isPending(new Date(now))) {
+      return { ok: true, status: 'EXPIRED', trackingUrl };
+    }
+
+    if (forcarConsulta) {
+      const remoto = await container.useCases.confirmPayment.execute({
+        externalId: payment.externalId,
+      });
+      return { ok: true, status: remoto, trackingUrl };
+    }
+
+    return { ok: true, status: 'PENDING', trackingUrl };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+function emailPixDoCliente(orderId: string, telefone?: string | null): string {
+  const digits = (telefone ?? '').replace(/\D/g, '').slice(-8) || orderId.slice(0, 8);
+  return `cliente+${digits}@levoentregas.app`;
 }
 
 function parseItens(bruto: FormDataEntryValue | null) {

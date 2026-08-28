@@ -5,6 +5,7 @@ import {
   OrderNotGeocodedError,
   OrderNotPendingError,
 } from '../errors';
+import type { PaymentStatus } from './payment';
 import { Address, Coordinates, Money, PhoneNumber, Token } from '../value-objects';
 
 export type OrderSourceKind = 'MANUAL' | 'SITE' | 'WEBHOOK' | 'IFOOD' | 'AIQFOME';
@@ -56,6 +57,7 @@ interface OrderProps {
   amount: Money;
   deliveryFee: Money;
   paymentMethod: PaymentMethod | null;
+  paymentStatus: PaymentStatus | null;
   items: OrderItem[];
   notes: string | null;
   status: OrderStatus;
@@ -87,6 +89,7 @@ export class Order extends AggregateRoot {
     amount?: Money;
     deliveryFee?: Money;
     paymentMethod?: PaymentMethod | null;
+    paymentStatus?: PaymentStatus | null;
     items?: OrderItem[];
     notes?: string | null;
     now?: Date;
@@ -112,6 +115,7 @@ export class Order extends AggregateRoot {
       amount: itens.length > 0 ? somar(itens).add(taxa) : (input.amount ?? Money.zero()),
       deliveryFee: taxa,
       paymentMethod: input.paymentMethod ?? null,
+      paymentStatus: input.paymentStatus ?? null,
       items: itens,
       notes: input.notes?.trim() || null,
       status: OrderStatus.New,
@@ -215,8 +219,20 @@ export class Order extends AggregateRoot {
     return 'NOVO';
   }
   get items(): readonly OrderItem[] { return this.props.items; }
-  get deliveryFee() { return this.props.deliveryFee; }
   get paymentMethod() { return this.props.paymentMethod; }
+  get paymentStatus() { return this.props.paymentStatus; }
+
+  markPaymentPaid(at: Date): void {
+    this.props.paymentStatus = 'PAID';
+    this.record(OrderEvents.PaymentConfirmed, this.props.establishmentId, { orderId: this.id }, at);
+  }
+
+  /** Pix online aguardando transferência — não entra na fila do painel. */
+  isAwaitingOnlinePayment(at: Date): boolean {
+    return this.props.paymentStatus === 'PENDING';
+  }
+
+  get deliveryFee() { return this.props.deliveryFee; }
   /** O que é venda, sem o frete. */
   get subtotal() { return Money.fromCents(this.props.amount.cents - this.props.deliveryFee.cents); }
   get notes() { return this.props.notes; }

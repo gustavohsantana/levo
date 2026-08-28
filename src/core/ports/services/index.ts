@@ -1,5 +1,6 @@
 import type { Address, Coordinates } from '../../value-objects';
 import type { OrderSourceKind } from '../../entities';
+import type { PaymentStatus } from '../../entities/payment';
 
 export interface Geocoder {
   /**
@@ -131,4 +132,24 @@ export interface Logger {
   info(payload: Record<string, unknown>, message: string): void;
   warn(payload: Record<string, unknown>, message: string): void;
   error(payload: Record<string, unknown>, message: string): void;
+}
+
+export interface PaymentGateway {
+  createPixCharge(input: {
+    accessToken: string;
+    orderId: string;
+    amountCents: number;
+    payerEmail?: string;
+    expiresInMinutes: number;
+  }): Promise<{
+    externalId: string;
+    qrCode: string;
+    qrCodeBase64: string | null;
+    expiresAt: Date;
+  }>;
+
+  getCharge(input: {
+    accessToken: string;
+    externalId: string;
+  }): Promise<{ status: PaymentStatus; paidAt: Date | null; amountCents: number }>;
 }

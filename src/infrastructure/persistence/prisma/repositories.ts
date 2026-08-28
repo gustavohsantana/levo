@@ -17,6 +17,8 @@ import {
   type Order,
   type OrderRepository,
   type OrderSourceKind,
+  type Payment,
+  type PaymentRepository,
   type Repositories,
   type Route,
   type RouteRepository,
@@ -27,7 +29,7 @@ import {
   Product,
   type ProductRepository,
 } from '@/core';
-import { CourierMapper, EstablishmentMapper, OrderMapper, RouteMapper } from './mappers';
+import { CourierMapper, EstablishmentMapper, OrderMapper, PaymentMapper, RouteMapper } from './mappers';
 
 type Tx = Prisma.TransactionClient;
 
@@ -124,9 +126,14 @@ export class PrismaOrderRepository extends TenantScoped implements OrderReposito
      * isto o dono via nome, endereço e valor sem saber o que preparar. A fila
      * pendente tem dezenas de linhas, não milhares — o custo do `include` aqui
      * é irrelevante perto de não poder ver o pedido.
+     *
+     * Pix online aguardando transferência fica fora: não é pedido confirmado.
      */
     const rows = await this.tx.order.findMany({
-      where: this.scoped({ status: PENDING_ORDER }),
+      where: this.scoped({
+        status: PENDING_ORDER,
+        OR: [{ paymentStatus: null }, { paymentStatus: { not: 'PENDING' as const } }],
+      }),
       include: { items: true },
       orderBy: { createdAt: 'asc' },
     });
@@ -139,6 +146,33 @@ export class PrismaOrderRepository extends TenantScoped implements OrderReposito
       orderBy: { createdAt: 'desc' },
     });
     return rows.map(OrderMapper.toDomain);
+  }
+}
+
+export class PrismaPaymentRepository extends TenantScoped implements PaymentRepository {
+  async save(payment: Payment): Promise<void> {
+    const data = PaymentMapper.toPersistence(payment);
+    await this.tx.payment.upsert({ where: { id: payment.id }, create: data, update: data });
+  }
+
+  async findById(id: string): Promise<Payment | null> {
+    const row = await this.tx.payment.findFirst({ where: this.scoped({ id }) });
+    return row ? PaymentMapper.toDomain(row) : null;
+  }
+
+  async findByOrderId(orderId: string): Promise<Payment | null> {
+    const row = await this.tx.payment.findFirst({ where: this.scoped({ orderId }) });
+    return row ? PaymentMapper.toDomain(row) : null;
+  }
+
+  async findByExternalId(
+    provider: Payment['provider'],
+    externalId: string,
+  ): Promise<Payment | null> {
+    const row = await this.tx.payment.findFirst({
+      where: this.scoped({ provider, externalId }),
+    });
+    return row ? PaymentMapper.toDomain(row) : null;
   }
 }
 
@@ -483,6 +517,7 @@ function toProduct(row: {
 export function buildRepositories(tx: Tx, establishmentId: string): Repositories {
   return {
     orders: new PrismaOrderRepository(tx, establishmentId),
+    payments: new PrismaPaymentRepository(tx, establishmentId),
     routes: new PrismaRouteRepository(tx, establishmentId),
     couriers: new PrismaCourierRepository(tx, establishmentId),
     establishments: new PrismaEstablishmentRepository(tx, establishmentId),

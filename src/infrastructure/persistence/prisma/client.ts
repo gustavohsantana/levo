@@ -9,6 +9,7 @@ const TENANT_SCOPED = new Set([
   'User',
   'Courier',
   'Order',
+  'Payment',
   'Route',
   'DomainEventLog',
   'IntegrationCredential',

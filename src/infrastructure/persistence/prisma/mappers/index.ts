@@ -2,6 +2,7 @@ import type { Courier as CourierRow, Establishment as EstablishmentRow } from '@
 import { Address, Coordinates, Courier, Establishment, Money, PhoneNumber } from '@/core';
 
 export * from './order-mapper';
+export * from './payment-mapper';
 export * from './route-mapper';
 
 export const CourierMapper = {

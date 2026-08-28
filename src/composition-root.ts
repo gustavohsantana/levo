@@ -16,6 +16,8 @@ import { StartRoute } from './application/use-cases/routes/start-route';
 import { SaveCourier } from '@/application/use-cases/couriers/save-courier';
 import { SetCourierActive } from '@/application/use-cases/couriers/set-courier-active';
 import { AdvanceOrderStage } from '@/application/use-cases/orders/advance-order-stage';
+import { CreatePayment } from '@/application/use-cases/payments/create-payment';
+import { ConfirmPayment } from '@/application/use-cases/payments/confirm-payment';
 import { RenameCategory } from '@/application/use-cases/catalog/rename-category';
 import { SaveProduct } from '@/application/use-cases/catalog/save-product';
 import { SetProductActive } from '@/application/use-cases/catalog/set-product-active';
@@ -23,6 +25,9 @@ import { RemoveProduct } from '@/application/use-cases/catalog/remove-product';
 import { CompleteStop } from './application/use-cases/routes/complete-stop';
 import { RecordCourierPing } from './application/use-cases/routes/record-courier-ping';
 import { GetTrackingSnapshot } from './application/use-cases/tracking/get-tracking-snapshot';
+import { CredentialStore } from './infrastructure/integrations/credential-store';
+import { mercadoPagoAccessTokenFor } from './infrastructure/payments/mercadopago/factory';
+import { mercadoPagoGateway } from './infrastructure/payments/mercadopago/gateway';
 import type { Geocoder, Repositories, UnitOfWork } from './core';
 
 /**
@@ -54,6 +59,8 @@ export interface Container {
     removeProduct: RemoveProduct;
     renameCategory: RenameCategory;
     advanceOrderStage: AdvanceOrderStage;
+    createPayment: CreatePayment;
+    confirmPayment: ConfirmPayment;
     saveCourier: SaveCourier;
     setCourierActive: SetCourierActive;
   };
@@ -93,6 +100,8 @@ export function containerFor(establishmentId: string): Container {
   const optimizer = new TwoOptOptimizer();
   const ids = uuidGenerator;
   const clock = systemClock;
+  const credentialStore = new CredentialStore(prisma, config.AUTH_SECRET);
+  const mercadoPagoToken = mercadoPagoAccessTokenFor(credentialStore, establishmentId);
 
   const container: Container = {
     uow,
@@ -112,6 +121,21 @@ export function containerFor(establishmentId: string): Container {
       removeProduct: new RemoveProduct(uow),
       renameCategory: new RenameCategory(uow),
       advanceOrderStage: new AdvanceOrderStage(uow, clock),
+      createPayment: new CreatePayment(
+        uow,
+        mercadoPagoGateway,
+        ids,
+        clock,
+        establishmentId,
+        () => mercadoPagoToken(),
+      ),
+      confirmPayment: new ConfirmPayment(
+        uow,
+        mercadoPagoGateway,
+        clock,
+        establishmentId,
+        () => mercadoPagoToken(),
+      ),
       saveCourier: new SaveCourier(uow, ids, establishmentId),
       setCourierActive: new SetCourierActive(uow),
       tracking: new GetTrackingSnapshot(uow, clock),

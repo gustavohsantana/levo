@@ -6,6 +6,7 @@ import {
   Order,
   type OrderSourceKind,
   type OrderStatus,
+  type PaymentStatus,
   PhoneNumber,
   Token,
 } from '@/core';
@@ -36,6 +37,7 @@ export const OrderMapper = {
       amount: Money.fromCents(row.amountCents),
       deliveryFee: Money.fromCents(row.deliveryFeeCents),
       paymentMethod: row.paymentMethod,
+      paymentStatus: row.paymentStatus as PaymentStatus | null,
       items: (row.items ?? []).map((item) => ({
         productId: item.productId,
         name: item.name,
@@ -69,6 +71,7 @@ export const OrderMapper = {
       amountCents: order.amount.cents,
       deliveryFeeCents: order.deliveryFee.cents,
       paymentMethod: order.paymentMethod,
+      paymentStatus: order.paymentStatus,
       notes: order.notes,
       status: order.status,
       trackingToken: order.trackingToken.value,

@@ -7,6 +7,7 @@ import {
   NotFoundError,
   type OrderItem,
   type PaymentMethod,
+  type PaymentStatus,
   type Product,
   ValidationError,
   type Clock,
@@ -38,6 +39,7 @@ interface Input {
   /** Ausente usa a taxa configurada no estabelecimento. */
   deliveryFeeReais?: number | null;
   paymentMethod?: PaymentMethod | null;
+  paymentStatus?: PaymentStatus | null;
 }
 
 export class CreateOrder {
@@ -90,6 +92,7 @@ export class CreateOrder {
         amount: Money.fromReais(input.amountReais ?? 0),
         deliveryFee: taxa,
         paymentMethod: input.paymentMethod,
+        paymentStatus: input.paymentStatus ?? null,
         items: itens,
         notes: input.notes,
         now: this.clock.now(),

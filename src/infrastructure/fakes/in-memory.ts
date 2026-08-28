@@ -13,6 +13,8 @@ import {
   type Order,
   type OrderRepository,
   type OrderSourceKind,
+  type Payment,
+  type PaymentRepository,
   type Repositories,
   type Route,
   RouteStatus,
@@ -35,6 +37,7 @@ import {
  */
 export class InMemoryDatabase {
   orders = new Map<string, Order>();
+  payments = new Map<string, Payment>();
   routes = new Map<string, Route>();
   couriers = new Map<string, Courier>();
   pings = new Map<string, Array<{ coordinates: Coordinates; at: Date }>>();
@@ -87,7 +90,11 @@ function buildRepositories(db: InMemoryDatabase): Repositories {
       );
     },
     async listPending() {
-      return [...db.orders.values()].filter((order) => order.status === 'NEW');
+      return [...db.orders.values()].filter(
+        (order) =>
+          order.status === 'NEW'
+          && order.paymentStatus !== 'PENDING',
+      );
     },
     async listOfDay(day) {
       return [...db.orders.values()].filter((order) => sameDay(order.createdAt, day));
@@ -226,6 +233,25 @@ function buildRepositories(db: InMemoryDatabase): Repositories {
     },
   };
 
+  const payments: PaymentRepository = {
+    async save(payment) {
+      db.payments.set(payment.id, payment);
+    },
+    async findById(id) {
+      return db.payments.get(id) ?? null;
+    },
+    async findByOrderId(orderId) {
+      return [...db.payments.values()].find((payment) => payment.orderId === orderId) ?? null;
+    },
+    async findByExternalId(provider, externalId) {
+      return (
+        [...db.payments.values()].find(
+          (payment) => payment.provider === provider && payment.externalId === externalId,
+        ) ?? null
+      );
+    },
+  };
+
   const geocodeCache: GeocodeCacheRepository = {
     async get(key) {
       return db.geocodeCache.get(key) ?? null;
@@ -237,6 +263,7 @@ function buildRepositories(db: InMemoryDatabase): Repositories {
 
   return {
     orders,
+    payments,
     routes,
     couriers,
     establishments,

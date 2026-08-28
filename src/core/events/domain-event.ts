@@ -28,6 +28,7 @@ export const OrderEvents = {
   /** Cancelado na plataforma de origem — iFood, aiqfome. */
   CancelledExternally: 'order.cancelled_externally',
   TrackingOpened: 'order.tracking_opened',
+  PaymentConfirmed: 'order.payment_confirmed',
 } as const;
 
 export const RouteEvents = {

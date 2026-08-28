@@ -3,6 +3,7 @@ import type {
   Establishment,
   Order,
   OrderSourceKind,
+  Payment,
   Product,
   Route,
 } from '../../entities';
@@ -128,9 +129,17 @@ export interface GeocodeCacheRepository {
   set(cacheKey: string, coordinates: Coordinates): Promise<void>;
 }
 
+export interface PaymentRepository {
+  save(payment: Payment): Promise<void>;
+  findById(id: string): Promise<Payment | null>;
+  findByOrderId(orderId: string): Promise<Payment | null>;
+  findByExternalId(provider: Payment['provider'], externalId: string): Promise<Payment | null>;
+}
+
 /** Tudo que um caso de uso enxerga dentro de uma transação. */
 export interface Repositories {
   orders: OrderRepository;
+  payments: PaymentRepository;
   routes: RouteRepository;
   couriers: CourierRepository;
   establishments: EstablishmentRepository;
