@@ -72,13 +72,19 @@ export class MercadoPagoGateway implements PaymentGateway {
     const body = (await response.json().catch(() => ({}))) as MpOrderResponse & {
       message?: string;
       error?: string;
+      errors?: Array<{ message?: string; code?: string }>;
     };
 
     if (!response.ok) {
+      const detalhe =
+        body.errors?.[0]?.message
+        ?? body.message
+        ?? body.error
+        ?? `HTTP ${response.status}`;
       throw new ExternalServiceError(
         'Mercado Pago',
-        body.message ?? body.error ?? `HTTP ${response.status}`,
-        { orderId: input.orderId, status: response.status },
+        detalhe,
+        { orderId: input.orderId, status: response.status, errors: body.errors },
       );
     }
 

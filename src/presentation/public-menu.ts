@@ -149,18 +149,20 @@ export async function criarPedidoPublicoAction(
     return { ok: false, error: 'Escolha ao menos um item.' };
   }
 
+  let credencialMp: { liveMode: boolean | null } | null = null;
+
   if (modoPagamento === 'pix_online') {
-    const credencial = await prisma.integrationCredential.findUnique({
+    credencialMp = await prisma.integrationCredential.findUnique({
       where: {
         establishmentId_provider: {
           establishmentId: establishment.id,
           provider: 'MERCADO_PAGO',
         },
       },
-      select: { id: true },
+      select: { liveMode: true },
     });
 
-    if (!credencial) {
+    if (!credencialMp) {
       return { ok: false, error: 'Pix online indisponível nesta loja. Escolha pagar na entrega.' };
     }
   }
@@ -186,7 +188,11 @@ export async function criarPedidoPublicoAction(
 
     const payment = await container.useCases.createPayment.execute({
       orderId: order.id,
-      payerEmail: emailPixDoCliente(order.id, parsed.data.customerPhone),
+      payerEmail: emailPixDoCliente(
+        order.id,
+        parsed.data.customerPhone,
+        credencialMp?.liveMode === false,
+      ),
     });
 
     return {
@@ -251,8 +257,17 @@ export async function consultarPagamentoAction(
   }
 }
 
-function emailPixDoCliente(orderId: string, telefone?: string | null): string {
+function emailPixDoCliente(
+  orderId: string,
+  telefone?: string | null,
+  sandbox = false,
+): string {
   const digits = (telefone ?? '').replace(/\D/g, '').slice(-8) || orderId.slice(0, 8);
+  /*
+   * Sandbox do Mercado Pago recusa qualquer e-mail que não seja @testuser.com.
+   * Produção aceita domínio real; o endereço não precisa existir de verdade.
+   */
+  if (sandbox) return `test_user_${digits}@testuser.com`;
   return `cliente+${digits}@levoentregas.app`;
 }
 
