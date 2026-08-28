@@ -1,8 +1,11 @@
 'use client';
 
-import { useTransition } from 'react';
-import { Check, Link2, LoaderCircle, TriangleAlert, Unlink } from 'lucide-react';
-import { desconectarMercadoPago } from '@/presentation/integration-actions';
+import { useState, useTransition } from 'react';
+import { Check, FlaskConical, Link2, LoaderCircle, TriangleAlert, Unlink } from 'lucide-react';
+import {
+  conectarMercadoPagoDoEnv,
+  desconectarMercadoPago,
+} from '@/presentation/integration-actions';
 import { Button } from '../primitives';
 
 /**
@@ -24,12 +27,27 @@ interface Props {
   conta: { nome: string | null; email: string | null } | null;
   /** Falso quando faltam as credenciais da aplicação no ambiente. */
   disponivel: boolean;
+  /** Client ID + Secret — OAuth de lojista, se o painel mostrar esse par. */
+  oauthDisponivel: boolean;
+  /** Public Key + Access Token da aba de produção. */
+  prodDisponivel: boolean;
+  /** Public Key + Access Token da aba de teste — só no `next dev`. */
+  testeDisponivel: boolean;
   /** Resultado do último consentimento, vindo do `?mercadopago=` do callback. */
   aviso?: string | null;
 }
 
-export function MercadoPagoConnect({ estado, conta, disponivel, aviso }: Props) {
+export function MercadoPagoConnect({
+  estado,
+  conta,
+  disponivel,
+  oauthDisponivel,
+  prodDisponivel,
+  testeDisponivel,
+  aviso,
+}: Props) {
   const [pendente, startTransition] = useTransition();
+  const [erroAcao, setErroAcao] = useState<string | null>(null);
 
   const mensagem = aviso ? MENSAGENS[aviso] : null;
 
@@ -58,25 +76,81 @@ export function MercadoPagoConnect({ estado, conta, disponivel, aviso }: Props) 
         </p>
 
         {mensagem ? <Aviso tom={mensagem.tom}>{mensagem.texto}</Aviso> : null}
+        {erroAcao ? <Aviso tom="erro">{erroAcao}</Aviso> : null}
 
         {disponivel ? (
-          <>
-            {/*
-             * `<a>` de verdade, e não botão com ação: o cookie de `state` que
-             * protege contra CSRF só viaja numa navegação de topo.
-             */}
-            <Button asChild variant="primary" className="mt-4">
-              <a href="/api/integrations/mercadopago/connect">
-                <Link2 />
-                {precisaReconectar ? 'Conectar de novo' : 'Conectar Mercado Pago'}
-              </a>
-            </Button>
+          <div className="mt-4 flex flex-col gap-3">
+            {prodDisponivel ? (
+              <>
+                <Button
+                  variant="primary"
+                  disabled={pendente}
+                  onClick={() =>
+                    startTransition(async () => {
+                      setErroAcao(null);
+                      const resultado = await conectarMercadoPagoDoEnv('producao');
+                      if (!resultado.ok) {
+                        setErroAcao(resultado.error ?? 'Não foi possível conectar.');
+                      }
+                    })
+                  }
+                >
+                  {pendente ? <LoaderCircle className="animate-spin" /> : <Link2 />}
+                  {precisaReconectar ? 'Conectar de novo' : 'Conectar Mercado Pago'}
+                </Button>
 
-            <p className="mt-3 text-xs leading-relaxed text-ink-faint">
-              Use a mesma conta da sua maquininha. Conectar não muda nada nela — só permite que o
-              cardápio gere a cobrança. Você precisa ter uma chave Pix cadastrada no Mercado Pago.
-            </p>
-          </>
+                <p className="text-xs leading-relaxed text-ink-faint">
+                  Public Key e Access Token de produção. O Pix cai nesta conta, com a taxa dela. O
+                  Levô não fica com nada da venda.
+                </p>
+              </>
+            ) : null}
+
+            {oauthDisponivel && !prodDisponivel ? (
+              <>
+                {/*
+                 * `<a>` de verdade, e não botão com ação: o cookie de `state` que
+                 * protege contra CSRF só viaja numa navegação de topo.
+                 */}
+                <Button asChild variant="primary">
+                  <a href="/api/integrations/mercadopago/connect">
+                    <Link2 />
+                    {precisaReconectar ? 'Conectar de novo' : 'Conectar Mercado Pago'}
+                  </a>
+                </Button>
+
+                <p className="text-xs leading-relaxed text-ink-faint">
+                  Use a mesma conta da sua maquininha. Conectar não muda nada nela — só permite que o
+                  cardápio gere a cobrança. Você precisa ter uma chave Pix cadastrada no Mercado Pago.
+                </p>
+              </>
+            ) : null}
+
+            {testeDisponivel ? (
+              <>
+                <Button
+                  variant={oauthDisponivel || prodDisponivel ? 'ghost' : 'primary'}
+                  disabled={pendente}
+                  onClick={() =>
+                    startTransition(async () => {
+                      setErroAcao(null);
+                      const resultado = await conectarMercadoPagoDoEnv('teste');
+                      if (!resultado.ok) {
+                        setErroAcao(resultado.error ?? 'Não foi possível conectar a conta de teste.');
+                      }
+                    })
+                  }
+                >
+                  {pendente ? <LoaderCircle className="animate-spin" /> : <FlaskConical />}
+                  Conectar conta de teste
+                </Button>
+
+                <p className="text-xs leading-relaxed text-ink-faint">
+                  Esta é a conta de teste da aplicação. Nenhum pagamento vira dinheiro de verdade.
+                </p>
+              </>
+            ) : null}
+          </div>
         ) : (
           <p className="mt-4 text-xs leading-relaxed text-ink-faint">
             Pagamento online ainda não está configurado neste ambiente.
@@ -145,6 +219,27 @@ export function MercadoPagoConnect({ estado, conta, disponivel, aviso }: Props) 
       </div>
 
       {mensagem ? <Aviso tom={mensagem.tom}>{mensagem.texto}</Aviso> : null}
+      {erroAcao ? <Aviso tom="erro">{erroAcao}</Aviso> : null}
+
+      {emTeste && prodDisponivel ? (
+        <Button
+          variant="primary"
+          className="mt-4"
+          disabled={pendente}
+          onClick={() =>
+            startTransition(async () => {
+              setErroAcao(null);
+              const resultado = await conectarMercadoPagoDoEnv('producao');
+              if (!resultado.ok) {
+                setErroAcao(resultado.error ?? 'Não foi possível conectar.');
+              }
+            })
+          }
+        >
+          {pendente ? <LoaderCircle className="animate-spin" /> : <Link2 />}
+          Trocar para produção
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -185,5 +280,9 @@ const MENSAGENS: Record<string, { tom: 'erro' | 'info'; texto: string }> = {
       'Esta conta do Mercado Pago não tem chave Pix cadastrada, e sem ela a cobrança falha na ' +
       'hora do pedido. Cadastre uma chave no aplicativo do Mercado Pago — pode ser aleatória — e ' +
       'conecte de novo.',
+  },
+  'conectado-em-teste': {
+    tom: 'info',
+    texto: 'Conectado com uma conta de teste. Nenhuma cobrança vira dinheiro de verdade.',
   },
 };

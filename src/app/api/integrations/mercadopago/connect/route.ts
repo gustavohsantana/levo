@@ -18,7 +18,7 @@ export async function GET() {
   try {
     const session = await requireSession();
 
-    if (!env().mercadoPagoEnabled) {
+    if (!env().mercadoPagoOAuthEnabled) {
       throw new ForbiddenError('Pagamento pelo Mercado Pago não configurado neste ambiente');
     }
 

@@ -68,4 +68,72 @@ describe('configuração de ambiente', () => {
   it('ainda recusa AUTH_SECRET curto demais', async () => {
     await expect(loadEnv({ ...MINIMO, AUTH_SECRET: 'curto' })).rejects.toThrow(/AUTH_SECRET/);
   });
+
+  it('liga o Mercado Pago com Public Key e Access Token de produção', async () => {
+    const env = await loadEnv({
+      ...MINIMO,
+      NODE_ENV: 'production',
+      MERCADO_PAGO_CLIENT_ID: undefined,
+      MERCADO_PAGO_CLIENT_SECRET: undefined,
+      MERCADO_PAGO_PUBLIC_KEY: 'APP_USR-pk-prod',
+      MERCADO_PAGO_ACCESS_TOKEN: 'APP_USR-at-prod',
+      MERCADO_PAGO_PUBLIC_KEY_TEST: undefined,
+      MERCADO_PAGO_ACCESS_TOKEN_TEST: undefined,
+    });
+
+    expect(env.mercadoPagoEnabled).toBe(true);
+    expect(env.mercadoPagoProdEnabled).toBe(true);
+    expect(env.mercadoPagoOAuthEnabled).toBe(false);
+  });
+
+  it('liga o Mercado Pago com o par de teste, sem Client Secret', async () => {
+    // A aba de teste do painel só entrega Public Key + Access Token.
+    const env = await loadEnv({
+      ...MINIMO,
+      NODE_ENV: 'development',
+      MERCADO_PAGO_CLIENT_ID: undefined,
+      MERCADO_PAGO_CLIENT_SECRET: undefined,
+      MERCADO_PAGO_PUBLIC_KEY: undefined,
+      MERCADO_PAGO_ACCESS_TOKEN: undefined,
+      MERCADO_PAGO_PUBLIC_KEY_TEST: 'APP_USR-pk-teste',
+      MERCADO_PAGO_ACCESS_TOKEN_TEST: 'APP_USR-at-teste',
+    });
+
+    expect(env.mercadoPagoEnabled).toBe(true);
+    expect(env.mercadoPagoOAuthEnabled).toBe(false);
+    expect(env.mercadoPagoTestEnabled).toBe(true);
+  });
+
+  it('não usa credencial de teste em produção', async () => {
+    const env = await loadEnv({
+      ...MINIMO,
+      NODE_ENV: 'production',
+      MERCADO_PAGO_CLIENT_ID: undefined,
+      MERCADO_PAGO_CLIENT_SECRET: undefined,
+      MERCADO_PAGO_PUBLIC_KEY: undefined,
+      MERCADO_PAGO_ACCESS_TOKEN: undefined,
+      MERCADO_PAGO_PUBLIC_KEY_TEST: 'APP_USR-pk-teste',
+      MERCADO_PAGO_ACCESS_TOKEN_TEST: 'APP_USR-at-teste',
+    });
+
+    expect(env.mercadoPagoEnabled).toBe(false);
+    expect(env.mercadoPagoTestEnabled).toBe(false);
+  });
+
+  it('liga o OAuth só com Client ID e Secret de produção', async () => {
+    const env = await loadEnv({
+      ...MINIMO,
+      NODE_ENV: 'production',
+      MERCADO_PAGO_CLIENT_ID: '3154098798706552',
+      MERCADO_PAGO_CLIENT_SECRET: 'segredo-da-aplicacao',
+      MERCADO_PAGO_PUBLIC_KEY: undefined,
+      MERCADO_PAGO_ACCESS_TOKEN: undefined,
+      MERCADO_PAGO_PUBLIC_KEY_TEST: undefined,
+      MERCADO_PAGO_ACCESS_TOKEN_TEST: undefined,
+    });
+
+    expect(env.mercadoPagoOAuthEnabled).toBe(true);
+    expect(env.mercadoPagoEnabled).toBe(true);
+    expect(env.mercadoPagoTestEnabled).toBe(false);
+  });
 });

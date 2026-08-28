@@ -6,6 +6,11 @@ import { env } from '@/env';
 import { IfoodAuth } from '@/infrastructure/integrations/ifood/auth';
 import { CredentialStore } from '@/infrastructure/integrations/credential-store';
 import { listarLojasAiqfome } from '@/infrastructure/integrations/aiqfome/stores';
+import {
+  contaAceitaPix,
+  lerContaMercadoPago,
+} from '@/infrastructure/payments/mercadopago/account';
+import { mercadoPagoEnvCredentials } from '@/infrastructure/payments/mercadopago/factory';
 import { getPrismaClient } from '@/infrastructure/persistence/prisma/client';
 import { requireSession } from './http/session';
 import { toFormError } from './http/error-mapper';
@@ -286,6 +291,74 @@ export async function desconectarAiqfome(): Promise<{ ok: boolean; error?: strin
 
     await getPrismaClient(env().DATABASE_URL).integrationCredential.deleteMany({
       where: { establishmentId: session.establishmentId, provider: 'AIQFOME' },
+    });
+
+    revalidatePath('/dashboard/integracoes');
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+/**
+ * Liga o par Public Key + Access Token do `.env` neste estabelecimento.
+ *
+ * São os nomes do painel: produção e teste são o mesmo tipo de par, em abas
+ * diferentes. O token é o da aplicação, então quem clicar nisto recebe nessa
+ * conta. OAuth de lojista (cada um com a conta dele) é outro fluxo.
+ */
+export async function conectarMercadoPagoDoEnv(
+  modo: 'teste' | 'producao',
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const credencial = mercadoPagoEnvCredentials(modo);
+    if (!credencial) {
+      return {
+        ok: false,
+        error:
+          modo === 'teste'
+            ? 'Public Key e Access Token de teste não estão neste ambiente.'
+            : 'Public Key e Access Token de produção não estão neste ambiente.',
+      };
+    }
+
+    const session = await requireSession();
+    const [conta, aceitaPix] = await Promise.all([
+      lerContaMercadoPago(credencial.accessToken),
+      contaAceitaPix(credencial.accessToken),
+    ]);
+
+    if (!conta) {
+      return {
+        ok: false,
+        error: 'O Mercado Pago não reconheceu o Access Token. Confira o par no .env.',
+      };
+    }
+
+    /*
+     * Conta de teste quase nunca lista Pix. Cobrança sandbox não depende disso.
+     * Produção recusa: sem Pix a primeira cobrança de verdade falha no cliente.
+     */
+    if (aceitaPix === false && modo === 'teste') {
+      console.info('[mercadopago] conta de teste sem Pix na lista de meios — seguindo mesmo assim', {
+        userId: conta.id,
+      });
+    } else if (aceitaPix === false) {
+      return {
+        ok: false,
+        error:
+          'Esta conta do Mercado Pago não tem chave Pix cadastrada. Cadastre uma no aplicativo e tente de novo.',
+      };
+    }
+
+    const store = new CredentialStore(getPrismaClient(env().DATABASE_URL), env().AUTH_SECRET);
+    await store.save(session.establishmentId, 'MERCADO_PAGO', {
+      accessToken: credencial.accessToken,
+      refreshToken: null,
+      expiresAt: null,
+      publicKey: credencial.publicKey,
+      liveMode: modo === 'producao',
+      merchantId: conta.id,
     });
 
     revalidatePath('/dashboard/integracoes');

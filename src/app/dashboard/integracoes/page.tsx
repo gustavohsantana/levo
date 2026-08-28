@@ -144,6 +144,9 @@ export default async function IntegracoesPage({
         estado={estadoMp}
         conta={contaMp ? { nome: contaMp.nome, email: contaMp.email } : null}
         disponivel={env().mercadoPagoEnabled}
+        oauthDisponivel={env().mercadoPagoOAuthEnabled}
+        prodDisponivel={env().mercadoPagoProdEnabled}
+        testeDisponivel={env().mercadoPagoTestEnabled}
         aviso={resultadoMp ?? null}
       />
     </div>

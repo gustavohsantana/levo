@@ -16,8 +16,10 @@ export function mercadoPagoRedirectUri(): string {
 
 export function mercadoPagoOAuth(): MercadoPagoOAuth {
   const config = env();
+  const clientId = config.MERCADO_PAGO_CLIENT_ID;
+  const clientSecret = config.MERCADO_PAGO_CLIENT_SECRET;
 
-  if (!config.MERCADO_PAGO_CLIENT_ID || !config.MERCADO_PAGO_CLIENT_SECRET) {
+  if (!clientId || !clientSecret) {
     throw new ConfigurationError(
       'Mercado Pago: MERCADO_PAGO_CLIENT_ID e MERCADO_PAGO_CLIENT_SECRET são obrigatórios ' +
         'para o consentimento do lojista',
@@ -25,10 +27,34 @@ export function mercadoPagoOAuth(): MercadoPagoOAuth {
   }
 
   return new MercadoPagoOAuth({
-    clientId: config.MERCADO_PAGO_CLIENT_ID,
-    clientSecret: config.MERCADO_PAGO_CLIENT_SECRET,
+    clientId,
+    clientSecret,
     redirectUri: mercadoPagoRedirectUri(),
   });
+}
+
+/**
+ * Public Key + Access Token do painel, no nome que o Mercado Pago usa.
+ *
+ * `producao` é o par da aba de produção. `teste` é o da aba de teste, e some
+ * em `NODE_ENV=production` para o token sandbox não receber Pix de lojista.
+ */
+export function mercadoPagoEnvCredentials(
+  modo: 'teste' | 'producao',
+): { publicKey: string; accessToken: string } | null {
+  const config = env();
+
+  if (modo === 'teste') {
+    const publicKey = config.MERCADO_PAGO_PUBLIC_KEY_TEST;
+    const accessToken = config.MERCADO_PAGO_ACCESS_TOKEN_TEST;
+    if (!config.mercadoPagoTestEnabled || !publicKey || !accessToken) return null;
+    return { publicKey, accessToken };
+  }
+
+  const publicKey = config.MERCADO_PAGO_PUBLIC_KEY;
+  const accessToken = config.MERCADO_PAGO_ACCESS_TOKEN;
+  if (!config.mercadoPagoProdEnabled || !publicKey || !accessToken) return null;
+  return { publicKey, accessToken };
 }
 
 /**

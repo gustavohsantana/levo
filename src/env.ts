@@ -39,17 +39,22 @@ const schema = z.object({
   AIQFOME_BASE_URL: z.string().url().optional(),
 
   /*
-   * Aplicação do Levô em "Suas integrações", no painel de developers do Mercado
-   * Pago. Uma só, para todos os estabelecimentos: o que separa uma loja da outra
-   * é o token que **ela** autoriza, guardado no `IntegrationCredential`.
+   * Aplicação do Levô em "Suas integrações". O painel chama as credenciais de
+   * produção de Public Key + Access Token — esses nomes, esse par. A aba de
+   * teste entrega o mesmo par, de uma conta sandbox. Sem `_ENABLED` de
+   * propósito: ter o par no ambiente *é* estar ligado.
    *
-   * Sem `_ENABLED` de propósito, ao contrário do iFood e do aiqfome. Aqueles
-   * têm polling que precisa ser desligado; aqui não há processo nenhum rodando,
-   * e uma variável a mais só criaria o estado em que a credencial existe e a
-   * integração está desligada — sem ninguém saber por quê.
+   * Client ID + Client Secret só entram se o painel mostrar esse segundo par
+   * (OAuth de lojista). Não são o "secret de produção".
    */
   MERCADO_PAGO_CLIENT_ID: z.string().optional(),
   MERCADO_PAGO_CLIENT_SECRET: z.string().optional(),
+  MERCADO_PAGO_PUBLIC_KEY: z.string().optional(),
+  MERCADO_PAGO_ACCESS_TOKEN: z.string().optional(),
+  MERCADO_PAGO_PUBLIC_KEY_TEST: z.string().optional(),
+  MERCADO_PAGO_ACCESS_TOKEN_TEST: z.string().optional(),
+  /** Segredo gerado em Suas integrações → Webhooks → Configurar notificações. */
+  MERCADO_PAGO_WEBHOOK_SECRET: z.string().optional(),
 
   /** Vem do Vercel Blob quando a loja de imagens está ligada ao projeto. */
   BLOB_READ_WRITE_TOKEN: z.string().optional(),
@@ -81,14 +86,29 @@ function load() {
     throw new Error(`Configuração inválida:\n${problems}\n\nCopie .env.example para .env.`);
   }
 
+  const mercadoPagoOAuthEnabled = Boolean(
+    parsed.data.MERCADO_PAGO_CLIENT_ID && parsed.data.MERCADO_PAGO_CLIENT_SECRET,
+  );
+  const mercadoPagoProdEnabled = Boolean(
+    parsed.data.MERCADO_PAGO_PUBLIC_KEY && parsed.data.MERCADO_PAGO_ACCESS_TOKEN,
+  );
+  const mercadoPagoTestEnabled =
+    parsed.data.NODE_ENV !== 'production' &&
+    Boolean(parsed.data.MERCADO_PAGO_PUBLIC_KEY_TEST && parsed.data.MERCADO_PAGO_ACCESS_TOKEN_TEST);
+
   return {
     ...parsed.data,
     ifoodEnabled: parsed.data.IFOOD_ENABLED === 'true',
     aiqfomeEnabled: parsed.data.AIQFOME_ENABLED === 'true',
-    // Ter a credencial da aplicação *é* estar ligado. Ver o comentário no schema.
-    mercadoPagoEnabled: Boolean(
-      parsed.data.MERCADO_PAGO_CLIENT_ID && parsed.data.MERCADO_PAGO_CLIENT_SECRET,
-    ),
+    /*
+     * Produção, no painel, é Public Key + Access Token. Teste é o mesmo par
+     * da aba sandbox. OAuth (Client ID + Secret) é outro fluxo, se o painel
+     * algum dia mostrar esse par.
+     */
+    mercadoPagoOAuthEnabled,
+    mercadoPagoProdEnabled,
+    mercadoPagoTestEnabled,
+    mercadoPagoEnabled: mercadoPagoOAuthEnabled || mercadoPagoProdEnabled || mercadoPagoTestEnabled,
     isProduction: parsed.data.NODE_ENV === 'production',
   };
 }

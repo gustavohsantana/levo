@@ -641,9 +641,11 @@ não morrer num log.
    tarde.
 
    Falta o que só existe fora do código: criar a aplicação no painel de
-   developers do Mercado Pago, cadastrar o `redirect_uri` como
-   `{PUBLIC_BASE_URL}/api/integrations/mercadopago/callback` e preencher
-   `MERCADO_PAGO_CLIENT_ID` e `MERCADO_PAGO_CLIENT_SECRET`.
+   developers do Mercado Pago. A aba de teste só entrega Public Key + Access
+   Token (`MERCADO_PAGO_PUBLIC_KEY_TEST` / `MERCADO_PAGO_ACCESS_TOKEN_TEST`) —
+   serve para o `next dev`. Client ID + Client Secret só aparecem nas
+   credenciais de produção, e são o que o OAuth do lojista usa. Cadastre o
+   `redirect_uri` como `{PUBLIC_BASE_URL}/api/integrations/mercadopago/callback`.
 2. **Cobrar.** Migration de `Payment`, port `PaymentGateway`, adapter,
    `CreatePayment`, tela de QR no cardápio, polling. Pedido nasce `PENDING`.
 3. **Confirmar.** Webhook assinado, `ConfirmPayment` idempotente com consulta à
