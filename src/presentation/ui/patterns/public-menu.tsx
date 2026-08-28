@@ -5,6 +5,7 @@ import { Check, Copy, LoaderCircle, Minus, Plus, ShoppingBag } from 'lucide-reac
 import {
   consultarPagamentoAction,
   criarPedidoPublicoAction,
+  sugerirCidadeAction,
   type MenuPublico,
 } from '@/presentation/public-menu';
 import { Button, Field, Input, Select, Textarea } from '../primitives';
@@ -49,6 +50,9 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
   const [enviando, enviar] = useTransition();
   const [checando, checar] = useTransition();
   const inicioPix = useRef<number | null>(null);
+  const [cidade, setCidade] = useState(menu.establishment.city);
+  const cidadeEditada = useRef(false);
+  const gpsPedido = useRef(false);
 
   const produtos = useMemo(
     () => menu.categorias.flatMap((categoria) => categoria.produtos),
@@ -88,6 +92,27 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
 
     return () => clearInterval(intervalo);
   }, [menu.establishment.slug, pix, pixStatus]);
+
+  useEffect(() => {
+    if (!checkout || gpsPedido.current) return;
+    if (!navigator.geolocation) return;
+    gpsPedido.current = true;
+
+    navigator.geolocation.getCurrentPosition(
+      (posicao) => {
+        void sugerirCidadeAction(posicao.coords.latitude, posicao.coords.longitude).then(
+          (resultado) => {
+            if (!resultado.ok || cidadeEditada.current) return;
+            setCidade(resultado.cidade);
+          },
+        );
+      },
+      () => {
+        /* Recusou ou o GPS falhou: fica a cidade da loja. */
+      },
+      { enableHighAccuracy: false, timeout: 8_000, maximumAge: 300_000 },
+    );
+  }, [checkout]);
 
   function ajustar(id: string, delta: number) {
     setQuantidades((atual) => {
@@ -329,12 +354,34 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
             <Input name="customerPhone" inputMode="tel" placeholder="(35) 99999-9999" required />
           </Field>
 
-          <Field label="Endereço" hint="rua, número, bairro">
-            <Input name="address" required />
+          <Field label="Cidade">
+            <Input
+              name="city"
+              required
+              autoComplete="address-level2"
+              value={cidade}
+              onChange={(evento) => {
+                cidadeEditada.current = true;
+                setCidade(evento.target.value);
+              }}
+            />
           </Field>
 
+          <Field label="Bairro">
+            <Input name="neighborhood" required autoComplete="address-level3" />
+          </Field>
+
+          <div className="grid grid-cols-[1fr_5.75rem] gap-2">
+            <Field label="Rua">
+              <Input name="street" required autoComplete="address-line1" />
+            </Field>
+            <Field label="Número">
+              <Input name="number" required inputMode="numeric" autoComplete="off" placeholder="s/n" />
+            </Field>
+          </div>
+
           <Field label="Complemento" hint="apartamento, portão, referência">
-            <Input name="reference" />
+            <Input name="reference" autoComplete="address-line2" />
           </Field>
 
           <fieldset className="flex flex-col gap-2">

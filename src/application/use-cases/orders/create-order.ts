@@ -40,6 +40,8 @@ interface Input {
   deliveryFeeReais?: number | null;
   paymentMethod?: PaymentMethod | null;
   paymentStatus?: PaymentStatus | null;
+  /** Cidade do endereço, quando o cliente a informou no cardápio. */
+  city?: string | null;
 }
 
 export class CreateOrder {
@@ -71,7 +73,10 @@ export class CreateOrder {
     const estabelecimento = await this.uow.run((repos) => repos.establishments.current());
 
     const coordinates = await this.geocoder
-      .geocode(address, { city: estabelecimento.city, state: estabelecimento.state })
+      .geocode(address, {
+        city: input.city?.trim() || estabelecimento.city,
+        state: estabelecimento.state,
+      })
       .catch(() => null);
 
     return this.uow.run(async (repos) => {

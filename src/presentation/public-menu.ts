@@ -6,6 +6,8 @@ import { getPrismaClient } from '@/infrastructure/persistence/prisma/client';
 import { createOrderSchema } from '@/application/dto/schemas';
 import { toFormError } from './http/error-mapper';
 import { checkRateLimit } from './http/rate-limit';
+import { montarEndereco } from './address-parts';
+import { cidadePorCoordenada } from '@/infrastructure/geocoding/reverse-city';
 
 /**
  * O cardápio público e o pedido feito pelo próprio cliente.
@@ -18,7 +20,13 @@ import { checkRateLimit } from './http/rate-limit';
  * o resto do arquivo existe por causa disso.
  */
 export interface MenuPublico {
-  establishment: { name: string; slug: string; deliveryFeeReais: number };
+  establishment: {
+    name: string;
+    slug: string;
+    deliveryFeeReais: number;
+    city: string;
+    state: string | null;
+  };
   /** Conta Mercado Pago conectada — habilita Pix e cartão online. */
   pixOnlineDisponivel: boolean;
   categorias: Array<{
@@ -38,7 +46,7 @@ export async function getMenuPublico(slug: string): Promise<MenuPublico | null> 
 
   const establishment = await prisma.establishment.findUnique({
     where: { slug },
-    select: { id: true, name: true, slug: true, deliveryFeeCents: true },
+    select: { id: true, name: true, slug: true, deliveryFeeCents: true, city: true, state: true },
   });
 
   if (!establishment?.slug) return null;
@@ -84,6 +92,8 @@ export async function getMenuPublico(slug: string): Promise<MenuPublico | null> 
       name: establishment.name,
       slug: establishment.slug,
       deliveryFeeReais: establishment.deliveryFeeCents / 100,
+      city: establishment.city ?? '',
+      state: establishment.state,
     },
     pixOnlineDisponivel: !!credencial,
     categorias: [...porCategoria.entries()].map(([nome, produtos]) => ({ nome, produtos })),
@@ -152,10 +162,20 @@ export async function criarPedidoPublicoAction(
   const modoPagamento = modoDoForm(formData.get('modoPagamento'));
   const online = modoPagamento !== 'entrega';
 
+  const rua = String(formData.get('street') ?? '').trim();
+  const numero = String(formData.get('number') ?? '').trim();
+  const bairro = String(formData.get('neighborhood') ?? '').trim();
+  const cidade = String(formData.get('city') ?? '').trim();
+
+  if (rua.length < 3) return { ok: false, error: 'Informe a rua.' };
+  if (!numero) return { ok: false, error: 'Informe o número. Se não tiver, escreva s/n.' };
+  if (bairro.length < 2) return { ok: false, error: 'Informe o bairro.' };
+  if (cidade.length < 2) return { ok: false, error: 'Informe a cidade.' };
+
   const parsed = createOrderSchema.safeParse({
     customerName: formData.get('customerName'),
     customerPhone: formData.get('customerPhone'),
-    address: formData.get('address'),
+    address: montarEndereco({ rua, numero, bairro, cidade }),
     reference: formData.get('reference'),
     amountReais: 0,
     notes: formData.get('notes'),
@@ -201,6 +221,7 @@ export async function criarPedidoPublicoAction(
       ...parsed.data,
       source: 'SITE',
       paymentStatus: online ? 'PENDING' : null,
+      city: cidade,
       items: parsed.data.items.map((item) => ({
         productId: item.productId,
         quantity: item.quantity,
@@ -340,6 +361,23 @@ export async function consultarPagamentoAction(
       };
     }
     return { ok: false, error: mensagem };
+  }
+}
+
+export async function sugerirCidadeAction(
+  lat: number,
+  lng: number,
+): Promise<{ ok: true; cidade: string } | { ok: false }> {
+  const limite = checkRateLimit('geo:cidade', { max: 30, windowMs: 60_000 });
+  if (!limite.allowed) return { ok: false };
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return { ok: false };
+
+  try {
+    const cidade = await cidadePorCoordenada(lat, lng);
+    if (!cidade) return { ok: false };
+    return { ok: true, cidade };
+  } catch {
+    return { ok: false };
   }
 }
 
