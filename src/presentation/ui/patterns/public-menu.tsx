@@ -35,11 +35,15 @@ type PixPendente = {
 export function PublicMenu({ menu }: { menu: MenuPublico }) {
   const [quantidades, setQuantidades] = useState<Record<string, number>>({});
   const [checkout, setCheckout] = useState(false);
-  const [modoPagamento, setModoPagamento] = useState<'entrega' | 'pix_online'>('entrega');
+  const [modoPagamento, setModoPagamento] = useState<
+    'entrega' | 'pix_online' | 'cartao_online'
+  >('entrega');
   const [erro, setErro] = useState<string | null>(null);
   const [feito, setFeito] = useState<string | null>(null);
   const [pix, setPix] = useState<PixPendente | null>(null);
-  const [pixStatus, setPixStatus] = useState<'PENDING' | 'PAID' | 'EXPIRED'>('PENDING');
+  const [pixStatus, setPixStatus] = useState<
+    'PENDING' | 'PAID' | 'EXPIRED' | 'REJECTED' | 'IN_REVIEW' | 'REFUNDED' | 'CHARGED_BACK' | 'CANCELLED'
+  >('PENDING');
   const [copiado, setCopiado] = useState(false);
   const [pixAviso, setPixAviso] = useState<string | null>(null);
   const [enviando, enviar] = useTransition();
@@ -112,6 +116,11 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
 
       if (resultado.modo === 'entrega') {
         setFeito(resultado.trackingUrl);
+        return;
+      }
+
+      if (resultado.modo === 'cartao') {
+        window.location.href = resultado.checkoutUrl;
         return;
       }
 
@@ -332,21 +341,39 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
             <legend className="text-sm font-medium text-ink">Pagamento</legend>
 
             {menu.pixOnlineDisponivel ? (
-              <label className="flex cursor-pointer items-start gap-2 rounded-lg border p-3 has-checked:border-accent has-checked:bg-accent-soft/30">
-                <input
-                  type="radio"
-                  name="modoPagamentoUi"
-                  className="mt-0.5"
-                  checked={modoPagamento === 'pix_online'}
-                  onChange={() => setModoPagamento('pix_online')}
-                />
-                <span>
-                  <span className="block text-sm font-medium text-ink">Pagar agora (Pix)</span>
-                  <span className="block text-xs text-ink-muted">
-                    QR Code na tela — confirmação automática
+              <>
+                <label className="flex cursor-pointer items-start gap-2 rounded-lg border p-3 has-checked:border-accent has-checked:bg-accent-soft/30">
+                  <input
+                    type="radio"
+                    name="modoPagamentoUi"
+                    className="mt-0.5"
+                    checked={modoPagamento === 'pix_online'}
+                    onChange={() => setModoPagamento('pix_online')}
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-ink">Pagar agora (Pix)</span>
+                    <span className="block text-xs text-ink-muted">
+                      QR Code na tela — confirmação automática
+                    </span>
                   </span>
-                </span>
-              </label>
+                </label>
+
+                <label className="flex cursor-pointer items-start gap-2 rounded-lg border p-3 has-checked:border-accent has-checked:bg-accent-soft/30">
+                  <input
+                    type="radio"
+                    name="modoPagamentoUi"
+                    className="mt-0.5"
+                    checked={modoPagamento === 'cartao_online'}
+                    onChange={() => setModoPagamento('cartao_online')}
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-ink">Pagar agora (cartão)</span>
+                    <span className="block text-xs text-ink-muted">
+                      Crédito ou débito no Mercado Pago — o dinheiro cai na conta da loja
+                    </span>
+                  </span>
+                </label>
+              </>
             ) : null}
 
             <label className="flex cursor-pointer items-start gap-2 rounded-lg border p-3 has-checked:border-accent has-checked:bg-accent-soft/30">
@@ -390,7 +417,11 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
 
           <Button type="submit" variant="primary" disabled={enviando}>
             {enviando ? <LoaderCircle className="animate-spin" /> : null}
-            {modoPagamento === 'pix_online' ? 'Gerar Pix e pedir' : 'Enviar pedido'}
+            {modoPagamento === 'pix_online'
+              ? 'Gerar Pix e pedir'
+              : modoPagamento === 'cartao_online'
+                ? 'Pagar com cartão'
+                : 'Enviar pedido'}
           </Button>
         </form>
       ) : (

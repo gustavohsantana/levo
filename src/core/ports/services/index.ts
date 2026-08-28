@@ -150,6 +150,26 @@ export interface PaymentGateway {
     expiresAt: Date;
   }>;
 
+  /**
+   * Checkout Pro: o cliente paga cartão na página do Mercado Pago.
+   * 3DS, PCI e antifraude ficam lá; o Levô só guarda o id da preferência.
+   */
+  createCardCheckout(input: {
+    accessToken: string;
+    orderId: string;
+    amountCents: number;
+    description: string;
+    payerEmail?: string;
+    statementDescriptor?: string;
+    backUrl?: string;
+    expiresInMinutes: number;
+    sandbox?: boolean;
+  }): Promise<{
+    externalId: string;
+    checkoutUrl: string;
+    expiresAt: Date;
+  }>;
+
   getCharge(input: {
     accessToken: string;
     externalId: string;

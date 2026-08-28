@@ -40,6 +40,7 @@ export interface OrderView {
   createdAt: string;
   trackingUrl: string;
   whatsappLink: string | null;
+  paymentStatus: 'PENDING' | 'PAID' | 'EXPIRED' | 'CANCELLED' | 'REFUNDED' | 'IN_REVIEW' | 'REJECTED' | 'CHARGED_BACK' | null;
 }
 
 export interface RouteView {
@@ -102,6 +103,7 @@ function toOrderView(order: Order, whatsapp: string | null, trackingUrl: string)
     createdAt: order.createdAt.toISOString(),
     trackingUrl,
     whatsappLink: whatsapp,
+    paymentStatus: order.paymentStatus,
   };
 }
 

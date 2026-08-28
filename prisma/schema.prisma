@@ -458,6 +458,8 @@ model Payment {
   amountCents     Int
   qrCode          String?
   qrCodeBase64    String?
+  /// Checkout Pro (cartão): página do Mercado Pago. Nulo no Pix.
+  checkoutUrl     String?
   expiresAt       DateTime?
   paidAt          DateTime?
   createdAt       DateTime            @default(now())

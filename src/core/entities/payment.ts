@@ -25,6 +25,8 @@ interface PaymentProps {
   amountCents: number;
   qrCode: string | null;
   qrCodeBase64: string | null;
+  /** Checkout Pro (cartão): URL da página do Mercado Pago. */
+  checkoutUrl: string | null;
   expiresAt: Date | null;
   paidAt: Date | null;
   createdAt: Date;
@@ -46,9 +48,10 @@ export class Payment extends AggregateRoot {
     provider: PaymentProvider;
     externalId: string;
     amountCents: number;
-    qrCode: string;
-    qrCodeBase64: string | null;
-    expiresAt: Date;
+    qrCode?: string | null;
+    qrCodeBase64?: string | null;
+    checkoutUrl?: string | null;
+    expiresAt?: Date | null;
     now: Date;
   }): Payment {
     return new Payment({
@@ -59,9 +62,10 @@ export class Payment extends AggregateRoot {
       externalId: input.externalId,
       status: PaymentStatus.Pending,
       amountCents: input.amountCents,
-      qrCode: input.qrCode,
-      qrCodeBase64: input.qrCodeBase64,
-      expiresAt: input.expiresAt,
+      qrCode: input.qrCode ?? null,
+      qrCodeBase64: input.qrCodeBase64 ?? null,
+      checkoutUrl: input.checkoutUrl ?? null,
+      expiresAt: input.expiresAt ?? null,
       paidAt: null,
       createdAt: input.now,
       updatedAt: input.now,
@@ -94,6 +98,28 @@ export class Payment extends AggregateRoot {
     this.props.updatedAt = at;
   }
 
+  markRejected(at: Date): void {
+    if (this.props.status === PaymentStatus.Paid) return;
+    this.props.status = PaymentStatus.Rejected;
+    this.props.updatedAt = at;
+  }
+
+  markInReview(at: Date): void {
+    if (this.props.status === PaymentStatus.Paid) return;
+    this.props.status = PaymentStatus.InReview;
+    this.props.updatedAt = at;
+  }
+
+  markChargedBack(at: Date): void {
+    this.props.status = PaymentStatus.ChargedBack;
+    this.props.updatedAt = at;
+  }
+
+  markRefunded(at: Date): void {
+    this.props.status = PaymentStatus.Refunded;
+    this.props.updatedAt = at;
+  }
+
   get establishmentId() { return this.props.establishmentId; }
   get orderId() { return this.props.orderId; }
   get provider() { return this.props.provider; }
@@ -102,12 +128,14 @@ export class Payment extends AggregateRoot {
   get amountCents() { return this.props.amountCents; }
   get qrCode() { return this.props.qrCode; }
   get qrCodeBase64() { return this.props.qrCodeBase64; }
+  get checkoutUrl() { return this.props.checkoutUrl; }
   get expiresAt() { return this.props.expiresAt; }
   get paidAt() { return this.props.paidAt; }
   get createdAt() { return this.props.createdAt; }
   get updatedAt() { return this.props.updatedAt; }
 
   isPending(at: Date): boolean {
+    if (this.props.status === PaymentStatus.InReview) return true;
     if (this.props.status !== PaymentStatus.Pending) return false;
     if (this.props.expiresAt && this.props.expiresAt <= at) return false;
     return true;

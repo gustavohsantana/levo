@@ -85,6 +85,21 @@ export async function POST(request: Request) {
       const token = env().MERCADO_PAGO_ACCESS_TOKEN;
       let paymentId = resourceId;
 
+      const collectorId =
+        payload.user_id != null
+          ? String(payload.user_id)
+          : typeof payload.userId === 'string' || typeof payload.userId === 'number'
+            ? String(payload.userId)
+            : null;
+
+      if (!registro && collectorId) {
+        const loja = await prisma.integrationCredential.findFirst({
+          where: { provider: 'MERCADO_PAGO', merchantId: collectorId },
+          select: { establishmentId: true },
+        });
+        if (loja) registro = loja;
+      }
+
       if (!registro && token) {
         const resolvido = await resolverIdPagamentoMp(token, resourceId);
         paymentId = resolvido.paymentId;

@@ -227,9 +227,30 @@ export class Order extends AggregateRoot {
     this.record(OrderEvents.PaymentConfirmed, this.props.establishmentId, { orderId: this.id }, at);
   }
 
-  /** Pix online aguardando transferência — não entra na fila do painel. */
-  isAwaitingOnlinePayment(at: Date): boolean {
-    return this.props.paymentStatus === 'PENDING';
+  markPaymentStatus(status: PaymentStatus): void {
+    this.props.paymentStatus = status;
+  }
+
+  markPaymentChargedBack(at: Date): void {
+    this.props.paymentStatus = 'CHARGED_BACK';
+    this.record(OrderEvents.PaymentChargedBack, this.props.establishmentId, { orderId: this.id }, at);
+  }
+
+  /**
+   * Só entra na fila da cozinha o que não cobra online, ou o que já pagou.
+   * Recusado, em análise e Pix à espera ficam de fora.
+   */
+  get isReleasedToKitchen(): boolean {
+    return (
+      this.props.paymentStatus === null
+      || this.props.paymentStatus === 'PAID'
+      || this.props.paymentStatus === 'CHARGED_BACK'
+    );
+  }
+
+  /** Pagamento online ainda não confirmado — não entra na fila do painel. */
+  isAwaitingOnlinePayment(_at: Date): boolean {
+    return this.props.paymentStatus === 'PENDING' || this.props.paymentStatus === 'IN_REVIEW';
   }
 
   get deliveryFee() { return this.props.deliveryFee; }

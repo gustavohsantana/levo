@@ -29,6 +29,7 @@ export const OrderEvents = {
   CancelledExternally: 'order.cancelled_externally',
   TrackingOpened: 'order.tracking_opened',
   PaymentConfirmed: 'order.payment_confirmed',
+  PaymentChargedBack: 'order.payment_charged_back',
 } as const;
 
 export const RouteEvents = {

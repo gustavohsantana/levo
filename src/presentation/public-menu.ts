@@ -19,7 +19,7 @@ import { checkRateLimit } from './http/rate-limit';
  */
 export interface MenuPublico {
   establishment: { name: string; slug: string; deliveryFeeReais: number };
-  /** Conta Mercado Pago conectada — habilita "Pagar agora (Pix)". */
+  /** Conta Mercado Pago conectada — habilita Pix e cartão online. */
   pixOnlineDisponivel: boolean;
   categorias: Array<{
     nome: string;
@@ -104,11 +104,33 @@ export type PedidoPublicoResult =
       contaTeste: boolean;
       ticketUrl: string | null;
     }
+  | {
+      ok: true;
+      modo: 'cartao';
+      trackingUrl: string;
+      orderId: string;
+      checkoutUrl: string;
+    }
   | { ok: false; error: string };
 
+export type StatusPagamentoOnline =
+  | 'PENDING'
+  | 'PAID'
+  | 'EXPIRED'
+  | 'REJECTED'
+  | 'IN_REVIEW'
+  | 'REFUNDED'
+  | 'CHARGED_BACK'
+  | 'CANCELLED';
+
 export type ConsultaPagamentoResult =
-  | { ok: true; status: 'PENDING' | 'PAID' | 'EXPIRED'; trackingUrl: string }
+  | { ok: true; status: StatusPagamentoOnline; trackingUrl: string }
   | { ok: false; error: string };
+
+function modoDoForm(valor: FormDataEntryValue | null): 'entrega' | 'pix_online' | 'cartao_online' {
+  if (valor === 'pix_online' || valor === 'cartao_online') return valor;
+  return 'entrega';
+}
 
 export async function criarPedidoPublicoAction(
   slug: string,
@@ -127,7 +149,8 @@ export async function criarPedidoPublicoAction(
 
   if (!establishment) return { ok: false, error: 'Cardápio não encontrado.' };
 
-  const modoPagamento = formData.get('modoPagamento') === 'pix_online' ? 'pix_online' : 'entrega';
+  const modoPagamento = modoDoForm(formData.get('modoPagamento'));
+  const online = modoPagamento !== 'entrega';
 
   const parsed = createOrderSchema.safeParse({
     customerName: formData.get('customerName'),
@@ -138,7 +161,7 @@ export async function criarPedidoPublicoAction(
     notes: formData.get('notes'),
     items: parseItens(formData.get('items')),
     paymentMethod:
-      modoPagamento === 'pix_online'
+      online
         ? 'ONLINE'
         : (formData.get('paymentMethod') as string) || undefined,
   });
@@ -153,7 +176,7 @@ export async function criarPedidoPublicoAction(
 
   let credencialMp: { liveMode: boolean | null } | null = null;
 
-  if (modoPagamento === 'pix_online') {
+  if (online) {
     credencialMp = await prisma.integrationCredential.findUnique({
       where: {
         establishmentId_provider: {
@@ -165,7 +188,10 @@ export async function criarPedidoPublicoAction(
     });
 
     if (!credencialMp) {
-      return { ok: false, error: 'Pix online indisponível nesta loja. Escolha pagar na entrega.' };
+      return {
+        ok: false,
+        error: 'Pagamento online indisponível nesta loja. Escolha pagar na entrega.',
+      };
     }
   }
 
@@ -174,7 +200,7 @@ export async function criarPedidoPublicoAction(
     const order = await container.useCases.createOrder.execute({
       ...parsed.data,
       source: 'SITE',
-      paymentStatus: modoPagamento === 'pix_online' ? 'PENDING' : null,
+      paymentStatus: online ? 'PENDING' : null,
       items: parsed.data.items.map((item) => ({
         productId: item.productId,
         quantity: item.quantity,
@@ -186,6 +212,41 @@ export async function criarPedidoPublicoAction(
 
     if (modoPagamento === 'entrega') {
       return { ok: true, modo: 'entrega', trackingUrl };
+    }
+
+    const establishmentRow = await prisma.establishment.findUnique({
+      where: { id: establishment.id },
+      select: { name: true },
+    });
+    const nomeLoja = establishmentRow?.name ?? 'Pedido';
+    const basePagamento = `${baseUrl}/cardapio/${slug}/pagamento?pedido=${order.id}`;
+
+    if (modoPagamento === 'cartao_online') {
+      const payment = await container.useCases.createPayment.execute({
+        orderId: order.id,
+        method: 'card',
+        payerEmail: emailPixDoCliente(
+          order.id,
+          parsed.data.customerPhone,
+          credencialMp?.liveMode === false,
+        ),
+        sandbox: credencialMp?.liveMode === false,
+        description: `Pedido em ${nomeLoja}`,
+        statementDescriptor: nomeLoja,
+        backUrl: basePagamento,
+      });
+
+      if (!payment.checkoutUrl) {
+        return { ok: false, error: 'Não foi possível abrir o pagamento no cartão. Tente de novo.' };
+      }
+
+      return {
+        ok: true,
+        modo: 'cartao',
+        trackingUrl,
+        orderId: order.id,
+        checkoutUrl: payment.checkoutUrl,
+      };
     }
 
     const payment = await container.useCases.createPayment.execute({
@@ -219,6 +280,7 @@ export async function consultarPagamentoAction(
   slug: string,
   orderId: string,
   forcarConsulta = false,
+  paymentId?: string | null,
 ): Promise<ConsultaPagamentoResult> {
   const prisma = getPrismaClient(env().DATABASE_URL);
   const establishment = await prisma.establishment.findUnique({
@@ -241,22 +303,33 @@ export async function consultarPagamentoAction(
     const trackingUrl = `${baseUrl}/t/${order.trackingToken.value}`;
 
     if (payment.status === 'PAID' || order.paymentStatus === 'PAID') {
-      return { ok: true, status: 'PAID', trackingUrl };
+      if (!forcarConsulta) return { ok: true, status: 'PAID', trackingUrl };
+    }
+
+    if (
+      payment.status === 'REJECTED'
+      || payment.status === 'EXPIRED'
+      || payment.status === 'CHARGED_BACK'
+      || payment.status === 'REFUNDED'
+    ) {
+      if (!forcarConsulta) {
+        return { ok: true, status: payment.status, trackingUrl };
+      }
     }
 
     const now = Date.now();
-    if (!payment.isPending(new Date(now))) {
-      return { ok: true, status: 'EXPIRED', trackingUrl };
+    if (!payment.isPending(new Date(now)) && payment.status !== 'PAID') {
+      return { ok: true, status: payment.status === 'EXPIRED' ? 'EXPIRED' : payment.status, trackingUrl };
     }
 
     if (forcarConsulta) {
       const remoto = await container.useCases.confirmPayment.execute({
-        externalId: payment.externalId,
+        externalId: paymentId || payment.externalId,
       });
       return { ok: true, status: remoto, trackingUrl };
     }
 
-    return { ok: true, status: 'PENDING', trackingUrl };
+    return { ok: true, status: payment.status === 'IN_REVIEW' ? 'IN_REVIEW' : 'PENDING', trackingUrl };
   } catch (cause) {
     const mensagem = toFormError(cause);
     if (/mercadolibre|resource not found|consultar o pagamento/i.test(mensagem)) {

@@ -23,10 +23,14 @@ export class CreatePayment {
     orderId: string;
     payerEmail?: string;
     sandbox?: boolean;
+    method?: 'pix' | 'card';
+    description?: string;
+    statementDescriptor?: string;
+    backUrl?: string;
   }): Promise<Payment & { ticketUrl: string | null }> {
     const accessToken = await this.getAccessToken(this.establishmentId).catch(() => {
       throw new ConfigurationError(
-        'Mercado Pago: conecte a conta do lojista em Integrações antes de cobrar Pix online.',
+        'Mercado Pago: conecte a conta do lojista em Integrações antes de cobrar online.',
         { establishmentId: this.establishmentId },
       );
     });
@@ -38,7 +42,7 @@ export class CreatePayment {
         throw new NotFoundError('Pedido', input.orderId);
       }
       if (order.paymentStatus !== 'PENDING') {
-        throw new ValidationError('Este pedido não aguarda pagamento Pix online.');
+        throw new ValidationError('Este pedido não aguarda pagamento online.');
       }
 
       const existente = await repos.payments.findByOrderId(input.orderId);
@@ -47,8 +51,48 @@ export class CreatePayment {
       return { existente: null, order };
     });
 
-    if (pedido.existente) return Object.assign(pedido.existente, { ticketUrl: null });
+    if (pedido.existente) {
+      return Object.assign(pedido.existente, { ticketUrl: null });
+    }
     const order = pedido.order!;
+    const method = input.method ?? 'pix';
+    const now = this.clock.now();
+
+    if (method === 'card') {
+      const charge = await this.gateway.createCardCheckout({
+        accessToken,
+        orderId: input.orderId,
+        amountCents: order.amount.cents,
+        description: input.description ?? `Pedido ${input.orderId}`,
+        payerEmail: input.payerEmail,
+        statementDescriptor: input.statementDescriptor,
+        backUrl: input.backUrl,
+        expiresInMinutes: 60,
+        sandbox: input.sandbox,
+      });
+
+      return this.uow.run(async (repos) => {
+        const duplicado = await repos.payments.findByOrderId(input.orderId);
+        if (duplicado) {
+          return Object.assign(duplicado, { ticketUrl: null });
+        }
+
+        const payment = Payment.create({
+          id: this.ids.next(),
+          establishmentId: this.establishmentId,
+          orderId: input.orderId,
+          provider: 'MERCADO_PAGO',
+          externalId: charge.externalId,
+          amountCents: order.amount.cents,
+          checkoutUrl: charge.checkoutUrl,
+          expiresAt: charge.expiresAt,
+          now,
+        });
+
+        await repos.payments.save(payment);
+        return Object.assign(payment, { ticketUrl: null });
+      });
+    }
 
     const charge = await this.gateway.createPixCharge({
       accessToken,
@@ -58,8 +102,6 @@ export class CreatePayment {
       expiresInMinutes: 30,
       sandbox: input.sandbox,
     });
-
-    const now = this.clock.now();
 
     return this.uow.run(async (repos) => {
       const duplicado = await repos.payments.findByOrderId(input.orderId);

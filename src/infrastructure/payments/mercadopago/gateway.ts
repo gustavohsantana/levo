@@ -31,6 +31,25 @@ interface MpOrderResponse {
   };
 }
 
+export function mapMercadoPagoStatus(status: string, detail = ''): PaymentStatus {
+  if (status === 'approved') return PaymentStatus.Paid;
+  if (status === 'refunded') return PaymentStatus.Refunded;
+  if (status === 'charged_back') return PaymentStatus.ChargedBack;
+  if (status === 'rejected') return PaymentStatus.Rejected;
+  if (
+    status === 'in_process'
+    || status === 'in_mediation'
+    || detail.includes('pending_contingency')
+    || detail.includes('pending_review')
+  ) {
+    return PaymentStatus.InReview;
+  }
+  if (status === 'cancelled' || status === 'expired' || detail.includes('expired')) {
+    return PaymentStatus.Expired;
+  }
+  return PaymentStatus.Pending;
+}
+
 function centsToAmountNumber(cents: number): number {
   return Math.round(cents) / 100;
 }
@@ -183,6 +202,101 @@ export class MercadoPagoGateway implements PaymentGateway {
     };
   }
 
+  async createCardCheckout(input: {
+    accessToken: string;
+    orderId: string;
+    amountCents: number;
+    description: string;
+    payerEmail?: string;
+    statementDescriptor?: string;
+    backUrl?: string;
+    expiresInMinutes: number;
+    sandbox?: boolean;
+  }) {
+    const expiresAt = new Date(Date.now() + input.expiresInMinutes * 60_000);
+    const baseUrl = process.env.PUBLIC_BASE_URL?.replace(/\/$/, '');
+    const backUrl = input.backUrl?.startsWith('https://') ? input.backUrl : undefined;
+
+    const response = await fetch('https://api.mercadopago.com/checkout/preferences', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${input.accessToken}`,
+        'Content-Type': 'application/json',
+        'X-Idempotency-Key': `card-${input.orderId}`,
+      },
+      body: JSON.stringify({
+        items: [
+          {
+            id: input.orderId,
+            title: input.description.slice(0, 127) || 'Pedido',
+            quantity: 1,
+            currency_id: 'BRL',
+            unit_price: centsToAmountNumber(input.amountCents),
+          },
+        ],
+        payer: {
+          email: input.payerEmail ?? `pedido-${input.orderId.slice(0, 8)}@levoentregas.app`,
+        },
+        external_reference: input.orderId,
+        binary_mode: true,
+        statement_descriptor: (input.statementDescriptor ?? 'LEVO').slice(0, 22),
+        payment_methods: {
+          excluded_payment_types: [{ id: 'ticket' }, { id: 'bank_transfer' }, { id: 'atm' }],
+          installments: 12,
+          default_installments: 1,
+        },
+        expires: true,
+        expiration_date_from: new Date().toISOString(),
+        expiration_date_to: expiresAt.toISOString(),
+        ...(baseUrl
+          ? { notification_url: `${baseUrl}/api/webhooks/payments/mercadopago` }
+          : {}),
+        ...(backUrl
+          ? {
+              back_urls: { success: backUrl, failure: backUrl, pending: backUrl },
+              auto_return: 'approved',
+            }
+          : {}),
+      }),
+    });
+
+    const body = (await response.json().catch(() => ({}))) as {
+      id?: string;
+      init_point?: string;
+      sandbox_init_point?: string;
+      message?: string;
+      error?: string;
+      cause?: Array<{ description?: string }>;
+    };
+
+    if (!response.ok) {
+      const detalhe =
+        body.cause?.[0]?.description
+        ?? body.message
+        ?? body.error
+        ?? `HTTP ${response.status}`;
+      throw new ExternalServiceError(
+        'Mercado Pago',
+        detalhe,
+        { orderId: input.orderId, status: response.status, cause: body.cause },
+      );
+    }
+
+    const checkoutUrl = input.sandbox
+      ? (body.sandbox_init_point ?? body.init_point)
+      : (body.init_point ?? body.sandbox_init_point);
+
+    if (!body.id || !checkoutUrl) {
+      throw new ExternalServiceError(
+        'Mercado Pago',
+        'Resposta sem link de pagamento no cartão',
+        { orderId: input.orderId, body },
+      );
+    }
+
+    return { externalId: body.id, checkoutUrl, expiresAt };
+  }
+
   async getCharge(input: { accessToken: string; externalId: string; orderId?: string }) {
     const resolvido = await resolverIdPagamentoMp(input.accessToken, input.externalId);
     let resolvedExternalId = resolvido.paymentId;
@@ -201,6 +315,15 @@ export class MercadoPagoGateway implements PaymentGateway {
     const { ok, status, body } = consulta;
 
     if (!ok) {
+      if (status === 404) {
+        return {
+          status: PaymentStatus.Pending,
+          paidAt: null,
+          amountCents: 0,
+          resolvedExternalId: resolvedExternalId,
+        };
+      }
+
       throw new ExternalServiceError(
         'Mercado Pago',
         'Não foi possível consultar o pagamento. Tente de novo em instantes.',
@@ -208,19 +331,10 @@ export class MercadoPagoGateway implements PaymentGateway {
       );
     }
 
-    const mappedStatus = body.status ?? '';
-    const detail = body.status_detail ?? '';
-    let mapped: PaymentStatus = PaymentStatus.Pending;
-
-    if (mappedStatus === 'approved') mapped = PaymentStatus.Paid;
-    else if (mappedStatus === 'cancelled' || mappedStatus === 'expired' || detail.includes('expired')) {
-      mapped = PaymentStatus.Expired;
-    }
-
     const amountCents = Math.round((body.transaction_amount ?? 0) * 100);
 
     return {
-      status: mapped,
+      status: mapMercadoPagoStatus(body.status ?? '', body.status_detail ?? ''),
       paidAt: body.date_approved ? new Date(body.date_approved) : null,
       amountCents,
       resolvedExternalId,

@@ -91,9 +91,7 @@ function buildRepositories(db: InMemoryDatabase): Repositories {
     },
     async listPending() {
       return [...db.orders.values()].filter(
-        (order) =>
-          order.status === 'NEW'
-          && order.paymentStatus !== 'PENDING',
+        (order) => order.status === 'NEW' && order.isReleasedToKitchen,
       );
     },
     async listOfDay(day) {

@@ -64,13 +64,13 @@ export function MercadoPagoConnect({
           {precisaReconectar ? (
             <>
               A autorização não vale mais — ela pode ter sido revogada na sua conta do Mercado
-              Pago. <strong className="text-ink">O Pix saiu do seu cardápio</strong> até você
-              conectar de novo.
+              Pago. <strong className="text-ink">Pix e cartão saíram do seu cardápio</strong> até
+              você conectar de novo.
             </>
           ) : (
             <>
-              O cliente paga por Pix na hora do pedido e o dinheiro cai na sua conta do Mercado
-              Pago, com a sua taxa. O Levô não fica com nada da venda.
+              O cliente paga por Pix ou cartão na hora do pedido e o dinheiro cai na sua conta do
+              Mercado Pago, com a sua taxa. O Levô não fica com nada da venda.
             </>
           )}
         </p>
@@ -192,7 +192,7 @@ export function MercadoPagoConnect({
               </>
             ) : (
               <>
-                O Pix do cardápio cai em{' '}
+                O Pix e o cartão do cardápio caem em{' '}
                 <strong className="text-ink">{conta?.nome ?? conta?.email ?? 'sua conta'}</strong>.
               </>
             )}

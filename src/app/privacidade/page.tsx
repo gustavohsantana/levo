@@ -86,6 +86,11 @@ export default function PrivacidadePage() {
           autoriza a integração: os pedidos vêm de lá e o estado da entrega pode voltar para lá.
         </li>
         <li>
+          <strong>Mercado Pago</strong>, quando o cliente paga Pix ou cartão no cardápio: nome,
+          e-mail de cobrança e valor. Número do cartão e CVV não passam pelo Levô — ficam no
+          Mercado Pago.
+        </li>
+        <li>
           <strong>Provedores de hospedagem e banco de dados</strong>, que armazenam as informações
           para que o serviço funcione.
         </li>

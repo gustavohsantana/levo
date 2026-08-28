@@ -24,6 +24,17 @@ const PAGAMENTOS: Record<string, string> = {
   ONLINE: 'Pago no aplicativo',
 };
 
+const STATUS_PAGAMENTO: Record<string, string> = {
+  PENDING: 'Aguardando pagamento',
+  PAID: 'Pago online',
+  EXPIRED: 'Pagamento expirado',
+  CANCELLED: 'Pagamento cancelado',
+  REFUNDED: 'Estornado',
+  IN_REVIEW: 'Pagamento em análise',
+  REJECTED: 'Cartão recusado',
+  CHARGED_BACK: 'Contestação (chargeback)',
+};
+
 export function OrderDetailDialog({
   pedido,
   trigger,
@@ -146,6 +157,9 @@ export function OrderDetailDialog({
               {pedido.paymentMethod ? (
                 <p className="mt-1.5 text-xs text-ink-muted">
                   {PAGAMENTOS[pedido.paymentMethod] ?? pedido.paymentMethod}
+                  {pedido.paymentStatus
+                    ? ` · ${STATUS_PAGAMENTO[pedido.paymentStatus] ?? pedido.paymentStatus}`
+                    : null}
                 </p>
               ) : null}
             </section>

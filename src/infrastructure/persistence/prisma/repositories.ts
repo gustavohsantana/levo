@@ -1,5 +1,6 @@
 import type {
   OrderStatus as OrderStatusEnum,
+  PaymentStatus as PaymentStatusEnum,
   Prisma,
   RouteStatus as RouteStatusEnum,
 } from '@/generated/prisma/client';
@@ -127,12 +128,16 @@ export class PrismaOrderRepository extends TenantScoped implements OrderReposito
      * pendente tem dezenas de linhas, não milhares — o custo do `include` aqui
      * é irrelevante perto de não poder ver o pedido.
      *
-     * Pix online aguardando transferência fica fora: não é pedido confirmado.
+     * Pagamento online só entra na fila depois de aprovado. Recusado, em
+     * análise e Pix à espera não são pedido da cozinha.
      */
     const rows = await this.tx.order.findMany({
       where: this.scoped({
         status: PENDING_ORDER,
-        OR: [{ paymentStatus: null }, { paymentStatus: { not: 'PENDING' as const } }],
+        OR: [
+          { paymentStatus: null },
+          { paymentStatus: { in: ['PAID', 'CHARGED_BACK'] as PaymentStatusEnum[] } },
+        ],
       }),
       include: { items: true },
       orderBy: { createdAt: 'asc' },
