@@ -74,12 +74,30 @@ export async function POST(request: Request) {
         },
       });
 
-      const registro = await prisma.payment.findUnique({
+      let registro = await prisma.payment.findUnique({
         where: {
           provider_externalId: { provider: 'MERCADO_PAGO', externalId: resourceId },
         },
         select: { establishmentId: true },
       });
+
+      if (!registro) {
+        const token = env().MERCADO_PAGO_ACCESS_TOKEN;
+        if (token) {
+          const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${resourceId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (mpRes.ok) {
+            const mp = (await mpRes.json()) as { external_reference?: string };
+            if (mp.external_reference) {
+              registro = await prisma.payment.findFirst({
+                where: { orderId: mp.external_reference, provider: 'MERCADO_PAGO' },
+                select: { establishmentId: true },
+              });
+            }
+          }
+        }
+      }
 
       if (registro) {
         containerFor(registro.establishmentId)

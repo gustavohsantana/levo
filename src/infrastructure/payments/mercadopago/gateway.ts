@@ -13,6 +13,8 @@ interface MpPaymentMethod {
 
 interface MpPayment {
   id?: string;
+  /** Id numérico usado em GET /v1/payments/{id} e nos webhooks. */
+  reference_id?: string | number;
   status?: string;
   status_detail?: string;
   amount?: string;
@@ -26,6 +28,14 @@ interface MpOrderResponse {
   transactions?: { payments?: MpPayment[] | MpPayment };
 }
 
+interface MpPaymentBody {
+  status?: string;
+  status_detail?: string;
+  transaction_amount?: number;
+  date_approved?: string;
+  message?: string;
+}
+
 function centsToAmount(cents: number): string {
   return (cents / 100).toFixed(2);
 }
@@ -34,6 +44,39 @@ function parsePayments(body: MpOrderResponse): MpPayment | null {
   const raw = body.transactions?.payments;
   if (!raw) return null;
   return Array.isArray(raw) ? (raw[0] ?? null) : raw;
+}
+
+function isOrdersPaymentId(id: string): boolean {
+  return id.startsWith('PAY');
+}
+
+async function buscarIdNumerico(
+  accessToken: string,
+  orderId: string,
+): Promise<string | null> {
+  const response = await fetch(
+    `${PAYMENTS_URL}/search?external_reference=${encodeURIComponent(orderId)}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+
+  const body = (await response.json().catch(() => ({}))) as {
+    results?: Array<{ id?: string | number }>;
+  };
+
+  const id = body.results?.[0]?.id;
+  return id != null ? String(id) : null;
+}
+
+async function lerPagamento(
+  accessToken: string,
+  externalId: string,
+): Promise<{ ok: boolean; status: number; body: MpPaymentBody }> {
+  const response = await fetch(`${PAYMENTS_URL}/${externalId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  const body = (await response.json().catch(() => ({}))) as MpPaymentBody;
+  return { ok: response.ok, status: response.status, body };
 }
 
 export class MercadoPagoGateway implements PaymentGateway {
@@ -98,7 +141,20 @@ export class MercadoPagoGateway implements PaymentGateway {
 
     const payment = parsePayments(body);
     const qrCode = payment?.payment_method?.qr_code;
-    const externalId = payment?.id ?? body.id;
+
+    let externalId =
+      payment?.reference_id != null
+        ? String(payment.reference_id)
+        : payment?.id ?? body.id;
+
+    /*
+     * Orders API devolve id PAY01…; consulta e webhook usam o numérico
+     * (175108590393). Sem o reference_id, buscamos pelo external_reference.
+     */
+    if (!externalId || isOrdersPaymentId(externalId)) {
+      const numerico = await buscarIdNumerico(input.accessToken, input.orderId);
+      if (numerico) externalId = numerico;
+    }
 
     if (!externalId || !qrCode) {
       throw new ExternalServiceError(
@@ -119,33 +175,38 @@ export class MercadoPagoGateway implements PaymentGateway {
     };
   }
 
-  async getCharge(input: { accessToken: string; externalId: string }) {
-    const response = await fetch(`${PAYMENTS_URL}/${input.externalId}`, {
-      headers: { Authorization: `Bearer ${input.accessToken}` },
-    });
+  async getCharge(input: { accessToken: string; externalId: string; orderId?: string }) {
+    let resolvedExternalId = input.externalId;
+    let consulta = await lerPagamento(input.accessToken, input.externalId);
 
-    const body = (await response.json().catch(() => ({}))) as {
-      status?: string;
-      status_detail?: string;
-      transaction_amount?: number;
-      date_approved?: string;
-      message?: string;
-    };
+    if (
+      !consulta.ok
+      && input.orderId
+      && isOrdersPaymentId(input.externalId)
+    ) {
+      const numerico = await buscarIdNumerico(input.accessToken, input.orderId);
+      if (numerico) {
+        resolvedExternalId = numerico;
+        consulta = await lerPagamento(input.accessToken, numerico);
+      }
+    }
 
-    if (!response.ok) {
+    const { ok, status, body } = consulta;
+
+    if (!ok) {
       throw new ExternalServiceError(
         'Mercado Pago',
-        body.message ?? `HTTP ${response.status}`,
-        { externalId: input.externalId, status: response.status },
+        body.message ?? `HTTP ${status}`,
+        { externalId: input.externalId, status },
       );
     }
 
-    const status = body.status ?? '';
+    const mappedStatus = body.status ?? '';
     const detail = body.status_detail ?? '';
     let mapped: PaymentStatus = PaymentStatus.Pending;
 
-    if (status === 'approved') mapped = PaymentStatus.Paid;
-    else if (status === 'cancelled' || status === 'expired' || detail.includes('expired')) {
+    if (mappedStatus === 'approved') mapped = PaymentStatus.Paid;
+    else if (mappedStatus === 'cancelled' || mappedStatus === 'expired' || detail.includes('expired')) {
       mapped = PaymentStatus.Expired;
     }
 
@@ -155,6 +216,7 @@ export class MercadoPagoGateway implements PaymentGateway {
       status: mapped,
       paidAt: body.date_approved ? new Date(body.date_approved) : null,
       amountCents,
+      resolvedExternalId,
     };
   }
 }

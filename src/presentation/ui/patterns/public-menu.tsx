@@ -41,7 +41,9 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
   const [pix, setPix] = useState<PixPendente | null>(null);
   const [pixStatus, setPixStatus] = useState<'PENDING' | 'PAID' | 'EXPIRED'>('PENDING');
   const [copiado, setCopiado] = useState(false);
+  const [pixAviso, setPixAviso] = useState<string | null>(null);
   const [enviando, enviar] = useTransition();
+  const [checando, checar] = useTransition();
   const inicioPix = useRef<number | null>(null);
 
   const produtos = useMemo(
@@ -74,7 +76,10 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
       if (!resultado.ok) return;
 
       setPixStatus(resultado.status);
-      if (resultado.status === 'PAID') setFeito(resultado.trackingUrl);
+      if (resultado.status === 'PAID') {
+        setPixAviso(null);
+        setFeito(resultado.trackingUrl);
+      }
     }, 3000);
 
     return () => clearInterval(intervalo);
@@ -121,6 +126,7 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
         ticketUrl: resultado.ticketUrl,
       });
       setPixStatus('PENDING');
+      setPixAviso(null);
       inicioPix.current = Date.now();
     });
   }
@@ -130,6 +136,37 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
     await navigator.clipboard.writeText(pix.qrCode);
     setCopiado(true);
     setTimeout(() => setCopiado(false), 2000);
+  }
+
+  function jaPaguei() {
+    if (!pix) return;
+    setPixAviso(null);
+
+    checar(async () => {
+      const resultado = await consultarPagamentoAction(
+        menu.establishment.slug,
+        pix.orderId,
+        true,
+      );
+
+      if (!resultado.ok) {
+        setPixAviso(resultado.error);
+        return;
+      }
+
+      setPixStatus(resultado.status);
+      if (resultado.status === 'PAID') {
+        setFeito(resultado.trackingUrl);
+        return;
+      }
+      if (resultado.status === 'EXPIRED') {
+        setPixAviso('O código expirou. Faça um novo pedido para gerar outro Pix.');
+        return;
+      }
+      setPixAviso(
+        'Ainda não identificamos o pagamento. Confira no banco e tente de novo em alguns segundos.',
+      );
+    });
   }
 
   if (feito) {
@@ -205,10 +242,21 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
               {copiado ? 'Copiado!' : 'Copiar código Pix'}
             </Button>
 
-            <p className="flex items-center justify-center gap-2 text-sm text-ink-muted">
-              <LoaderCircle className="size-4 animate-spin" aria-hidden />
-              Aguardando pagamento…
-            </p>
+            <Button type="button" variant="primary" onClick={jaPaguei} disabled={checando}>
+              {checando ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
+              {checando ? 'Conferindo…' : 'Já paguei'}
+            </Button>
+
+            {pixAviso ? (
+              <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-950 hairline">
+                {pixAviso}
+              </p>
+            ) : (
+              <p className="flex items-center justify-center gap-2 text-sm text-ink-muted">
+                <LoaderCircle className="size-4 animate-spin" aria-hidden />
+                Aguardando pagamento…
+              </p>
+            )}
           </>
         ) : null}
       </main>

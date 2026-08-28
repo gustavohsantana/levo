@@ -153,5 +153,12 @@ export interface PaymentGateway {
   getCharge(input: {
     accessToken: string;
     externalId: string;
-  }): Promise<{ status: PaymentStatus; paidAt: Date | null; amountCents: number }>;
+    /** Fallback quando o banco guardou id PAY01… da Orders API. */
+    orderId?: string;
+  }): Promise<{
+    status: PaymentStatus;
+    paidAt: Date | null;
+    amountCents: number;
+    resolvedExternalId: string;
+  }>;
 }

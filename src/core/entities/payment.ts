@@ -72,6 +72,15 @@ export class Payment extends AggregateRoot {
     return new Payment(props);
   }
 
+  /**
+   * Orders API grava PAY01…; webhook e GET /v1/payments usam o id numérico.
+   * Sem isto, o pagamento cai no Mercado Pago e a tela nunca confirma.
+   */
+  rebindExternalId(id: string): void {
+    if (!id || id === this.props.externalId) return;
+    this.props.externalId = id;
+  }
+
   markPaid(at: Date): void {
     if (this.props.status === PaymentStatus.Paid) return;
     this.props.status = PaymentStatus.Paid;
