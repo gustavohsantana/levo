@@ -101,6 +101,8 @@ export type PedidoPublicoResult =
       qrCodeBase64: string | null;
       expiresAt: string;
       amountCents: number;
+      contaTeste: boolean;
+      ticketUrl: string | null;
     }
   | { ok: false; error: string };
 
@@ -193,6 +195,7 @@ export async function criarPedidoPublicoAction(
         parsed.data.customerPhone,
         credencialMp?.liveMode === false,
       ),
+      sandbox: credencialMp?.liveMode === false,
     });
 
     return {
@@ -204,6 +207,8 @@ export async function criarPedidoPublicoAction(
       qrCodeBase64: payment.qrCodeBase64,
       expiresAt: payment.expiresAt?.toISOString() ?? new Date().toISOString(),
       amountCents: payment.amountCents,
+      contaTeste: credencialMp?.liveMode === false,
+      ticketUrl: payment.ticketUrl,
     };
   } catch (cause) {
     return { ok: false, error: toFormError(cause) };

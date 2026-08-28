@@ -17,6 +17,8 @@ type PixPendente = {
   qrCodeBase64: string | null;
   expiresAt: string;
   amountCents: number;
+  contaTeste: boolean;
+  ticketUrl: string | null;
 };
 
 /**
@@ -115,6 +117,8 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
         qrCodeBase64: resultado.qrCodeBase64,
         expiresAt: resultado.expiresAt,
         amountCents: resultado.amountCents,
+        contaTeste: resultado.contaTeste,
+        ticketUrl: resultado.ticketUrl,
       });
       setPixStatus('PENDING');
       inicioPix.current = Date.now();
@@ -162,6 +166,28 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
 
         {pixStatus === 'PENDING' ? (
           <>
+            {pix.contaTeste ? (
+              <div className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-950 hairline">
+                <p className="font-medium">Conta de teste do Mercado Pago</p>
+                <p className="mt-1 leading-relaxed">
+                  Este Pix <strong>não funciona</strong> no app do banco (Nubank, Inter…). O código
+                  contém <code className="text-xs">TESTUSER</code> — é simulado. Em teste, o pagamento
+                  costuma confirmar sozinho em alguns segundos; ou conecte a conta{' '}
+                  <strong>de produção</strong> em Integrações para cobrar de verdade.
+                </p>
+                {pix.ticketUrl ? (
+                  <a
+                    href={pix.ticketUrl}
+                    className="mt-2 inline-block text-sm font-medium underline"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Abrir página de teste no Mercado Pago
+                  </a>
+                ) : null}
+              </div>
+            ) : null}
+
             <div className="rounded-lg bg-raised p-4 text-center">
               <p className="numeric text-lg font-semibold text-ink">{currency(pix.amountCents)}</p>
               {pix.qrCodeBase64 ? (

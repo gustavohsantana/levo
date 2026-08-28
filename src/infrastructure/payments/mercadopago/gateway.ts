@@ -8,6 +8,7 @@ interface MpPaymentMethod {
   id?: string;
   qr_code?: string;
   qr_code_base64?: string;
+  ticket_url?: string;
 }
 
 interface MpPayment {
@@ -42,6 +43,7 @@ export class MercadoPagoGateway implements PaymentGateway {
     amountCents: number;
     payerEmail?: string;
     expiresInMinutes: number;
+    sandbox?: boolean;
   }) {
     const amount = centsToAmount(input.amountCents);
     const expiration = `PT${input.expiresInMinutes}M`;
@@ -65,7 +67,13 @@ export class MercadoPagoGateway implements PaymentGateway {
             expiration_time: expiration,
           }],
         },
-        payer: input.payerEmail ? { email: input.payerEmail } : undefined,
+        payer: input.payerEmail
+          ? {
+              email: input.payerEmail,
+              // Sandbox: APRO aprova o Pix automaticamente (doc MP — não paga no banco).
+              ...(input.sandbox ? { first_name: 'APRO' } : {}),
+            }
+          : undefined,
       }),
     });
 
@@ -106,6 +114,7 @@ export class MercadoPagoGateway implements PaymentGateway {
       externalId,
       qrCode,
       qrCodeBase64: payment?.payment_method?.qr_code_base64 ?? null,
+      ticketUrl: payment?.payment_method?.ticket_url ?? null,
       expiresAt,
     };
   }

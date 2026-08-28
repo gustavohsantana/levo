@@ -141,10 +141,12 @@ export interface PaymentGateway {
     amountCents: number;
     payerEmail?: string;
     expiresInMinutes: number;
+    sandbox?: boolean;
   }): Promise<{
     externalId: string;
     qrCode: string;
     qrCodeBase64: string | null;
+    ticketUrl: string | null;
     expiresAt: Date;
   }>;
 

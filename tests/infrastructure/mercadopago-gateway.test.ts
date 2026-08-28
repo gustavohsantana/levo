@@ -38,6 +38,7 @@ describe('MercadoPagoGateway', () => {
     expect(charge.externalId).toBe('PAY456');
     expect(charge.qrCode).toBe('00020126pix');
     expect(charge.qrCodeBase64).toBe('abc123');
+    expect(charge.ticketUrl).toBeNull();
 
     const fetchMock = vi.mocked(fetch);
     expect(fetchMock).toHaveBeenCalledOnce();

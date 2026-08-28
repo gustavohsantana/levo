@@ -22,7 +22,8 @@ export class CreatePayment {
   async execute(input: {
     orderId: string;
     payerEmail?: string;
-  }): Promise<Payment> {
+    sandbox?: boolean;
+  }): Promise<Payment & { ticketUrl: string | null }> {
     const accessToken = await this.getAccessToken(this.establishmentId).catch(() => {
       throw new ConfigurationError(
         'Mercado Pago: conecte a conta do lojista em Integrações antes de cobrar Pix online.',
@@ -46,7 +47,7 @@ export class CreatePayment {
       return { existente: null, order };
     });
 
-    if (pedido.existente) return pedido.existente;
+    if (pedido.existente) return Object.assign(pedido.existente, { ticketUrl: null });
     const order = pedido.order!;
 
     const charge = await this.gateway.createPixCharge({
@@ -55,13 +56,14 @@ export class CreatePayment {
       amountCents: order.amount.cents,
       payerEmail: input.payerEmail,
       expiresInMinutes: 30,
+      sandbox: input.sandbox,
     });
 
     const now = this.clock.now();
 
     return this.uow.run(async (repos) => {
       const duplicado = await repos.payments.findByOrderId(input.orderId);
-      if (duplicado) return duplicado;
+      if (duplicado) return Object.assign(duplicado, { ticketUrl: null });
 
       const payment = Payment.create({
         id: this.ids.next(),
@@ -77,7 +79,7 @@ export class CreatePayment {
       });
 
       await repos.payments.save(payment);
-      return payment;
+      return Object.assign(payment, { ticketUrl: charge.ticketUrl });
     });
   }
 }
