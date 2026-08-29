@@ -4,6 +4,8 @@ import { containerFor } from '@/composition-root';
 import { env } from '@/env';
 import { verifyMercadoPagoWebhookSignature } from '@/infrastructure/payments/mercadopago/webhook-signature';
 import { resolverIdPagamentoMp } from '@/infrastructure/payments/mercadopago/gateway';
+import { CredentialStore } from '@/infrastructure/integrations/credential-store';
+import { mercadoPagoAccessTokenFor } from '@/infrastructure/payments/mercadopago/factory';
 import { getPrismaClient } from '@/infrastructure/persistence/prisma/client';
 import { toErrorResponse } from '@/presentation/http/error-mapper';
 
@@ -24,6 +26,18 @@ export async function GET() {
     endpoint: 'mercadopago-payment-webhook',
     method: 'POST',
   });
+}
+
+/**
+ * O access token do lojista dono do pagamento.
+ *
+ * Passa pelo `CredentialStore`, que decifra e renova quando está perto de
+ * vencer — o token do Mercado Pago dura cerca de 180 dias, então na prática
+ * isso acontece raramente, mas quando acontece é aqui.
+ */
+async function tokenDoLojista(establishmentId: string): Promise<string> {
+  const store = new CredentialStore(getPrismaClient(env().DATABASE_URL), env().AUTH_SECRET);
+  return mercadoPagoAccessTokenFor(store, establishmentId)();
 }
 
 export async function POST(request: Request) {
@@ -82,7 +96,6 @@ export async function POST(request: Request) {
         select: { establishmentId: true },
       });
 
-      const token = env().MERCADO_PAGO_ACCESS_TOKEN;
       let paymentId = resourceId;
 
       const collectorId =
@@ -92,6 +105,11 @@ export async function POST(request: Request) {
             ? String(payload.userId)
             : null;
 
+      /*
+       * O `user_id` da notificação é a conta que recebeu — o lojista. É por ele
+       * que se descobre de quem é o pagamento **antes** de precisar falar com o
+       * Mercado Pago, e é o que torna este webhook multi-loja.
+       */
       if (!registro && collectorId) {
         const loja = await prisma.integrationCredential.findFirst({
           where: { provider: 'MERCADO_PAGO', merchantId: collectorId },
@@ -99,6 +117,19 @@ export async function POST(request: Request) {
         });
         if (loja) registro = loja;
       }
+
+      /*
+       * O token é o do lojista, não o da nossa aplicação.
+       *
+       * Consultar o pagamento de um cliente com o token de outra conta devolve
+       * 404 — e com uma loja só isso passa despercebido, porque as duas contas
+       * são a mesma. O token do `.env` fica como último recurso, para o caso em
+       * que a notificação chega sem `user_id` e sem pagamento conhecido; aí é a
+       * única chance de descobrir de quem é.
+       */
+      const token = registro
+        ? await tokenDoLojista(registro.establishmentId).catch(() => null)
+        : env().MERCADO_PAGO_ACCESS_TOKEN;
 
       if (!registro && token) {
         const resolvido = await resolverIdPagamentoMp(token, resourceId);
