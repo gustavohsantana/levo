@@ -131,6 +131,15 @@ export interface GeocodeCacheRepository {
 
 export interface PaymentRepository {
   save(payment: Payment): Promise<void>;
+  /**
+   * Pagamentos pendentes criados antes de `antesDe`, para reconciliação.
+   *
+   * O webhook do gateway é otimização, não garantia: cobrança que expira sem
+   * ser paga não gera notificação confiável, e o pagamento fica pendente para
+   * sempre — com o pedido preso em "aguardando pagamento" na tela do cliente.
+   * Com Pix isso é a maioria dos casos, porque carrinho abandonado é a regra.
+   */
+  listPendingOlderThan(antesDe: Date, limite: number): Promise<Payment[]>;
   findById(id: string): Promise<Payment | null>;
   findByOrderId(orderId: string): Promise<Payment | null>;
   findByExternalId(provider: Payment['provider'], externalId: string): Promise<Payment | null>;

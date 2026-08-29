@@ -259,6 +259,63 @@ async function drenarAvisos(): Promise<void> {
   }
 }
 
+/**
+ * Quanto esperar antes de perguntar ao gateway sobre um pagamento pendente.
+ *
+ * Curto demais e conversamos com o Mercado Pago sobre cobrança que o cliente
+ * ainda está lendo no aplicativo do banco. Dois minutos deixam o webhook fazer
+ * o trabalho no caso comum — ele chega em segundos — e a reconciliação cobre o
+ * que ele não cobre.
+ */
+const RECONCILIAR_APOS_MS = 2 * 60_000;
+
+/** Teto por rodada. Fila grande se resolve em ciclos, não numa avalanche. */
+const RECONCILIAR_POR_CICLO = 20;
+
+/**
+ * Pergunta ao gateway o que aconteceu com os pagamentos pendentes.
+ *
+ * O webhook é otimização, não garantia. Cobrança de Pix que expira sem ser paga
+ * não gera notificação confiável — e, sem isto, o pagamento fica PENDING para
+ * sempre e o pedido trava em "aguardando pagamento" na tela do cliente. Com Pix
+ * isso é a maioria dos casos, porque carrinho abandonado é a regra, não a
+ * exceção.
+ *
+ * Quem sabe decidir é o `ConfirmPayment`: ele relê o status no gateway, confere
+ * o valor e marca pago ou expirado. Aqui só existe quem o chame sem depender de
+ * o webhook ter chegado.
+ */
+async function reconciliarPagamentos(establishmentId: string): Promise<void> {
+  const container = containerFor(establishmentId);
+  const antesDe = new Date(Date.now() - RECONCILIAR_APOS_MS);
+
+  const pendentes = await container.read((repos) =>
+    repos.payments.listPendingOlderThan(antesDe, RECONCILIAR_POR_CICLO),
+  );
+
+  for (const pagamento of pendentes) {
+    try {
+      const resultado = await container.useCases.confirmPayment.execute({
+        externalId: pagamento.externalId,
+      });
+
+      // Só registra quando saiu de pendente: um log por pagamento a cada 30
+      // segundos afogaria os erros que importam.
+      if (resultado !== 'PENDING') {
+        logger.info(
+          { establishmentId, paymentId: pagamento.id, orderId: pagamento.orderId, resultado },
+          'pagamento.reconciliado',
+        );
+      }
+    } catch (cause) {
+      logger.error(
+        { establishmentId, paymentId: pagamento.id, cause: String(cause) },
+        'pagamento.reconciliacao_falhou',
+      );
+    }
+  }
+}
+
 async function tick(): Promise<void> {
   const prisma = getPrismaClient(config.DATABASE_URL);
   const establishments = await prisma.establishment.findMany({ select: { id: true } });
@@ -287,6 +344,21 @@ async function tick(): Promise<void> {
 
   // Depois de importar: o que entrou nesta rodada pode ter gerado aviso.
   await drenarAvisos();
+
+  /*
+   * Isolado por estabelecimento: gateway fora do ar numa loja não pode impedir
+   * a reconciliação das outras.
+   */
+  for (const establishment of establishments) {
+    try {
+      await reconciliarPagamentos(establishment.id);
+    } catch (cause) {
+      logger.error(
+        { establishmentId: establishment.id, cause: String(cause) },
+        'pagamento.reconciliacao_falhou',
+      );
+    }
+  }
 }
 
 /** Roda uma vez por dia, junto com um dos ciclos. */

@@ -165,6 +165,21 @@ export class PrismaPaymentRepository extends TenantScoped implements PaymentRepo
     return row ? PaymentMapper.toDomain(row) : null;
   }
 
+  async listPendingOlderThan(antesDe: Date, limite: number): Promise<Payment[]> {
+    const rows = await this.tx.payment.findMany({
+      where: this.scoped({
+        status: 'PENDING' as PaymentStatusEnum,
+        createdAt: { lt: antesDe },
+      }),
+      // Mais antigos primeiro: são os que já venceram, e cada rodada limpa a
+      // frente da fila em vez de revisitar sempre os mesmos recentes.
+      orderBy: { createdAt: 'asc' },
+      take: limite,
+    });
+
+    return rows.map(PaymentMapper.toDomain);
+  }
+
   async findByOrderId(orderId: string): Promise<Payment | null> {
     const row = await this.tx.payment.findFirst({ where: this.scoped({ orderId }) });
     return row ? PaymentMapper.toDomain(row) : null;

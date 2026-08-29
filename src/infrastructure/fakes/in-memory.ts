@@ -238,6 +238,12 @@ function buildRepositories(db: InMemoryDatabase): Repositories {
     async findById(id) {
       return db.payments.get(id) ?? null;
     },
+    async listPendingOlderThan(antesDe, limite) {
+      return [...db.payments.values()]
+        .filter((payment) => payment.status === 'PENDING' && payment.createdAt < antesDe)
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+        .slice(0, limite);
+    },
     async findByOrderId(orderId) {
       return [...db.payments.values()].find((payment) => payment.orderId === orderId) ?? null;
     },
