@@ -22,7 +22,6 @@ const schema = z.object({
   IFOOD_ENABLED: z.enum(['true', 'false']).default('false'),
   IFOOD_CLIENT_ID: z.string().optional(),
   IFOOD_CLIENT_SECRET: z.string().optional(),
-  IFOOD_MERCHANT_ID: z.string().optional(),
 
   AIQFOME_ENABLED: z.enum(['true', 'false']).default('false'),
   AIQFOME_API_KEY: z.string().optional(),
