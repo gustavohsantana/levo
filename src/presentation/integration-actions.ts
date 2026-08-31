@@ -304,12 +304,27 @@ export async function desconectarAiqfome(): Promise<{ ok: boolean; error?: strin
  * Liga o par Public Key + Access Token do `.env` neste estabelecimento.
  *
  * São os nomes do painel: produção e teste são o mesmo tipo de par, em abas
- * diferentes. O token é o da aplicação, então quem clicar nisto recebe nessa
- * conta. OAuth de lojista (cada um com a conta dele) é outro fluxo.
+ * diferentes. O token é o **da aplicação**, então quem clicar nisto passa a
+ * receber naquela conta — não na dele.
+ *
+ * Isso é atalho de piloto, e por isso não existe em produção. Com dois
+ * lojistas, os dois clicariam e o dinheiro dos dois cairia na mesma conta: o
+ * pior tipo de defeito, porque não dá erro nenhum e só aparece no extrato de
+ * quem não recebeu. Em produção o caminho é o OAuth, em que cada um autoriza a
+ * própria conta.
  */
 export async function conectarMercadoPagoDoEnv(
   modo: 'teste' | 'producao',
 ): Promise<{ ok: boolean; error?: string }> {
+  if (env().isProduction) {
+    return {
+      ok: false,
+      error:
+        'Em produção, cada loja conecta a própria conta do Mercado Pago. ' +
+        'Use "Conectar Mercado Pago".',
+    };
+  }
+
   try {
     const credencial = mercadoPagoEnvCredentials(modo);
     if (!credencial) {
