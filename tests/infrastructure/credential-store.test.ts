@@ -5,13 +5,44 @@ import { decryptToken, encryptToken } from '@/infrastructure/security/token-ciph
 
 const SECRET = 'segredo-de-teste-com-mais-de-32-caracteres!!';
 
-/** Prisma de mentira, só com o que o store usa. */
+/**
+ * Prisma de mentira que MODELA a trava, em vez de fingir que ela existe.
+ *
+ * `$transaction` é serializado por uma fila, como o `FOR UPDATE` serializa no
+ * Postgres, e o `upsert` altera a linha que o `findUnique` seguinte devolve.
+ * Sem essas duas coisas, um teste de concorrência passaria mesmo com o código
+ * errado — que é o pior tipo de teste verde.
+ */
 function fakePrisma(row: Record<string, unknown> | null) {
-  const upsert = vi.fn().mockResolvedValue({});
-  return {
-    client: { integrationCredential: { findUnique: vi.fn().mockResolvedValue(row), upsert } },
-    upsert,
+  let atual = row;
+  const upsert = vi.fn(async (args: { update: Record<string, unknown>; create?: Record<string, string | null> }) => {
+    atual = { ...(atual ?? {}), ...args.update };
+    return {};
+  });
+
+  const modelo = {
+    integrationCredential: {
+      findUnique: vi.fn(async () => atual),
+      upsert,
+    },
   };
+
+  let fila: Promise<unknown> = Promise.resolve();
+
+  const client = {
+    ...modelo,
+    $queryRaw: vi.fn().mockResolvedValue([]),
+    $executeRawUnsafe: vi.fn().mockResolvedValue(0),
+    $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => {
+      const minhaVez = fila.then(() =>
+        fn({ ...modelo, $queryRaw: client.$queryRaw, $executeRawUnsafe: client.$executeRawUnsafe }),
+      );
+      fila = minhaVez.catch(() => undefined);
+      return minhaVez;
+    }),
+  };
+
+  return { client, upsert };
 }
 
 function storedRow(overrides: Record<string, unknown> = {}) {
@@ -66,7 +97,7 @@ describe('CredentialStore', () => {
     expect(renew).toHaveBeenCalledWith('refresh-atual');
 
     // E o que foi gravado precisa estar cifrado.
-    const gravado = upsert.mock.calls[0][0].update;
+    const gravado = upsert.mock.calls[0][0].update as Record<string, string>;
     expect(gravado.accessToken).not.toContain('token-novo');
     expect(decryptToken(gravado.accessToken, SECRET)).toBe('token-novo');
   });
@@ -85,7 +116,7 @@ describe('CredentialStore', () => {
     }));
 
     // Sobrescrever com null condenaria o lojista a reautorizar na próxima vez.
-    const gravado = upsert.mock.calls[0][0].update;
+    const gravado = upsert.mock.calls[0][0].update as Record<string, string>;
     expect(decryptToken(gravado.refreshToken, SECRET)).toBe('refresh-atual');
   });
 
@@ -131,7 +162,7 @@ describe('CredentialStore', () => {
       liveMode: null,
     }));
 
-    const gravado = upsert.mock.calls[0][0].update;
+    const gravado = upsert.mock.calls[0][0].update as Record<string, string>;
     expect(gravado.publicKey).toBe('APP_USR-chave-publica');
     expect(gravado.liveMode).toBe(true);
   });
@@ -180,7 +211,7 @@ describe('CredentialStore', () => {
       merchantId: 'loja-9',
     });
 
-    const criado = upsert.mock.calls[0][0].create;
+    const criado = upsert.mock.calls[0][0].create as Record<string, string>;
     expect(criado.accessToken).not.toContain('token-em-claro');
     expect(decryptToken(criado.accessToken, SECRET)).toBe('token-em-claro');
     expect(decryptToken(criado.refreshToken, SECRET)).toBe('refresh-em-claro');
@@ -202,5 +233,76 @@ describe('CredentialStore — credencial ilegível', () => {
 
     await expect(store.read('est-1', 'IFOOD')).rejects.toThrow(/AUTH_SECRET/);
     await expect(store.read('est-1', 'IFOOD')).rejects.toThrow(/Reconecte/);
+  });
+
+  /**
+   * O caso que matou o token do aiqfome em 31/08.
+   *
+   * Dois workers na mesma loja renovaram ao mesmo tempo. O provedor rotaciona o
+   * refresh token a cada renovação, então a segunda chamada invalidou o que a
+   * primeira tinha acabado de gravar — e a integração morreu até o lojista
+   * reautorizar no portal.
+   *
+   * Guardar a escrita não resolveria: o estrago está na CHAMADA duplicada, que
+   * acontece antes de qualquer gravação. Por isso o teste é sobre quantas vezes
+   * o provedor foi chamado, e não sobre qual valor sobrou gravado.
+   */
+  it('duas renovações simultâneas chamam o provedor uma vez só', async () => {
+    const { client } = fakePrisma(
+      storedRow({ expiresAt: new Date(Date.now() + 60 * 1000) }),
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const store = new CredentialStore(client as any, SECRET);
+
+    let rodadas = 0;
+    const renew = vi.fn(async (): Promise<StoredTokens> => {
+      rodadas += 1;
+      // Latência de rede: sem ela, as duas chamadas não se sobrepõem e o teste
+      // passaria mesmo sem trava nenhuma.
+      await new Promise((r) => setTimeout(r, 20));
+      return {
+        accessToken: `token-${rodadas}`,
+        refreshToken: `refresh-${rodadas}`,
+        expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000),
+      };
+    });
+
+    const [a, b] = await Promise.all([
+      store.accessTokenFor('est-1', 'AIQFOME', renew),
+      store.accessTokenFor('est-1', 'AIQFOME', renew),
+    ]);
+
+    expect(renew).toHaveBeenCalledTimes(1);
+    // Quem esperou recebe o token que o primeiro gravou, não um segundo.
+    expect(a).toBe('token-1');
+    expect(b).toBe('token-1');
+  });
+
+  it('quem espera pela trava não chama o provedor com o refresh token velho', async () => {
+    const { client } = fakePrisma(
+      storedRow({ expiresAt: new Date(Date.now() + 60 * 1000) }),
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const store = new CredentialStore(client as any, SECRET);
+
+    const usados: string[] = [];
+    const renew = vi.fn(async (refreshToken: string): Promise<StoredTokens> => {
+      usados.push(refreshToken);
+      await new Promise((r) => setTimeout(r, 20));
+      return {
+        accessToken: 'token-novo',
+        refreshToken: 'refresh-novo',
+        expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000),
+      };
+    });
+
+    await Promise.all([
+      store.accessTokenFor('est-1', 'AIQFOME', renew),
+      store.accessTokenFor('est-1', 'AIQFOME', renew),
+    ]);
+
+    // O refresh velho e usado uma vez. Uma segunda chamada com ele e o que o
+    // provedor responde com invalid_grant.
+    expect(usados).toEqual(['refresh-atual']);
   });
 });
