@@ -4,6 +4,7 @@ import { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
+  Ban,
   Check,
   ChefHat,
   LoaderCircle,
@@ -18,6 +19,7 @@ import type { OrderView, RouteView } from '@/presentation/queries';
 import { Button } from '../primitives';
 import { clockTime, currency } from '../format';
 import { PinPickerDialog } from './pin-picker-dialog';
+import { CancelOrderDialog } from './cancel-order-dialog';
 import { OrderDetailDialog } from './order-detail-dialog';
 import { SourceTag } from './source-tag';
 import { StartRouteButton } from './start-route-button';
@@ -324,12 +326,40 @@ function OrderCard({
           fica no cartão em vez de num aviso separado que o dono precisa
           procurar.
         */}
+        {/*
+          Cancelar fica ao lado de aceitar porque é ali que a decisão acontece
+          — mandar o dono abrir o detalhe para recusar um pedido que ele já
+          decidiu recusar é passo a mais no momento de mais pressa.
+          Discreto de propósito: fantasma contra o contorno do aceitar, para
+          que a mão que corre não erre o alvo. O diálogo de motivo é a trava.
+        */}
+        {pedido.source === 'IFOOD' ? (
+          <CancelOrderDialog
+            orderId={pedido.id}
+            customerName={pedido.customerName}
+            trigger={
+              <Button
+                size="sm"
+                variant="ghost"
+                className="ml-auto text-ink-faint hover:bg-danger-soft hover:text-danger"
+              >
+                <Ban />
+                Cancelar
+              </Button>
+            }
+          />
+        ) : null}
+
         {!pedido.isGeocoded ? (
           <PinPickerDialog
             order={pedido}
             origin={origin}
             trigger={
-              <Button size="sm" variant="outline" className="ml-auto">
+              <Button
+                size="sm"
+                variant="outline"
+                className={pedido.source === 'IFOOD' ? '' : 'ml-auto'}
+              >
                 <MapPinOff />
                 Localizar
               </Button>
@@ -339,7 +369,7 @@ function OrderCard({
           <Button
             size="sm"
             variant="outline"
-            className="ml-auto"
+            className={pedido.source === 'IFOOD' ? '' : 'ml-auto'}
             disabled={pendente}
             onClick={() =>
               startTransition(async () => {
