@@ -23,6 +23,12 @@ export function FinishedOrders({ orders }: { orders: OrderView[] }) {
   if (finished.length === 0) return null;
 
   const entregues = finished.filter((o) => o.status === 'DELIVERED').length;
+  /*
+   * Cancelado ganha contagem própria no cabeçalho, ao lado de entregue.
+   * Somados num total só, três cancelamentos numa tarde passavam despercebidos
+   * — e é justamente o número que o dono precisa ver sem abrir nada.
+   */
+  const cancelados = finished.filter((o) => o.status === 'CANCELLED').length;
 
   return (
     <section>
@@ -36,6 +42,12 @@ export function FinishedOrders({ orders }: { orders: OrderView[] }) {
             <span className="text-xs text-ink-faint">
               <span className="numeric">{entregues}</span> entregue
               {entregues > 1 ? 's' : ''}
+            </span>
+          ) : null}
+          {cancelados > 0 ? (
+            <span className="text-xs text-danger">
+              <span className="numeric">{cancelados}</span> cancelado
+              {cancelados > 1 ? 's' : ''}
             </span>
           ) : null}
           <span className="ml-auto text-xs text-ink-faint group-open:hidden">mostrar</span>

@@ -229,6 +229,61 @@ export async function advanceOrderStageAction(
 }
 
 /**
+ * Motivos que a plataforma aceita para cancelar AQUELE pedido.
+ *
+ * Consultado na hora em que o lojista abre o diálogo, e não guardado: a lista
+ * muda com o estado do pedido, e um código velho é recusado na hora de usar.
+ *
+ * Lista vazia não é erro — significa que a plataforma não ofereceu motivo, e o
+ * cancelamento segue com o padrão dela.
+ */
+export type ReasonsResult =
+  | { ok: true; reasons: Array<{ code: string; description: string }> }
+  | { ok: false; error: string };
+
+export async function cancellationReasonsAction(orderId: string): Promise<ReasonsResult> {
+  try {
+    const session = await requireSession();
+    const motivos = await containerFor(session.establishmentId).useCases.cancelOrder.reasons(
+      orderId,
+    );
+    return {
+      ok: true,
+      reasons: motivos.map((m) => ({ code: m.cancelCodeId, description: m.description })),
+    };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+/**
+ * Cancela o pedido na plataforma de origem.
+ *
+ * Síncrono, diferente das outras transições: o lojista precisa saber na hora se
+ * o iFood recusou. Se enfileirasse, ele fecharia a tela achando que resolveu e
+ * a comida sairia assim mesmo.
+ */
+export async function cancelOrderAction(
+  orderId: string,
+  reason: string,
+  code: string,
+): Promise<ActionResult> {
+  try {
+    const session = await requireSession();
+    await containerFor(session.establishmentId).useCases.cancelOrder.execute(
+      orderId,
+      reason,
+      code,
+    );
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+
+  revalidatePath('/dashboard');
+  return { ok: true };
+}
+
+/**
  * Cidade e estado da operação.
  *
  * Editável porque entra em toda busca de endereço: um piloto em Pouso Alegre e

@@ -108,10 +108,34 @@ export interface OrderSource {
  *
  * Comando ausente não é erro: a caixa de saída marca como resolvido e segue.
  */
+/**
+ * Um motivo aceito para cancelar um pedido específico.
+ *
+ * A lista não é fixa nem decorável: depende do estado do pedido e de quem pede
+ * o cancelamento. O código errado é recusado pela plataforma — e, em produção,
+ * o motivo é o que decide quem paga a multa.
+ */
+export interface CancellationReason {
+  cancelCodeId: string;
+  description: string;
+}
+
 export interface MarketplaceCommands {
   readonly kind: OrderSourceKind;
   /** Aceito pelo lojista. */
   confirm?(externalOrderId: string): Promise<void>;
+  /**
+   * Motivos que a plataforma aceita para AQUELE pedido.
+   *
+   * Opcional como os demais: nem toda origem tem cancelamento pela API. Sem
+   * este método, o pedido só pode ser cancelado do lado de lá.
+   */
+  cancellationReasons?(externalOrderId: string): Promise<CancellationReason[]>;
+  /**
+   * Pede o cancelamento. Pedir não é cancelar — quem decide é a plataforma, e a
+   * confirmação chega depois, como evento.
+   */
+  requestCancellation?(externalOrderId: string, reason: string, code: string): Promise<void>;
   /** Saiu da cozinha, esperando o entregador. */
   markReady?(externalOrderId: string): Promise<void>;
   /** Saiu para entrega. */

@@ -312,17 +312,27 @@ export class Order extends AggregateRoot {
    * Cancelado na plataforma de origem — pelo cliente ou pela própria loja, fora
    * do Levô.
    *
-   * Diferente das outras transições, esta aceita QUALQUER estado de partida e
-   * não valida nada: o fato já aconteceu lá fora, e recusá-lo aqui só produziria
-   * um painel que discorda da realidade. Um pedido já entregue é o único que
-   * não regride — entrega feita não se desfaz por cancelamento tardio.
+   * Aceita QUALQUER estado de partida, inclusive entregue, e não valida nada: o
+   * fato já aconteceu lá fora, e recusá-lo aqui produz um painel que discorda
+   * da realidade.
+   *
+   * Entregue também regride, e isso é deliberado. A versão anterior desistia
+   * calada nesse caso, para não desfazer a entrega do motoboy — mas quem
+   * cancela um pedido do marketplace decide se o lojista recebe. Mostrar
+   * "Entregue" num pedido que o iFood cancelou esconde justamente a parte que
+   * dói: a comida saiu e o dinheiro não vem. O trabalho do motoboy não se
+   * perde — ele vive na parada da rota, que é outro registro.
+   *
+   * `entregue` no evento preserva a distinção para quem for auditar depois.
    */
   markCancelledExternally(now = new Date()): void {
-    if (this.props.status === OrderStatus.Delivered) return;
+    if (this.props.status === OrderStatus.Cancelled) return;
+
+    const entregue = this.props.status === OrderStatus.Delivered;
 
     this.props.status = OrderStatus.Cancelled;
     this.props.routeId = null;
-    this.record(OrderEvents.CancelledExternally, this.props.establishmentId, {}, now);
+    this.record(OrderEvents.CancelledExternally, this.props.establishmentId, { entregue }, now);
   }
 
   /**

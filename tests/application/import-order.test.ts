@@ -186,8 +186,19 @@ describe('ImportOrderFromSource — mudanças de estado na plataforma', () => {
     expect(result.updated).toBe(0);
   });
 
-  it('não regride um pedido já entregue', async () => {
-    // Cancelamento que chega depois da entrega feita não desfaz a entrega.
+  /*
+   * Este teste já exigiu o contrário: entrega feita não regredia por
+   * cancelamento tardio, para não desfazer o trabalho do motoboy.
+   *
+   * A regra virou depois de custar uma tarde. O iFood cancelou um pedido e o
+   * painel seguiu mostrando "Entregue" — sem log, sem evento, sem nada para
+   * investigar. Quem cancela decide se o lojista recebe, e esconder isso
+   * esconde justamente a parte que dói: a comida saiu e o dinheiro não vem.
+   *
+   * O trabalho do motoboy não se perde: ele vive na parada da rota, que é outro
+   * registro. E o evento carrega `entregue` para quem for auditar.
+   */
+  it('regride um pedido entregue quando a plataforma cancela', async () => {
     const source = new FakeOrderSource([externalOrder('IF-4')]);
     await importOrders.execute(source);
 
@@ -201,6 +212,6 @@ describe('ImportOrderFromSource — mudanças de estado na plataforma', () => {
     source.changes = [{ externalId: 'IF-4', status: 'CANCELLED' }];
     await importOrders.execute(source);
 
-    expect([...db.orders.values()].find((o) => o.externalId === 'IF-4')!.status).toBe('DELIVERED');
+    expect([...db.orders.values()].find((o) => o.externalId === 'IF-4')!.status).toBe('CANCELLED');
   });
 });

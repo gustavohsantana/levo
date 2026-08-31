@@ -1,10 +1,11 @@
 'use client';
 
 import * as Dialog from '@radix-ui/react-dialog';
-import { MessageCircle, X } from 'lucide-react';
+import { Ban, MessageCircle, X } from 'lucide-react';
 import type { OrderView } from '@/presentation/queries';
 import { Button } from '../primitives';
 import { clockTime, currency, phoneDisplay } from '../format';
+import { CancelOrderDialog } from './cancel-order-dialog';
 import { SourceTag } from './source-tag';
 
 /**
@@ -173,6 +174,30 @@ export function OrderDetailDialog({
               </section>
             ) : null}
           </div>
+
+          {/*
+            Cancelar fica no rodapé do detalhe, longe do fluxo normal e atrás de
+            um segundo diálogo: é a única ação daqui que o lojista não desfaz.
+            Só o iFood por enquanto: no manual não há plataforma para avisar, e
+            a API do aiqfome ainda não expõe cancelamento. Botão que sempre
+            falha é pior que botão ausente — quando eles abrirem o endpoint,
+            muda esta linha.
+          */}
+          {pedido.source === 'IFOOD' &&
+          (pedido.status === 'NEW' || pedido.status === 'IN_ROUTE') ? (
+            <div className="flex justify-end border-t px-5 py-3">
+              <CancelOrderDialog
+                orderId={pedido.id}
+                customerName={pedido.customerName}
+                trigger={
+                  <Button variant="ghost" size="sm" className="text-danger hover:bg-danger-soft">
+                    <Ban />
+                    Cancelar pedido
+                  </Button>
+                }
+              />
+            </div>
+          ) : null}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

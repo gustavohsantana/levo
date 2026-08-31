@@ -16,6 +16,8 @@ import { StartRoute } from './application/use-cases/routes/start-route';
 import { SaveCourier } from '@/application/use-cases/couriers/save-courier';
 import { SetCourierActive } from '@/application/use-cases/couriers/set-courier-active';
 import { AdvanceOrderStage } from '@/application/use-cases/orders/advance-order-stage';
+import { CancelOrder } from '@/application/use-cases/orders/cancel-order';
+import { marketplaceCommandsFor } from '@/infrastructure/integrations/marketplace-factory';
 import { CreatePayment } from '@/application/use-cases/payments/create-payment';
 import { ConfirmPayment } from '@/application/use-cases/payments/confirm-payment';
 import { RenameCategory } from '@/application/use-cases/catalog/rename-category';
@@ -59,6 +61,7 @@ export interface Container {
     removeProduct: RemoveProduct;
     renameCategory: RenameCategory;
     advanceOrderStage: AdvanceOrderStage;
+    cancelOrder: CancelOrder;
     createPayment: CreatePayment;
     confirmPayment: ConfirmPayment;
     saveCourier: SaveCourier;
@@ -121,6 +124,20 @@ export function containerFor(establishmentId: string): Container {
       removeProduct: new RemoveProduct(uow),
       renameCategory: new RenameCategory(uow),
       advanceOrderStage: new AdvanceOrderStage(uow, clock),
+      /*
+       * A origem do pedido escolhe o canal: um estabelecimento pode ter iFood e
+       * aiqfome ligados ao mesmo tempo, e cancelar no lugar errado não faria
+       * nada visível — o pedido seguiria vivo na plataforma certa.
+       */
+      cancelOrder: new CancelOrder(
+        uow,
+        (kind) =>
+          kind === 'IFOOD' || kind === 'AIQFOME'
+            ? marketplaceCommandsFor(credentialStore, establishmentId, kind, config, logger)
+            : Promise.resolve(null),
+        clock,
+        logger,
+      ),
       createPayment: new CreatePayment(
         uow,
         mercadoPagoGateway,
