@@ -1,6 +1,7 @@
 import {
   ExternalServiceError,
   type ExternalOrder,
+  type ExternalOrderItem,
   type ExternalStatusChange,
   type Logger,
   type OrderSource,
@@ -302,7 +303,25 @@ interface IfoodOrder {
     };
   };
   total?: { orderAmount?: number };
+  items?: IfoodItem[];
+  payments?: { methods?: Array<{ method?: string; type?: string; prepaid?: boolean }> };
   observations?: string;
+}
+
+/**
+ * Item do pedido. O iFood aninha em três níveis — item, complemento e
+ * customização do complemento — e `totalPrice` do item já soma os três.
+ */
+interface IfoodItem {
+  name?: string;
+  quantity?: number;
+  totalPrice?: number;
+  price?: number;
+  observations?: string;
+  options?: Array<{
+    name?: string;
+    customizations?: Array<{ name?: string }>;
+  }>;
 }
 
 /**
@@ -329,16 +348,94 @@ export function mapIfoodOrder(
       .filter(Boolean)
       .join(' - ');
 
+  const itens = mapItens(payload.items ?? []);
+
+  // O iFood envia valores em reais, com decimais. Centavos são a moeda do
+  // domínio: arredondar aqui evita float atravessando o sistema.
+  const totalCents = Math.round((payload.total?.orderAmount ?? 0) * 100);
+
   return {
     externalId: payload.id ?? fallbackId,
     customerName: payload.customer?.name?.trim() || 'Cliente iFood',
     customerPhone: payload.customer?.phone?.number ?? null,
     address: formatted,
     reference: address?.complement ?? address?.reference ?? null,
-    // O iFood envia o total em reais, com decimais. Centavos são a moeda do
-    // domínio: arredondar aqui evita float atravessando o sistema.
-    amountCents: Math.round((payload.total?.orderAmount ?? 0) * 100),
+    amountCents: totalCents,
     notes: payload.observations?.trim() || null,
     placedAt: new Date(placedAt),
+    items: itens.length > 0 ? itens : undefined,
+    deliveryFeeCents: itens.length > 0 ? taxaQueFechaOTotal(itens, totalCents) : undefined,
+    paymentMethod: mapPagamento(payload.payments?.methods ?? []),
   };
+}
+
+/**
+ * A diferença entre o total e a soma dos itens.
+ *
+ * Não é só a taxa de entrega: o iFood cobra `additionalFees` por fora, e com
+ * itens o domínio deriva o total deles mais a taxa. Se mandássemos só o
+ * `deliveryFee` de lá, o nosso total ficaria alguns centavos abaixo do que o
+ * cliente pagou — e nada no painel explicaria a diferença.
+ *
+ * Mandar a diferença inteira faz a conta fechar sempre, inclusive absorvendo o
+ * arredondamento de cada linha. O piso em zero é para o caso de desconto maior
+ * que as taxas: raro, porque promoção de marketplace costuma ser bancada por
+ * ele, e o alternativo seria uma taxa negativa que o domínio não representa.
+ */
+function taxaQueFechaOTotal(itens: ExternalOrderItem[], totalCents: number): number {
+  const soma = itens.reduce((t, i) => t + i.unitPriceCents * i.quantity, 0);
+  return Math.max(0, totalCents - soma);
+}
+
+/**
+ * Achata os três níveis do iFood numa linha por item.
+ *
+ * `totalPrice` já inclui complementos e customizações, então eles entram no
+ * NOME e não como linhas próprias — linha própria contaria o dinheiro duas
+ * vezes. O que a cozinha precisa é ler o pedido inteiro de uma vez.
+ */
+function mapItens(items: IfoodItem[]): ExternalOrderItem[] {
+  return items.map((item) => {
+    const extras = (item.options ?? []).flatMap((opcao) => [
+      opcao.name?.trim(),
+      ...(opcao.customizations ?? []).map((c) => c.name?.trim()),
+    ]);
+
+    const detalhes = extras.filter(Boolean).join(', ');
+    const base = item.name?.trim() || 'Item';
+    const observacao = item.observations?.trim();
+
+    const quantidade = Math.max(1, Math.round(item.quantity ?? 1));
+    const linhaCents = Math.round((item.totalPrice ?? item.price ?? 0) * 100);
+
+    return {
+      name: [detalhes ? `${base} (${detalhes})` : base, observacao ? `— ${observacao}` : '']
+        .filter(Boolean)
+        .join(' '),
+      quantity: quantidade,
+      // `totalPrice` é da linha inteira. O domínio guarda unitário e multiplica
+      // de volta, então dividimos aqui — a sobra do arredondamento é absorvida
+      // pela taxa, que é a diferença até o total.
+      unitPriceCents: Math.round(linhaCents / quantidade),
+    };
+  });
+}
+
+/**
+ * Como o cliente pagou.
+ *
+ * Pré-pago vira `ONLINE` seja qual for o meio: para quem entrega, o que importa
+ * é que não há nada a receber na porta. Cartão na maquininha e dinheiro
+ * precisam do meio certo, porque o motoboy sai preparado para eles.
+ */
+function mapPagamento(
+  methods: Array<{ method?: string; type?: string; prepaid?: boolean }>,
+): ExternalOrder['paymentMethod'] {
+  const primeiro = methods[0];
+  if (!primeiro) return undefined;
+  if (primeiro.prepaid || primeiro.type === 'ONLINE') return 'ONLINE';
+
+  return (
+    { CASH: 'CASH', CREDIT: 'CREDIT', DEBIT: 'DEBIT', PIX: 'PIX' } as const
+  )[primeiro.method ?? ''];
 }

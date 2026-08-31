@@ -53,6 +53,19 @@ export interface RouteOptimizer {
   optimize(matrix: number[][]): OptimizedRoute;
 }
 
+/** Uma linha do pedido, como a plataforma de origem a descreve. */
+export interface ExternalOrderItem {
+  /**
+   * O que a cozinha precisa ler. Complementos e customizações vêm dentro do
+   * nome porque o domínio tem uma linha por item, não uma árvore: o preço já
+   * os inclui, e separá-los em linhas próprias contaria o dinheiro duas vezes.
+   */
+  name: string;
+  quantity: number;
+  /** Preço unitário da linha, complementos incluídos. */
+  unitPriceCents: number;
+}
+
 /** Pedido cru vindo de fora, antes de virar entidade. */
 export interface ExternalOrder {
   externalId: string;
@@ -63,6 +76,27 @@ export interface ExternalOrder {
   amountCents: number;
   notes: string | null;
   placedAt: Date;
+  /**
+   * O que foi pedido. Opcional porque nem toda origem descreve o pedido — o
+   * webhook genérico manda só endereço e valor.
+   *
+   * Vazio e ausente significam a mesma coisa aqui: sem itens, o total continua
+   * sendo o que a plataforma disse.
+   */
+  items?: ExternalOrderItem[];
+  /**
+   * Taxa de entrega cobrada pela plataforma.
+   *
+   * Vem de fora em vez de ser recalculada por faixa de distância: o cliente já
+   * pagou este valor, e um número nosso diferente do dele é divergência que
+   * ninguém consegue explicar depois.
+   */
+  deliveryFeeCents?: number;
+  /**
+   * Como o cliente pagou. `ONLINE` quando o marketplace já recebeu — não há o
+   * que cobrar na porta, e é o que o motoboy precisa saber.
+   */
+  paymentMethod?: 'CASH' | 'CREDIT' | 'DEBIT' | 'PIX' | 'ONLINE';
 }
 
 /**

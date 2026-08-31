@@ -147,6 +147,20 @@ export class ImportOrderFromSource {
       const raced = await repos.orders.findBySourceRef(source.kind, external.externalId);
       if (raced) return 'duplicate';
 
+      /*
+       * Os itens vêm sem `productId`: o que o marketplace vendeu não é
+       * necessariamente um produto do nosso catálogo, e inventar o vínculo por
+       * semelhança de nome erraria justamente nos combos. O nome e o preço são
+       * cópia do momento do pedido, que é o que a cozinha precisa ler.
+       */
+      const itens = (external.items ?? []).map((item) => ({
+        productId: null,
+        name: item.name,
+        quantity: item.quantity,
+        unitPrice: Money.fromCents(item.unitPriceCents),
+        discount: Money.zero(),
+      }));
+
       const order = Order.create({
         id: this.ids.next(),
         establishmentId: this.establishmentId,
@@ -158,7 +172,18 @@ export class ImportOrderFromSource {
           : null,
         address,
         coordinates,
+        /*
+         * Com itens, a entidade deriva o total deles mais a taxa e ignora este
+         * `amount` — e o adapter manda a taxa justamente como a diferença até
+         * o total da plataforma, para a conta fechar no centavo.
+         */
         amount: Money.fromCents(external.amountCents),
+        deliveryFee:
+          external.deliveryFeeCents !== undefined
+            ? Money.fromCents(external.deliveryFeeCents)
+            : undefined,
+        paymentMethod: external.paymentMethod ?? null,
+        items: itens,
         notes: external.notes,
         now: external.placedAt ?? this.clock.now(),
       });
