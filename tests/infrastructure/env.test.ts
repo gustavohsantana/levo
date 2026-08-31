@@ -69,10 +69,10 @@ describe('configuração de ambiente', () => {
     await expect(loadEnv({ ...MINIMO, AUTH_SECRET: 'curto' })).rejects.toThrow(/AUTH_SECRET/);
   });
 
-  it('liga o Mercado Pago com Public Key e Access Token de produção', async () => {
+  it('liga o atalho do .env fora de produção', async () => {
     const env = await loadEnv({
       ...MINIMO,
-      NODE_ENV: 'production',
+      NODE_ENV: 'development',
       MERCADO_PAGO_CLIENT_ID: undefined,
       MERCADO_PAGO_CLIENT_SECRET: undefined,
       MERCADO_PAGO_PUBLIC_KEY: 'APP_USR-pk-prod',
@@ -84,6 +84,31 @@ describe('configuração de ambiente', () => {
     expect(env.mercadoPagoEnabled).toBe(true);
     expect(env.mercadoPagoProdEnabled).toBe(true);
     expect(env.mercadoPagoOAuthEnabled).toBe(false);
+  });
+
+  /*
+   * O par do `.env` é o token DA APLICAÇÃO: quem clicar recebe naquela conta,
+   * não na dele. Com dois lojistas, os dois receberiam no mesmo lugar.
+   *
+   * A ação no servidor também recusa em produção, mas depender só disso deixou
+   * na tela um botão que não funcionava — e escondeu o OAuth, que só aparece
+   * quando o atalho não está disponível. O lojista ficou sem caminho nenhum.
+   */
+  it('esconde o atalho do .env em produção, deixando o OAuth aparecer', async () => {
+    const env = await loadEnv({
+      ...MINIMO,
+      NODE_ENV: 'production',
+      MERCADO_PAGO_CLIENT_ID: 'client-id',
+      MERCADO_PAGO_CLIENT_SECRET: 'client-secret',
+      MERCADO_PAGO_PUBLIC_KEY: 'APP_USR-pk-prod',
+      MERCADO_PAGO_ACCESS_TOKEN: 'APP_USR-at-prod',
+      MERCADO_PAGO_PUBLIC_KEY_TEST: undefined,
+      MERCADO_PAGO_ACCESS_TOKEN_TEST: undefined,
+    });
+
+    expect(env.mercadoPagoProdEnabled).toBe(false);
+    expect(env.mercadoPagoOAuthEnabled).toBe(true);
+    expect(env.mercadoPagoEnabled).toBe(true);
   });
 
   it('liga o Mercado Pago com o par de teste, sem Client Secret', async () => {

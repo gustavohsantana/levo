@@ -88,9 +88,20 @@ function load() {
   const mercadoPagoOAuthEnabled = Boolean(
     parsed.data.MERCADO_PAGO_CLIENT_ID && parsed.data.MERCADO_PAGO_CLIENT_SECRET,
   );
-  const mercadoPagoProdEnabled = Boolean(
-    parsed.data.MERCADO_PAGO_PUBLIC_KEY && parsed.data.MERCADO_PAGO_ACCESS_TOKEN,
-  );
+  /*
+   * O par do `.env` é atalho de desenvolvimento, produção ou teste — a aba do
+   * painel do Mercado Pago separa as chaves, não a natureza da coisa. Nos dois
+   * casos o token é o DA APLICAÇÃO: quem clicar recebe naquela conta, não na
+   * dele. Com dois lojistas, os dois receberiam no mesmo lugar.
+   *
+   * Some em produção junto com o de teste. A ação no servidor também recusa,
+   * mas depender só disso deixava na tela um botão que não funciona — e
+   * escondia o OAuth, que é o caminho certo, porque ele só aparecia quando
+   * este aqui não estava disponível.
+   */
+  const mercadoPagoProdEnabled =
+    parsed.data.NODE_ENV !== 'production' &&
+    Boolean(parsed.data.MERCADO_PAGO_PUBLIC_KEY && parsed.data.MERCADO_PAGO_ACCESS_TOKEN);
   const mercadoPagoTestEnabled =
     parsed.data.NODE_ENV !== 'production' &&
     Boolean(parsed.data.MERCADO_PAGO_PUBLIC_KEY_TEST && parsed.data.MERCADO_PAGO_ACCESS_TOKEN_TEST);
