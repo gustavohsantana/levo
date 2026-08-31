@@ -344,6 +344,7 @@ export async function getDashboard() {
         name: establishment.name,
         coordinates: establishment.coordinates.toJSON(),
         deliveryFeeReais: establishment.deliveryFee.reais,
+        autoConfirmOrders: establishment.autoConfirmOrders,
         feeBands: feeBands.map((b) => ({ km: b.uptoMeters / 1000, reais: b.fee.reais })),
       },
       pending: pending.map((order) =>

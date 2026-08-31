@@ -38,6 +38,7 @@ export const EstablishmentMapper = {
       row.state,
       Money.fromCents(row.deliveryFeeCents),
       row.slug,
+      row.autoConfirmOrders,
     );
   },
 };

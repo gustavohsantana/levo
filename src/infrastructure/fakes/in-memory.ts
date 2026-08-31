@@ -44,6 +44,8 @@ export class InMemoryDatabase {
   geocodeCache = new Map<string, Coordinates>();
   /** Avisos enfileirados para o marketplace, por (provedor, pedido, comando). */
   marketplace = new Map<string, MarketplaceCommandEntry>();
+  /** Aceite automático de pedido de marketplace. */
+  autoConfirmOrders = false;
   products = new Map<string, Product>();
   deliveryFeeBands: DeliveryFeeBand[] = [];
   events: DomainEvent[] = [];
@@ -147,6 +149,10 @@ function buildRepositories(db: InMemoryDatabase): Repositories {
   const establishments: EstablishmentRepository = {
     async current() {
       return db.establishment;
+    },
+
+    async setAutoConfirm(ligado) {
+      db.autoConfirmOrders = ligado;
     },
 
     async deliveryFeeBands() {

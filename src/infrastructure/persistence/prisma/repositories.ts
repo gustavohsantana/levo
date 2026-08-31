@@ -297,6 +297,12 @@ export class PrismaEstablishmentRepository extends TenantScoped implements Estab
     if (!row) throw new NotFoundError('Estabelecimento', this.establishmentId);
     return EstablishmentMapper.toDomain(row);
   }
+  async setAutoConfirm(ligado: boolean): Promise<void> {
+    await this.tx.establishment.update({
+      where: { id: this.establishmentId },
+      data: { autoConfirmOrders: ligado },
+    });
+  }
   async saveSettings(
     city: string | null,
     state: string | null,

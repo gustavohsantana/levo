@@ -66,6 +66,16 @@ model Establishment {
   state            String?
   /// Taxa de entrega sugerida ao lancar pedido manual. Editavel no pedido.
   deliveryFeeCents Int      @default(0)
+  /// Aceita sozinho o pedido que chega do marketplace.
+  ///
+  /// O iFood exige confirmacao em ate 3 minutos e penaliza quem passa disso.
+  /// Numa cozinha cheia, ninguem olha a tela a cada dois minutos — e o preco
+  /// de esquecer nao e um aviso, e ranking pior na plataforma.
+  ///
+  /// Desligado por padrao porque aceitar e um compromisso: aceito e pedido que
+  /// vai sair. Quem liga isto esta dizendo que aceita tudo o que chegar, e essa
+  /// decisao e do dono, nao nossa.
+  autoConfirmOrders Boolean @default(false)
   lat              Float
   lng              Float
   createdAt        DateTime @default(now())

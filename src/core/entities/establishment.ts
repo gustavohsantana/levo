@@ -22,6 +22,13 @@ export class Establishment extends Entity {
     readonly deliveryFee: Money = Money.zero(),
     /** Endereço público do cardápio. `null` enquanto o dono não publicou. */
     readonly slug: string | null = null,
+    /**
+     * Aceita sozinho o pedido que chega do marketplace.
+     *
+     * O iFood dá 3 minutos para confirmar e penaliza quem passa disso — prazo
+     * que ninguém cumpre olhando a tela numa cozinha cheia.
+     */
+    readonly autoConfirmOrders: boolean = false,
   ) {
     super(id);
   }

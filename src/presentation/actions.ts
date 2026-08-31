@@ -290,6 +290,28 @@ export async function cancelOrderAction(
  * outro em Curitiba não podem compartilhar o mesmo palpite, e ninguém deveria
  * digitar a própria cidade em cada pedido.
  */
+/**
+ * Liga ou desliga o aceite automático de pedido de marketplace.
+ *
+ * Ação própria, e não parte do formulário de configurações: isto é um
+ * interruptor que se vira no meio do turno, e obrigá-lo a reenviar cidade,
+ * estado e slug faria um campo vazio apagar o que estava certo.
+ */
+export async function alternarAceiteAutomaticoAction(ligado: boolean): Promise<ActionResult> {
+  try {
+    const session = await requireSession();
+    await containerFor(session.establishmentId).read((repos) =>
+      repos.establishments.setAutoConfirm(ligado),
+    );
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+
+  revalidatePath('/dashboard/configuracoes');
+  revalidatePath('/dashboard');
+  return { ok: true };
+}
+
 export async function salvarRegiaoAction(formData: FormData): Promise<ActionResult> {
   const city = String(formData.get('city') ?? '').trim();
   const state = String(formData.get('state') ?? '').trim().toUpperCase();

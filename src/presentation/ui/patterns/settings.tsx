@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { Link2, LoaderCircle, MapPin } from 'lucide-react';
-import { salvarRegiaoAction } from '@/presentation/actions';
+import { alternarAceiteAutomaticoAction, salvarRegiaoAction } from '@/presentation/actions';
 import { DeliveryFeeBands, type Faixa } from './delivery-fee-bands';
 import { Button, Field, Input } from '../primitives';
 
@@ -26,6 +26,7 @@ export function Settings({
     state: string | null;
     deliveryFeeReais: number;
     slug: string | null;
+    autoConfirmOrders: boolean;
     baseUrl: string;
   };
 }) {
@@ -143,7 +144,62 @@ export function Settings({
       </section>
       </form>
 
+      <AceiteAutomatico inicial={establishment.autoConfirmOrders} />
+
       <DeliveryFeeBands inicial={faixas} />
     </div>
+  );
+}
+
+/**
+ * O interruptor do aceite automático.
+ *
+ * Salva no clique, sem botão de confirmar: é um estado só, e um "Salvar" ao
+ * lado de um interruptor faz o dono achar que já valeu quando ainda não valeu.
+ */
+function AceiteAutomatico({ inicial }: { inicial: boolean }) {
+  const [ligado, setLigado] = useState(inicial);
+  const [erro, setErro] = useState<string | null>(null);
+  const [pendente, startTransition] = useTransition();
+
+  return (
+    <section className="rounded-lg bg-surface p-5 hairline">
+      <h2 className="text-sm font-semibold text-ink">Aceitar pedidos automaticamente</h2>
+
+      <p className="mt-1 text-sm leading-relaxed text-ink-muted">
+        O iFood dá <strong className="text-ink">3 minutos</strong> para você aceitar cada pedido e
+        piora sua posição na plataforma quando passa disso — prazo difícil de cumprir com a cozinha
+        cheia. Com isto ligado, o pedido é aceito assim que chega e já entra na fila de preparo.
+      </p>
+
+      <p className="mt-2 text-xs leading-relaxed text-ink-faint">
+        Aceitar é um compromisso: o pedido vai sair. Se você costuma recusar por falta de item ou
+        por estar fora da área, deixe desligado e aceite na mão.
+      </p>
+
+      <label className="mt-4 flex cursor-pointer items-center gap-2.5 text-sm text-ink">
+        <input
+          type="checkbox"
+          checked={ligado}
+          disabled={pendente}
+          onChange={(evento) => {
+            const novo = evento.target.checked;
+            setLigado(novo);
+            setErro(null);
+            startTransition(async () => {
+              const r = await alternarAceiteAutomaticoAction(novo);
+              if (!r.ok) {
+                setLigado(!novo);
+                setErro(r.error ?? 'Não foi possível salvar.');
+              }
+            });
+          }}
+        />
+        {ligado ? 'Ligado' : 'Desligado'}
+        {pendente ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
+      </label>
+
+      {erro ? <p className="mt-2 text-sm text-danger">{erro}</p> : null}
+    </section>
   );
 }

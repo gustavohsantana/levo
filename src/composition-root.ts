@@ -114,7 +114,25 @@ export function containerFor(establishmentId: string): Container {
     useCases: {
       createOrder: new CreateOrder(uow, geocoder, ids, clock, establishmentId),
       geocodeOrder: new GeocodeOrder(uow, geocoder, clock),
-      importOrders: new ImportOrderFromSource(uow, geocoder, ids, clock, establishmentId, logger),
+      importOrders: new ImportOrderFromSource(
+        uow,
+        geocoder,
+        ids,
+        clock,
+        establishmentId,
+        logger,
+        /*
+         * Lido a cada pedido, não uma vez na montagem: o worker vive por horas
+         * e o dono pode ligar o aceite automático no meio do turno.
+         */
+        async () =>
+          (
+            await prisma.establishment.findUnique({
+              where: { id: establishmentId },
+              select: { autoConfirmOrders: true },
+            })
+          )?.autoConfirmOrders ?? false,
+      ),
       planRoute: new PlanRoute(uow, routing, optimizer, ids, clock),
       startRoute: new StartRoute(uow, clock),
       completeStop: new CompleteStop(uow, clock),

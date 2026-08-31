@@ -352,7 +352,7 @@ export function mapIfoodOrder(
 
   // O iFood envia valores em reais, com decimais. Centavos são a moeda do
   // domínio: arredondar aqui evita float atravessando o sistema.
-  const totalCents = Math.round((payload.total?.orderAmount ?? 0) * 100);
+  const totalCents = Math.max(0, Math.round((payload.total?.orderAmount ?? 0) * 100));
 
   return {
     externalId: payload.id ?? fallbackId,
@@ -407,7 +407,13 @@ function mapItens(items: IfoodItem[]): ExternalOrderItem[] {
     const observacao = item.observations?.trim();
 
     const quantidade = Math.max(1, Math.round(item.quantity ?? 1));
-    const linhaCents = Math.round((item.totalPrice ?? item.price ?? 0) * 100);
+    /*
+     * Piso em zero: o domínio não representa dinheiro negativo, e uma linha de
+     * ajuste com valor negativo faria o pedido inteiro ser recusado na
+     * importação. Perder o preço de um item é ruim; perder o pedido é pior — e
+     * a diferença reaparece na taxa, que é o que fecha o total.
+     */
+    const linhaCents = Math.max(0, Math.round((item.totalPrice ?? item.price ?? 0) * 100));
 
     return {
       name: [detalhes ? `${base} (${detalhes})` : base, observacao ? `— ${observacao}` : '']

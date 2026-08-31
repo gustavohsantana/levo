@@ -54,6 +54,15 @@ export interface EstablishmentRepository {
   deliveryFeeBands(): Promise<DeliveryFeeBand[]>;
   saveDeliveryFeeBands(bands: DeliveryFeeBand[]): Promise<void>;
   /** O que a tela de configurações edita. */
+  /**
+   * Liga ou desliga o aceite automático de pedido de marketplace.
+   *
+   * Separado de `saveSettings` de propósito: aquilo é um formulário que o dono
+   * salva inteiro, isto é um interruptor que ele vira sozinho. Junto, virar o
+   * interruptor exigiria reenviar cidade, estado e slug — e um deles chegar
+   * vazio apagaria o que estava certo.
+   */
+  setAutoConfirm(ligado: boolean): Promise<void>;
   saveSettings(
     city: string | null,
     state: string | null,

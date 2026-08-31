@@ -74,8 +74,17 @@ describe('ImportOrderFromSource', () => {
 
     expect(result.imported).toBe(2);
     expect(result.failed).toBe(1);
-    // O que falhou fica sem ack e volta no próximo ciclo de polling.
-    expect(source.acknowledged).toEqual(['IF-1', 'IF-3']);
+    /*
+     * O quebrado tambem sai da fila. Este teste ja exigiu o contrario — o que
+     * falhava ficava sem ack para tentar de novo — e a homologacao do iFood
+     * cobrou a conta: endereco invalido nunca vira valido, entao o pedido
+     * voltava a cada 30 segundos, falhava de novo e levava junto os eventos do
+     * mesmo lote. Perdemos ponto de acknowledgment por causa de um pedido so.
+     *
+     * Falha passageira (rede, banco) continua sem ack e volta. A diferenca e
+     * se repetir tem chance de dar outro resultado.
+     */
+    expect(source.acknowledged).toEqual(['IF-1', 'IF-2', 'IF-3']);
   });
 
   it('importa mesmo com o geocodificador fora do ar', async () => {

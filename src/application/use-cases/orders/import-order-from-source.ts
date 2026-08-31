@@ -1,5 +1,6 @@
 import {
   Address,
+  DomainError,
   type Clock,
   type Geocoder,
   type IdGenerator,
@@ -35,6 +36,13 @@ export class ImportOrderFromSource {
     private readonly clock: Clock,
     private readonly establishmentId: string,
     private readonly logger?: Logger,
+    /**
+     * Se esta loja aceita sozinha o que chega do marketplace.
+     *
+     * Função e não booleano: o worker vive por horas, e o dono pode ligar o
+     * automático no meio do turno sem reiniciar nada.
+     */
+    private readonly aceitaSozinho?: () => Promise<boolean>,
   ) {}
 
   async execute(source: OrderSource): Promise<ImportResult> {
@@ -50,12 +58,34 @@ export class ImportOrderFromSource {
         acknowledged.push(external.externalId);
       } catch (cause) {
         // Um pedido com endereço impossível não pode derrubar a leva inteira.
-        // Ele fica sem ack e volta no próximo ciclo de polling.
         result.failed++;
         this.logger?.error(
           { externalId: external.externalId, source: source.kind, cause: String(cause) },
           'import.failed',
         );
+
+        /*
+         * ⭐ Falha permanente sai da fila; falha passageira volta.
+         *
+         * Sem esta separação, um pedido que o domínio SEMPRE recusa — item com
+         * preço negativo, endereço que não vira `Address` — fica para sempre
+         * sem ack: volta a cada 30 segundos, falha de novo, e leva junto os
+         * eventos que vieram no mesmo lote. Foi assim que perdemos ponto de
+         * acknowledgment na homologação do iFood, com um único pedido travando
+         * a fila por horas.
+         *
+         * O critério é se repetir tem chance de dar outro resultado. Erro de
+         * domínio é sobre o conteúdo, e o conteúdo não muda: insistir é perder
+         * a fila inteira por um pedido. Erro de rede ou de banco é sobre o
+         * momento, e o próximo ciclo pode muito bem funcionar.
+         */
+        if (cause instanceof DomainError) {
+          acknowledged.push(external.externalId);
+          this.logger?.error(
+            { externalId: external.externalId, source: source.kind },
+            'import.descartado_permanente',
+          );
+        }
       }
     }
 
@@ -198,6 +228,33 @@ export class ImportOrderFromSource {
       });
 
       if (!coordinates) order.markGeocodingFailed('endereço não localizado', this.clock.now());
+
+      /*
+       * ⭐ Aceite automático, dentro da transação da importação.
+       *
+       * O iFood exige confirmação em até 3 minutos e penaliza quem passa
+       * disso. Depender de alguém ver a tela não sustenta esse prazo numa
+       * cozinha cheia — e na homologação custou os 10 pontos do cenário de
+       * confirmação, com pedidos aceitos em 4 e 5 minutos.
+       *
+       * Junto com a gravação do pedido, não depois: se o processo morrer entre
+       * as duas coisas, o pedido existiria aqui sem a plataforma saber que foi
+       * aceito. O aviso vai para a caixa de saída, que é o que garante entrega
+       * mesmo com o iFood fora do ar.
+       */
+      if (await this.aceitaSozinho?.().catch(() => false)) {
+        order.markConfirmed(this.clock.now());
+        if ((order.source === 'IFOOD' || order.source === 'AIQFOME') && order.externalId) {
+          await repos.marketplace.enqueue([
+            {
+              establishmentId: order.establishmentId,
+              provider: order.source,
+              externalOrderId: order.externalId,
+              command: 'CONFIRM',
+            },
+          ]);
+        }
+      }
 
       await repos.orders.save(order);
       await repos.events.append(order.pullEvents());
