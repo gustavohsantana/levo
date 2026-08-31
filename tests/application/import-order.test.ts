@@ -198,6 +198,23 @@ describe('ImportOrderFromSource — mudanças de estado na plataforma', () => {
    * O trabalho do motoboy não se perde: ele vive na parada da rota, que é outro
    * registro. E o evento carrega `entregue` para quem for auditar.
    */
+  it('grava evento quando a plataforma muda o estado', async () => {
+    /*
+     * Sem isto o pedido mudava de estado sem rastro: o historico mostrava so
+     * `order.created` para um pedido cancelado horas antes, e nao dava para
+     * saber se quem cancelou foi o cliente, a plataforma ou nos.
+     */
+    const source = new FakeOrderSource([externalOrder('IF-5')]);
+    await importOrders.execute(source);
+    db.events.length = 0;
+
+    source.pending = [];
+    source.changes = [{ externalId: 'IF-5', status: 'CANCELLED' }];
+    await importOrders.execute(source);
+
+    expect(db.events.map((e) => e.name)).toContain('order.cancelled_externally');
+  });
+
   it('regride um pedido entregue quando a plataforma cancela', async () => {
     const source = new FakeOrderSource([externalOrder('IF-4')]);
     await importOrders.execute(source);

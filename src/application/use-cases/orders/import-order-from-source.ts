@@ -101,6 +101,14 @@ export class ImportOrderFromSource {
           else order.markConcludedExternally(this.clock.now());
 
           await repos.orders.save(order);
+          /*
+           * Sem este append, o pedido mudava de estado sem deixar rastro: o
+           * histórico mostrava só `order.created` para um pedido cancelado
+           * horas antes, e não havia como saber se quem cancelou foi o cliente,
+           * a plataforma ou nós. Toda outra transição do sistema grava evento;
+           * esta era a única que não gravava.
+           */
+          await repos.events.append(order.pullEvents());
           return true;
         });
 
