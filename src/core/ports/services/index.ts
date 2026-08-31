@@ -69,6 +69,13 @@ export interface ExternalOrderItem {
 /** Pedido cru vindo de fora, antes de virar entidade. */
 export interface ExternalOrder {
   externalId: string;
+  /**
+   * O numero curto do pedido na plataforma — "1366" no iFood.
+   *
+   * Opcional porque nem toda origem tem um. E o identificador humano: o
+   * `externalId` e um UUID que ninguem le em voz alta no telefone.
+   */
+  displayId?: string;
   customerName: string;
   customerPhone: string | null;
   address: string;

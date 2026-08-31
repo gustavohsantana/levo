@@ -166,6 +166,7 @@ export class ImportOrderFromSource {
         establishmentId: this.establishmentId,
         source: source.kind,
         externalId: external.externalId,
+        displayId: external.displayId ?? null,
         customerName: external.customerName,
         customerPhone: external.customerPhone
           ? PhoneNumber.tryCreate(external.customerPhone)

@@ -279,6 +279,16 @@ function OrderCard({
           <div className="flex items-center gap-1.5">
             <p className="truncate text-sm font-medium text-ink">{pedido.customerName}</p>
             <SourceTag source={pedido.source} />
+            {/*
+              O numero do pedido na plataforma. E por ele que o cliente liga e
+              que o suporte do marketplace pergunta — sem ele, quatro pedidos
+              no mesmo minuto sao quatro cartoes iguais.
+            */}
+            {pedido.displayId ? (
+              <span className="numeric shrink-0 text-xs text-ink-faint">
+                #{pedido.displayId}
+              </span>
+            ) : null}
           </div>
           <p className="truncate text-xs text-ink-faint">{pedido.address}</p>
         </div>

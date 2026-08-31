@@ -356,6 +356,7 @@ export function mapIfoodOrder(
 
   return {
     externalId: payload.id ?? fallbackId,
+    displayId: payload.displayId?.trim() || undefined,
     customerName: payload.customer?.name?.trim() || 'Cliente iFood',
     customerPhone: payload.customer?.phone?.number ?? null,
     address: formatted,

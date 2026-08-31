@@ -62,6 +62,12 @@ export function OrderDetailDialog({
               </div>
               <Dialog.Description className="mt-0.5 text-xs text-ink-muted">
                 {clockTime(pedido.createdAt)}
+                {pedido.displayId ? (
+                  <>
+                    {' · pedido '}
+                    <span className="numeric">#{pedido.displayId}</span>
+                  </>
+                ) : null}
               </Dialog.Description>
             </div>
 

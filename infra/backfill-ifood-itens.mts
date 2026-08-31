@@ -21,10 +21,14 @@ const auth = new IfoodAuth({ clientId: c.IFOOD_CLIENT_ID!, clientSecret: c.IFOOD
 const token = await store.accessTokenFor(est!.id, 'IFOOD', (rt) => auth.refresh(rt));
 
 const alvos = await prisma.order.findMany({
-  where: { establishmentId: est!.id, source: 'IFOOD', items: { none: {} } },
-  select: { id: true, externalId: true, amountCents: true },
+  where: {
+    establishmentId: est!.id,
+    source: 'IFOOD',
+    OR: [{ items: { none: {} } }, { displayId: null }],
+  },
+  select: { id: true, externalId: true, amountCents: true, displayId: true, _count: { select: { items: true } } },
 });
-console.log(`${alvos.length} pedido(s) sem itens\n`);
+console.log(`${alvos.length} pedido(s) incompleto(s)\n`);
 
 for (const pedido of alvos) {
   const r = await fetch(`https://merchant-api.ifood.com.br/order/v1.0/orders/${pedido.externalId}`, {
@@ -37,33 +41,41 @@ for (const pedido of alvos) {
 
   const bruto = await r.json();
   const mapeado = mapIfoodOrder(bruto, pedido.externalId!, bruto.createdAt);
-  if (!mapeado.items?.length) {
-    console.log(`  ${pedido.externalId?.slice(0, 8)}  sem itens no iFood — pulado`);
-    continue;
-  }
+
+  // Itens so entram quando ainda nao ha nenhum: rodar de novo nao duplica.
+  const gravarItens = pedido._count.items === 0 && (mapeado.items?.length ?? 0) > 0;
 
   await prisma.$transaction([
-    prisma.orderItem.createMany({
-      data: mapeado.items.map((i) => ({
-        orderId: pedido.id,
-        productId: null,
-        name: i.name,
-        quantity: i.quantity,
-        unitPriceCents: i.unitPriceCents,
-        discountCents: 0,
-      })),
-    }),
+    ...(gravarItens
+      ? [
+          prisma.orderItem.createMany({
+            data: mapeado.items!.map((i) => ({
+              orderId: pedido.id,
+              productId: null,
+              name: i.name,
+              quantity: i.quantity,
+              unitPriceCents: i.unitPriceCents,
+              discountCents: 0,
+            })),
+          }),
+        ]
+      : []),
     prisma.order.update({
       where: { id: pedido.id },
       data: {
-        deliveryFeeCents: mapeado.deliveryFeeCents ?? 0,
-        paymentMethod: mapeado.paymentMethod ?? null,
+        displayId: mapeado.displayId ?? null,
+        ...(gravarItens
+          ? {
+              deliveryFeeCents: mapeado.deliveryFeeCents ?? 0,
+              paymentMethod: mapeado.paymentMethod ?? null,
+            }
+          : {}),
       },
     }),
   ]);
 
   console.log(
-    `  ${pedido.externalId?.slice(0, 8)}  ${mapeado.items.length} item(ns), taxa R$ ${((mapeado.deliveryFeeCents ?? 0) / 100).toFixed(2)}, ${mapeado.paymentMethod}`,
+    `  ${pedido.externalId?.slice(0, 8)}  #${mapeado.displayId ?? '?'}  ${gravarItens ? `${mapeado.items!.length} item(ns) gravados` : 'itens ja existiam'}`,
   );
 }
 await prisma.$disconnect();

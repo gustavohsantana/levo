@@ -114,6 +114,13 @@ model Order {
   establishmentId  String
   source           OrderSourceKind
   externalId       String?
+  /// O numero curto do pedido na plataforma de origem — "1366" no iFood.
+  ///
+  /// E por ele que o cliente liga reclamando e que o suporte do marketplace
+  /// identifica o pedido. Sem ele, quatro pedidos no mesmo minuto viram
+  /// quatro cartoes indistinguiveis, e o dono nao casa o que ve na tela com o
+  /// que a plataforma pergunta.
+  displayId        String?
   customerName     String
   customerPhone    String?
   address          String

@@ -22,6 +22,8 @@ export interface OrderView {
   amountCents: number;
   notes: string | null;
   source: 'MANUAL' | 'SITE' | 'WEBHOOK' | 'IFOOD' | 'AIQFOME';
+  /** Numero curto na plataforma. Nulo em pedido manual. */
+  displayId: string | null;
   deliveryFeeCents: number;
   paymentMethod: 'CASH' | 'CREDIT' | 'DEBIT' | 'PIX' | 'ONLINE' | null;
   status: 'NEW' | 'IN_ROUTE' | 'DELIVERED' | 'FAILED' | 'CANCELLED';
@@ -87,6 +89,7 @@ function toOrderView(order: Order, whatsapp: string | null, trackingUrl: string)
     deliveryFeeCents: order.deliveryFee.cents,
     paymentMethod: order.paymentMethod,
     source: order.source,
+    displayId: order.displayId,
     notes: order.notes,
     status: order.status,
     isGeocoded: order.isGeocoded,

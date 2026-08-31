@@ -50,6 +50,8 @@ interface OrderProps {
   establishmentId: string;
   source: OrderSourceKind;
   externalId: string | null;
+  /** Numero curto na plataforma de origem. O que o cliente fala no telefone. */
+  displayId: string | null;
   customerName: string;
   customerPhone: PhoneNumber | null;
   address: Address;
@@ -82,6 +84,7 @@ export class Order extends AggregateRoot {
     establishmentId: string;
     source: OrderSourceKind;
     externalId?: string | null;
+    displayId?: string | null;
     customerName: string;
     customerPhone?: PhoneNumber | null;
     address: Address;
@@ -103,6 +106,7 @@ export class Order extends AggregateRoot {
       establishmentId: input.establishmentId,
       source: input.source,
       externalId: input.externalId ?? null,
+      displayId: input.displayId ?? null,
       customerName: input.customerName.trim(),
       customerPhone: input.customerPhone ?? null,
       address: input.address,
@@ -194,6 +198,7 @@ export class Order extends AggregateRoot {
   get establishmentId() { return this.props.establishmentId; }
   get source() { return this.props.source; }
   get externalId() { return this.props.externalId; }
+  get displayId() { return this.props.displayId; }
   get customerName() { return this.props.customerName; }
   get customerPhone() { return this.props.customerPhone; }
   get address() { return this.props.address; }
