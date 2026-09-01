@@ -53,7 +53,19 @@ export function PagamentoPublico({
   const [renovando, renovar] = useTransition();
   const [agora, setAgora] = useState(() => Date.now());
 
-  const restanteMs = expiraEm ? new Date(expiraEm).getTime() - agora : null;
+  /*
+   * Diferença entre o relógio do aparelho e o do servidor.
+   *
+   * Celular atrasado mostraria minutos restantes num código que já morreu, e a
+   * pessoa pagaria um QR vencido — dinheiro sai e volta, sem gerar pagamento
+   * nenhum. Medindo o desvio uma vez, o contador anda pelo relógio de quem
+   * manda, que é o mesmo que o Mercado Pago usa para vencer a cobrança.
+   */
+  const [desvioMs, setDesvioMs] = useState(
+    () => Date.parse(inicial.servidorEm) - Date.now(),
+  );
+
+  const restanteMs = expiraEm ? new Date(expiraEm).getTime() - (agora + desvioMs) : null;
   /*
    * Um QR vencido continua legível pelo banco: o cliente paga, o Mercado Pago
    * vê a cobrança expirada e devolve o dinheiro uns dois minutos depois — sem
@@ -79,6 +91,7 @@ export function PagamentoPublico({
       setCodigo(r.qrCode);
       setCodigoBase64(r.qrCodeBase64);
       setExpiraEm(r.expiresAt);
+      setDesvioMs(Date.parse(r.servidorEm) - Date.now());
       setAgora(Date.now());
       setStatus('PENDING');
     });

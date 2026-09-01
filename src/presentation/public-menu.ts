@@ -210,6 +210,16 @@ export type PagamentoPublico = {
   qrCode: string | null;
   qrCodeBase64: string | null;
   expiresAt: string | null;
+  /**
+   * Quando o servidor montou esta tela.
+   *
+   * O contador não pode comparar o vencimento com o relógio do celular: um
+   * telefone atrasado mostra minutos restantes num código que já morreu, e a
+   * pessoa paga um QR vencido — o dinheiro sai e volta. Com este instante o
+   * navegador mede a diferença e conta pelo relógio de quem manda, que é o
+   * mesmo do Mercado Pago.
+   */
+  servidorEm: string;
   contaTeste: boolean;
   checkoutUrl: string | null;
   /** Chave pública da loja — o Brick do cartão roda no navegador com ela. */
@@ -515,6 +525,7 @@ export async function getPagamentoPublico(
     qrCode: payment?.qrCode ?? null,
     qrCodeBase64: payment?.qrCodeBase64 ?? null,
     expiresAt: payment?.expiresAt?.toISOString() ?? null,
+    servidorEm: new Date().toISOString(),
     contaTeste: credencial?.liveMode === false,
     checkoutUrl: payment?.checkoutUrl ?? null,
     publicKey: credencial?.publicKey ?? null,
@@ -665,7 +676,13 @@ export async function renovarPixAction(
   slug: string,
   orderId: string,
 ): Promise<
-  | { ok: true; qrCode: string; qrCodeBase64: string | null; expiresAt: string }
+  | {
+      ok: true;
+      qrCode: string;
+      qrCodeBase64: string | null;
+      expiresAt: string;
+      servidorEm: string;
+    }
   | { ok: false; error: string }
 > {
   const limite = checkRateLimit(`pix:renovar:${orderId}`, { max: 6, windowMs: 60_000 });
@@ -708,6 +725,7 @@ export async function renovarPixAction(
       qrCode: payment.qrCode,
       qrCodeBase64: payment.qrCodeBase64,
       expiresAt: payment.expiresAt.toISOString(),
+      servidorEm: new Date().toISOString(),
     };
   } catch (cause) {
     return { ok: false, error: toFormError(cause) };
