@@ -89,6 +89,7 @@ model Establishment {
   credentials         IntegrationCredential[]
   marketplaceCommands MarketplaceCommand[]
   products            Product[]
+  optionGroups        OptionGroup[]
   deliveryFeeRules    DeliveryFeeRule[]
 }
 
@@ -406,8 +407,9 @@ model Product {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
-  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+  establishment Establishment       @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
   orderItems    OrderItem[]
+  optionGroups  ProductOptionGroup[]
 
   /// Reimportar não duplica. Em Postgres, NULL é distinto de NULL, então
   /// vários produtos manuais convivem sem esbarrar nesta restrição.
@@ -423,6 +425,74 @@ model Product {
 /// reescrever sozinho a cada reajuste — e a conta do dia deixaria de fechar.
 ///
 /// `productId` fica só como procedência, e nulo quando o produto for apagado.
+/// Um conjunto de escolhas que um produto oferece: tamanhos, sabores, bordas,
+/// adicionais, talheres.
+///
+/// Vive no ESTABELECIMENTO, nao no produto, e e o que faz o cadastro caber numa
+/// tarde em vez de numa semana: "Frutas" e um objeto so, usado pelos quatro
+/// tamanhos de acai. Reajustar a Nutella e um numero, nao quatro.
+///
+/// Obrigatorio e opcional nao viram campo: saem do `minimo`. Minimo 1 e
+/// obrigatorio, minimo 0 e opcional — uma regra explica "escolha ate 3 frutas",
+/// "escolha 2 sabores" e "escolha a base".
+///
+/// Validado contra tres negocios reais de Pouso Alegre. A Pizza Prime vende o
+/// TAMANHO como produto e o sabor como opcao precificada; a Skina vende o SABOR
+/// como produto e o tamanho como grupo; o marmitex nao usa grupo nenhum. Os tres
+/// cabem aqui sem caso especial — e o terceiro e o motivo de isto ser opcional.
+model OptionGroup {
+  id              String   @id @default(uuid())
+  establishmentId String
+  name            String
+  /// Quantas escolhas o cliente PRECISA fazer. Zero torna o grupo opcional.
+  min             Int      @default(0)
+  /// Teto de escolhas. `2` e o meio a meio da pizza; `8` sao os cereais do acai.
+  max             Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  establishment Establishment      @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+  options       Option[]
+  products      ProductOptionGroup[]
+
+  @@index([establishmentId, name])
+}
+
+/// Uma escolha dentro do grupo, com o quanto ela soma ao preco.
+///
+/// Preco zero e caso comum e nao excecao: a base do acai — acai, ninho ou misto
+/// — e obrigatoria e nao cobra nada. O grupo existe para capturar a DECISAO, que
+/// a cozinha precisa saber; cobrar e outro assunto.
+model Option {
+  id         String  @id @default(uuid())
+  groupId    String
+  name       String
+  /// Quanto soma ao preco-base do produto. Na Pizza Prime o sabor carrega o
+  /// preco inteiro e o produto vale zero; no acai o produto vale R$ 13 e o
+  /// adicional soma. E a mesma conta, com a base em lugares diferentes.
+  priceCents Int     @default(0)
+  /// Fora de estoque some da lista sem apagar o historico dos pedidos.
+  active     Boolean @default(true)
+  position   Int     @default(0)
+
+  group OptionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId, position])
+}
+
+/// Liga um grupo a um produto, na ordem em que aparece na tela.
+model ProductOptionGroup {
+  productId String
+  groupId   String
+  position  Int    @default(0)
+
+  product Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  group   OptionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([productId, groupId])
+  @@index([productId, position])
+}
+
 model OrderItem {
   id             String  @id @default(uuid())
   orderId        String
