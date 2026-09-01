@@ -7,6 +7,7 @@ import {
   Ban,
   Check,
   ChefHat,
+  MapPin,
   LoaderCircle,
   MapPinOff,
   MessageCircle,
@@ -61,16 +62,20 @@ interface Props {
  * dono não precisar aprender um segundo vocabulário. `moving` já é "em rota" na
  * etiqueta de status e na barra de progresso; `warning` já é urgência.
  *
+ * A cor é um risco fino no topo, não o fundo da coluna. Tingir o fundo fazia
+ * o cartão branco — que é o objeto que o dono manipula — perder destaque
+ * dentro da própria coluna. O risco sinaliza sem competir.
+ *
  * NOVOS é âmbar porque ali o relógio corre — o iFood dá 3 minutos para aceitar
  * e piora a posição da loja quem passa disso. MONTANDO fica neutro de
  * propósito: é trabalho em curso, não decisão pendente, e colorir tudo faz cor
  * nenhuma chamar atenção.
  */
 const TONS = {
-  espera: { fundo: 'bg-warning-soft/40', icone: 'text-warning' },
-  cozinha: { fundo: 'bg-raised/60', icone: 'text-ink-faint' },
-  pronto: { fundo: 'bg-accent-soft/40', icone: 'text-accent-ink' },
-  rua: { fundo: 'bg-moving-soft/40', icone: 'text-moving' },
+  espera: { risco: 'bg-warning', icone: 'text-warning', selo: 'bg-warning-soft text-warning' },
+  cozinha: { risco: 'bg-line-strong', icone: 'text-ink-faint', selo: 'bg-surface text-ink-muted' },
+  pronto: { risco: 'bg-accent', icone: 'text-accent-ink', selo: 'bg-accent-soft text-accent-ink' },
+  rua: { risco: 'bg-moving', icone: 'text-moving', selo: 'bg-moving-soft text-moving' },
 } as const;
 
 type Tom = keyof typeof TONS;
@@ -118,17 +123,17 @@ export function OrderBoard({
         onToggle={onToggle}
         origin={origin}
       />
-      <section className={`flex min-w-0 flex-col rounded-lg p-2.5 ${TONS.rua.fundo}`}>
+      <section className="flex min-w-0 flex-col overflow-hidden rounded-lg bg-raised">
+        <div className={`h-[3px] ${TONS.rua.risco}`} />
+        <div className="flex min-h-0 flex-1 flex-col p-2.5">
         <header className="mb-2 flex items-center gap-2 px-1">
           <Truck className={`size-3.5 ${TONS.rua.icone}`} aria-hidden />
           <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
             Em rota
           </h3>
-          {rotas.length > 0 ? (
-            <span className="numeric ml-auto rounded-xs bg-surface px-1.5 text-xs text-ink-muted">
-              {rotas.length}
-            </span>
-          ) : null}
+          <span className={`numeric ml-auto rounded-xs px-1.5 text-xs ${TONS.rua.selo}`}>
+            {rotas.length}
+          </span>
         </header>
 
         {rotas.length === 0 ? (
@@ -140,6 +145,7 @@ export function OrderBoard({
             ))}
           </ul>
         )}
+        </div>
       </section>
     </div>
   );
@@ -151,7 +157,7 @@ function RouteCard({ rota }: { rota: RouteView }) {
   const progresso = rota.stops.length > 0 ? (feitas / rota.stops.length) * 100 : 0;
 
   return (
-    <li className="rounded-md bg-surface p-2.5 hairline">
+    <li className="rounded-md bg-surface p-3 hairline">
       <p className="truncate text-sm font-medium text-ink">{rota.courierName}</p>
       <p className="text-xs text-ink-faint">
         {rota.status === 'PLANNED' ? 'aguardando saída' : 'na rua'} ·{' '}
@@ -173,12 +179,20 @@ function RouteCard({ rota }: { rota: RouteView }) {
         */}
         {rota.status === 'PLANNED' ? <StartRouteButton routeId={rota.id} /> : null}
 
-        <Button asChild variant="ghost" size="sm">
-          <Link href={`/dashboard/rotas/${rota.id}`}>Mapa</Link>
+        {/*
+          Contornados, não fantasmas. Quem usa isto está com a mão ocupada e o
+          telefone tocando: texto solto tem alvo de toque pequeno demais, e a
+          borda é o que diz onde clicar sem precisar mirar.
+        */}
+        <Button asChild variant="outline" size="sm">
+          <Link href={`/dashboard/rotas/${rota.id}`}>
+            <MapPin />
+            Mapa
+          </Link>
         </Button>
 
         {rota.courierWhatsappLink ? (
-          <Button asChild variant="ghost" size="sm">
+          <Button asChild variant="outline" size="sm">
             <a href={rota.courierWhatsappLink} target="_blank" rel="noreferrer">
               <MessageCircle />
               WhatsApp
@@ -215,18 +229,23 @@ function Column({
 }) {
   return (
     <section
-      className={`flex min-w-0 flex-col rounded-lg p-2.5 ${TONS[tom].fundo}`}
+      className="flex min-w-0 flex-col overflow-hidden rounded-lg bg-raised"
     >
+      <div className={`h-[3px] ${TONS[tom].risco}`} />
+      <div className="flex min-h-0 flex-1 flex-col p-2.5">
       <header className="mb-2 flex items-center gap-2 px-1">
         <Icone className={`size-3.5 ${TONS[tom].icone}`} aria-hidden />
         <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
           {titulo}
         </h3>
-        {pedidos.length > 0 ? (
-          <span className="numeric ml-auto rounded-xs bg-surface px-1.5 text-xs text-ink-muted">
-            {pedidos.length}
-          </span>
-        ) : null}
+        {/*
+          O zero também aparece. Some quando vazio, a coluna perde a referência
+          e o dono precisa contar cartão para saber se está em dia — e "em dia"
+          é justamente a informação que o zero dá.
+        */}
+        <span className={`numeric ml-auto rounded-xs px-1.5 text-xs ${TONS[tom].selo}`}>
+          {pedidos.length}
+        </span>
       </header>
 
       {pedidos.length === 0 ? (
@@ -252,6 +271,7 @@ function Column({
           ))}
         </ul>
       )}
+      </div>
     </section>
   );
 }
