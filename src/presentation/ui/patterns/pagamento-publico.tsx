@@ -331,18 +331,29 @@ export function PagamentoPublico({
             {renovando ? 'Gerando…' : 'Gerar novo código Pix'}
           </Button>
         ) : (
-          <>
-            <Button type="button" variant="outline" onClick={copiarCodigo}>
-              {copiado ? <Check /> : <Copy />}
-              {copiado ? 'Copiado!' : 'Copiar código Pix'}
-            </Button>
-
-            <Button type="button" variant="primary" onClick={conferirDeNovo} disabled={checando}>
-              {checando ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
-              {checando ? 'Conferindo…' : 'Já paguei'}
-            </Button>
-          </>
+          <Button type="button" variant="outline" onClick={copiarCodigo}>
+            {copiado ? <Check /> : <Copy />}
+            {copiado ? 'Copiado!' : 'Copiar código Pix'}
+          </Button>
         )}
+
+        {/*
+          "Já paguei" continua na tela mesmo com o código vencido. O pior
+          instante possível é justamente esse: quem pagou aos 29:50 vê a tela
+          virar aos 30:00 e precisa de um jeito de dizer que o dinheiro saiu.
+          A sondagem automática pegaria de qualquer forma, mas ficar sem botão
+          bem na hora em que a pessoa está insegura com o próprio dinheiro é o
+          contrário do que a tela deveria fazer.
+        */}
+        <Button
+          type="button"
+          variant={vencido ? 'outline' : 'primary'}
+          onClick={conferirDeNovo}
+          disabled={checando}
+        >
+          {checando ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
+          {checando ? 'Conferindo…' : 'Já paguei'}
+        </Button>
 
         {aviso || erro ? (
           <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-950 hairline">
