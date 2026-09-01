@@ -339,6 +339,78 @@ export async function concluirEntregasAction(
   return { ok: true };
 }
 
+export interface GrupoInput {
+  id?: string;
+  name: string;
+  min: number;
+  max: number;
+  options: Array<{ id?: string; name: string; priceReais: number }>;
+}
+
+/** Cria ou edita um grupo de opções: tamanhos, sabores, bordas, adicionais. */
+export async function salvarGrupoAction(grupo: GrupoInput): Promise<ActionResult> {
+  try {
+    const session = await requireSession();
+    await containerFor(session.establishmentId).useCases.saveOptionGroup.execute(grupo);
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+
+  revalidatePath('/dashboard/catalogo');
+  return { ok: true };
+}
+
+export async function removerGrupoAction(id: string): Promise<ActionResult> {
+  try {
+    const session = await requireSession();
+    await containerFor(session.establishmentId).read((repos) => repos.optionGroups.delete(id));
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+
+  revalidatePath('/dashboard/catalogo');
+  return { ok: true };
+}
+
+/** Define quais grupos um produto oferece, na ordem em que aparecem. */
+export async function definirGruposDoProdutoAction(
+  productId: string,
+  groupIds: string[],
+): Promise<ActionResult> {
+  try {
+    const session = await requireSession();
+    await containerFor(session.establishmentId).read((repos) =>
+      repos.optionGroups.setForProduct(productId, groupIds),
+    );
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+
+  revalidatePath('/dashboard/catalogo');
+  return { ok: true };
+}
+
+/**
+ * Anexa um grupo a todos os produtos de uma categoria.
+ *
+ * É o atalho que evita trinta cliques numa pizzaria com trinta sabores.
+ */
+export async function anexarGrupoNaCategoriaAction(
+  groupId: string,
+  categoria: string,
+): Promise<{ ok: true; afetados: number } | { ok: false; error: string }> {
+  try {
+    const session = await requireSession();
+    const afetados = await containerFor(session.establishmentId).read((repos) =>
+      repos.optionGroups.attachToCategory(groupId, categoria),
+    );
+    revalidatePath('/dashboard/catalogo');
+    return { ok: true, afetados };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
 export async function salvarRegiaoAction(formData: FormData): Promise<ActionResult> {
   const city = String(formData.get('city') ?? '').trim();
   const state = String(formData.get('state') ?? '').trim().toUpperCase();

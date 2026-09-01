@@ -8,6 +8,7 @@ import type {
   Route,
 } from '../../entities';
 import type { DeliveryFeeBand } from '../../services/delivery-fee';
+import type { OptionGroupSpec } from '../../services/option-selection';
 import type { DomainEvent } from '../../events/domain-event';
 import type { Coordinates } from '../../value-objects';
 
@@ -100,6 +101,33 @@ export interface ProductRepository {
   renameCategory(de: string, para: string): Promise<number>;
 }
 
+/**
+ * Grupos de opção do estabelecimento.
+ *
+ * Separado do produto de propósito: o grupo existe por conta própria e é usado
+ * por vários. "Frutas" é um objeto só, servindo os quatro tamanhos de açaí —
+ * é isso que faz reajustar a Nutella ser um número e não quatro.
+ */
+export interface OptionGroupRepository {
+  list(): Promise<OptionGroupSpec[]>;
+  findById(id: string): Promise<OptionGroupSpec | null>;
+  /** Os grupos de um produto, na ordem em que aparecem na tela. */
+  forProduct(productId: string): Promise<OptionGroupSpec[]>;
+  /** Os grupos de vários produtos de uma vez — o cardápio inteiro numa consulta. */
+  forProducts(productIds: string[]): Promise<Map<string, OptionGroupSpec[]>>;
+  save(grupo: OptionGroupSpec): Promise<void>;
+  delete(id: string): Promise<void>;
+  /** Substitui os grupos do produto pela lista dada, na ordem. */
+  setForProduct(productId: string, groupIds: string[]): Promise<void>;
+  /**
+   * Anexa um grupo a todos os produtos de uma categoria.
+   *
+   * É o atalho que evita trinta cliques: uma pizzaria com trinta sabores anexa
+   * "Tamanho" à categoria inteira de uma vez. Devolve quantos receberam.
+   */
+  attachToCategory(groupId: string, category: string): Promise<number>;
+}
+
 export interface EventStore {
   append(events: DomainEvent[]): Promise<void>;
 }
@@ -163,6 +191,7 @@ export interface Repositories {
   establishments: EstablishmentRepository;
   pings: CourierPingRepository;
   products: ProductRepository;
+  optionGroups: OptionGroupRepository;
   events: EventStore;
   marketplace: MarketplaceOutbox;
   geocodeCache: GeocodeCacheRepository;

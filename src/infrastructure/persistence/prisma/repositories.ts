@@ -29,6 +29,8 @@ import {
   Money,
   Product,
   type ProductRepository,
+  type OptionGroupRepository,
+  type OptionGroupSpec,
 } from '@/core';
 import { CourierMapper, EstablishmentMapper, OrderMapper, PaymentMapper, RouteMapper } from './mappers';
 
@@ -541,6 +543,148 @@ function toProduct(row: {
   });
 }
 
+export class PrismaOptionGroupRepository implements OptionGroupRepository {
+  constructor(
+    private readonly tx: Tx,
+    private readonly establishmentId: string,
+  ) {}
+
+  async list(): Promise<OptionGroupSpec[]> {
+    const rows = await this.tx.optionGroup.findMany({
+      where: { establishmentId: this.establishmentId },
+      include: { options: { orderBy: { position: 'asc' } } },
+      orderBy: { name: 'asc' },
+    });
+    return rows.map(paraSpec);
+  }
+
+  async findById(id: string): Promise<OptionGroupSpec | null> {
+    const row = await this.tx.optionGroup.findFirst({
+      where: { id, establishmentId: this.establishmentId },
+      include: { options: { orderBy: { position: 'asc' } } },
+    });
+    return row ? paraSpec(row) : null;
+  }
+
+  async forProduct(productId: string): Promise<OptionGroupSpec[]> {
+    const rows = await this.tx.productOptionGroup.findMany({
+      where: { productId, group: { establishmentId: this.establishmentId } },
+      include: { group: { include: { options: { orderBy: { position: 'asc' } } } } },
+      orderBy: { position: 'asc' },
+    });
+    return rows.map((row) => paraSpec(row.group));
+  }
+
+  /**
+   * Uma consulta para o cardápio inteiro.
+   *
+   * Buscar grupo por produto num laço faria N+1 na tela que o cliente abre — e
+   * é a tela com mais pressa de todas.
+   */
+  async forProducts(productIds: string[]): Promise<Map<string, OptionGroupSpec[]>> {
+    if (productIds.length === 0) return new Map();
+
+    const rows = await this.tx.productOptionGroup.findMany({
+      where: {
+        productId: { in: productIds },
+        group: { establishmentId: this.establishmentId },
+      },
+      include: { group: { include: { options: { orderBy: { position: 'asc' } } } } },
+      orderBy: { position: 'asc' },
+    });
+
+    const porProduto = new Map<string, OptionGroupSpec[]>();
+    for (const row of rows) {
+      const lista = porProduto.get(row.productId) ?? [];
+      lista.push(paraSpec(row.group));
+      porProduto.set(row.productId, lista);
+    }
+    return porProduto;
+  }
+
+  async save(grupo: OptionGroupSpec): Promise<void> {
+    await this.tx.optionGroup.upsert({
+      where: { id: grupo.id },
+      create: {
+        id: grupo.id,
+        establishmentId: this.establishmentId,
+        name: grupo.name,
+        min: grupo.min,
+        max: grupo.max,
+      },
+      update: { name: grupo.name, min: grupo.min, max: grupo.max },
+    });
+
+    /*
+     * Apaga e recria as opções.
+     *
+     * O `id` da opção vive no pedido já gravado apenas como NOME copiado, não
+     * como referência — então trocar o id não reescreve histórico. Reconciliar
+     * uma a uma custaria complexidade para salvar uma lista de dez itens.
+     */
+    await this.tx.option.deleteMany({ where: { groupId: grupo.id } });
+    if (grupo.options.length > 0) {
+      await this.tx.option.createMany({
+        data: grupo.options.map((opcao, indice) => ({
+          id: opcao.id,
+          groupId: grupo.id,
+          name: opcao.name,
+          priceCents: opcao.price.cents,
+          position: indice,
+        })),
+      });
+    }
+  }
+
+  async delete(id: string): Promise<void> {
+    await this.tx.optionGroup.deleteMany({ where: { id, establishmentId: this.establishmentId } });
+  }
+
+  async setForProduct(productId: string, groupIds: string[]): Promise<void> {
+    await this.tx.productOptionGroup.deleteMany({ where: { productId } });
+    if (groupIds.length > 0) {
+      await this.tx.productOptionGroup.createMany({
+        data: groupIds.map((groupId, indice) => ({ productId, groupId, position: indice })),
+      });
+    }
+  }
+
+  async attachToCategory(groupId: string, category: string): Promise<number> {
+    const produtos = await this.tx.product.findMany({
+      where: { establishmentId: this.establishmentId, category },
+      select: { id: true },
+    });
+
+    // `skipDuplicates` porque anexar de novo é operação normal: o dono clica
+    // depois de cadastrar mais produtos na mesma categoria.
+    const r = await this.tx.productOptionGroup.createMany({
+      data: produtos.map((p) => ({ productId: p.id, groupId, position: 99 })),
+      skipDuplicates: true,
+    });
+    return r.count;
+  }
+}
+
+function paraSpec(row: {
+  id: string;
+  name: string;
+  min: number;
+  max: number;
+  options: Array<{ id: string; name: string; priceCents: number }>;
+}): OptionGroupSpec {
+  return {
+    id: row.id,
+    name: row.name,
+    min: row.min,
+    max: row.max,
+    options: row.options.map((o) => ({
+      id: o.id,
+      name: o.name,
+      price: Money.fromCents(o.priceCents),
+    })),
+  };
+}
+
 export function buildRepositories(tx: Tx, establishmentId: string): Repositories {
   return {
     orders: new PrismaOrderRepository(tx, establishmentId),
@@ -550,6 +694,7 @@ export function buildRepositories(tx: Tx, establishmentId: string): Repositories
     establishments: new PrismaEstablishmentRepository(tx, establishmentId),
     pings: new PrismaCourierPingRepository(tx),
     products: new PrismaProductRepository(tx, establishmentId),
+    optionGroups: new PrismaOptionGroupRepository(tx, establishmentId),
     events: new PrismaEventStore(tx),
     marketplace: new PrismaMarketplaceOutbox(tx),
     geocodeCache: new PrismaGeocodeCacheRepository(tx),

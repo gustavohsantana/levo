@@ -25,6 +25,8 @@ import {
   type DeliveryFeeBand,
   Product,
   type ProductRepository,
+  type OptionGroupRepository,
+  type OptionGroupSpec,
 } from '@/core';
 
 /**
@@ -44,6 +46,9 @@ export class InMemoryDatabase {
   geocodeCache = new Map<string, Coordinates>();
   /** Avisos enfileirados para o marketplace, por (provedor, pedido, comando). */
   marketplace = new Map<string, MarketplaceCommandEntry>();
+  optionGroups = new Map<string, OptionGroupSpec>();
+  /** Grupos de cada produto, na ordem. */
+  productGroups = new Map<string, string[]>();
   /** Aceite automático de pedido de marketplace. */
   autoConfirmOrders = false;
   products = new Map<string, Product>();
@@ -143,6 +148,53 @@ function buildRepositories(db: InMemoryDatabase): Repositories {
     },
     async list() {
       return [...db.couriers.values()];
+    },
+  };
+
+  const optionGroups: OptionGroupRepository = {
+    async list() {
+      return [...db.optionGroups.values()];
+    },
+    async findById(id) {
+      return db.optionGroups.get(id) ?? null;
+    },
+    async forProduct(productId) {
+      return (db.productGroups.get(productId) ?? [])
+        .map((id) => db.optionGroups.get(id))
+        .filter((g): g is OptionGroupSpec => Boolean(g));
+    },
+    async forProducts(productIds) {
+      const mapa = new Map<string, OptionGroupSpec[]>();
+      for (const productId of productIds) {
+        const grupos = (db.productGroups.get(productId) ?? [])
+          .map((id) => db.optionGroups.get(id))
+          .filter((g): g is OptionGroupSpec => Boolean(g));
+        if (grupos.length > 0) mapa.set(productId, grupos);
+      }
+      return mapa;
+    },
+    async save(grupo) {
+      db.optionGroups.set(grupo.id, grupo);
+    },
+    async delete(id) {
+      db.optionGroups.delete(id);
+      for (const [produto, ids] of db.productGroups) {
+        db.productGroups.set(produto, ids.filter((g) => g !== id));
+      }
+    },
+    async setForProduct(productId, groupIds) {
+      db.productGroups.set(productId, [...groupIds]);
+    },
+    async attachToCategory(groupId, category) {
+      let n = 0;
+      for (const produto of db.products.values()) {
+        if (produto.category !== category) continue;
+        const atuais = db.productGroups.get(produto.id) ?? [];
+        if (atuais.includes(groupId)) continue;
+        db.productGroups.set(produto.id, [...atuais, groupId]);
+        n += 1;
+      }
+      return n;
     },
   };
 
@@ -281,6 +333,7 @@ function buildRepositories(db: InMemoryDatabase): Repositories {
     events,
     marketplace,
     products,
+    optionGroups,
     geocodeCache,
   };
 }

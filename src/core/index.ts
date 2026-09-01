@@ -5,4 +5,5 @@ export * from './ports/repositories';
 export * from './ports/services';
 export * from './routing/baseline-duration';
 export * from './services/delivery-fee';
+export * from './services/option-selection';
 export * from './value-objects';

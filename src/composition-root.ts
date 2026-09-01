@@ -17,6 +17,7 @@ import { SaveCourier } from '@/application/use-cases/couriers/save-courier';
 import { SetCourierActive } from '@/application/use-cases/couriers/set-courier-active';
 import { AdvanceOrderStage } from '@/application/use-cases/orders/advance-order-stage';
 import { CancelOrder } from '@/application/use-cases/orders/cancel-order';
+import { SaveOptionGroup } from '@/application/use-cases/catalog/save-option-group';
 import { marketplaceCommandsFor } from '@/infrastructure/integrations/marketplace-factory';
 import { CreatePayment } from '@/application/use-cases/payments/create-payment';
 import { ConfirmPayment } from '@/application/use-cases/payments/confirm-payment';
@@ -62,6 +63,7 @@ export interface Container {
     renameCategory: RenameCategory;
     advanceOrderStage: AdvanceOrderStage;
     cancelOrder: CancelOrder;
+    saveOptionGroup: SaveOptionGroup;
     createPayment: CreatePayment;
     confirmPayment: ConfirmPayment;
     saveCourier: SaveCourier;
@@ -141,6 +143,7 @@ export function containerFor(establishmentId: string): Container {
       setProductActive: new SetProductActive(uow),
       removeProduct: new RemoveProduct(uow),
       renameCategory: new RenameCategory(uow),
+      saveOptionGroup: new SaveOptionGroup(uow, ids),
       advanceOrderStage: new AdvanceOrderStage(uow, clock),
       /*
        * A origem do pedido escolhe o canal: um estabelecimento pode ter iFood e
