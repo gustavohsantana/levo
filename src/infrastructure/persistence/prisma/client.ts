@@ -69,11 +69,40 @@ export type LevoPrismaClient = ReturnType<typeof withTenantGuard>;
 
 let singleton: LevoPrismaClient | undefined;
 
+/**
+ * Deixa o modo de SSL explícito na URL de conexão.
+ *
+ * `sslmode=require` hoje é tratado como `verify-full` pelo driver, mas a
+ * próxima versão dele vai adotar a semântica do libpq — em que `require` cifra
+ * sem verificar o certificado. Ou seja: a mesma URL passaria a aceitar um
+ * servidor que se diz o nosso banco, e nada avisaria além do warning que o
+ * driver imprime desde já.
+ *
+ * Fixar aqui, e não nas três variáveis de ambiente, é o que impede local,
+ * Vercel e VM de divergirem — a próxima pessoa a criar um ambiente não precisa
+ * saber desta armadilha.
+ */
+function comSslVerificado(connectionString: string): string {
+  try {
+    const url = new URL(connectionString);
+    const modo = url.searchParams.get('sslmode');
+    if (modo === 'require' || modo === 'prefer' || modo === 'verify-ca') {
+      url.searchParams.set('sslmode', 'verify-full');
+      return url.toString();
+    }
+    return connectionString;
+  } catch {
+    // URL que não parseia é problema do ambiente, e o driver dará um erro
+    // melhor que o nosso. Segue como veio.
+    return connectionString;
+  }
+}
+
 export function getPrismaClient(connectionString: string): LevoPrismaClient {
   // Em desenvolvimento o Next recarrega módulos a cada mudança; sem o
   // singleton, cada recarga abre um pool novo e o Postgres recusa conexão.
   if (!singleton) {
-    singleton = withTenantGuard(new PrismaClient({ adapter: new PrismaPg({ connectionString }) }));
+    singleton = withTenantGuard(new PrismaClient({ adapter: new PrismaPg({ connectionString: comSslVerificado(connectionString) }) }));
   }
   return singleton;
 }
