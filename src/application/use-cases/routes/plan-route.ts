@@ -15,6 +15,7 @@ import {
   type UnitOfWork,
   baselineDuration,
 } from '@/core';
+import { mensagemDaRota, telefoneParaWhatsApp } from '@/core/services/route-message';
 
 interface Input {
   courierId: string;
@@ -32,6 +33,8 @@ export class PlanRoute {
     private readonly ids: IdGenerator,
     private readonly clock: Clock,
     private readonly maxStops: number = MAX_STOPS,
+    /** Endereço público, para montar o link do motoboy. Vazio desliga o aviso. */
+    private readonly baseUrl: string = '',
   ) {}
 
   async execute(input: Input): Promise<Route> {
@@ -161,6 +164,35 @@ export class PlanRoute {
         ...route.pullEvents(),
         ...confirmed.flatMap((order) => order.pullEvents()),
       ]);
+
+      /*
+       * A mensagem entra na mesma transação da rota.
+       *
+       * Fora dela, uma queda entre gravar e enfileirar deixaria o motoboy com
+       * uma rota que ninguém avisou. Dentro, ou as duas existem ou nenhuma —
+       * e o envio em si é do worker, que pode falhar à vontade sem levar o
+       * despacho junto.
+       */
+      if (this.baseUrl) {
+        const loja = await repos.establishments.current();
+        if (loja.whatsappRoutes) {
+          const courier = await repos.couriers.findById(input.courierId);
+          const telefone = courier ? telefoneParaWhatsApp(courier.phone.value) : null;
+
+          if (courier && telefone) {
+            await repos.courierNotifications.enqueue({
+              routeId: route.id,
+              phone: telefone,
+              text: mensagemDaRota({
+                courierName: courier.name,
+                storeName: loja.name,
+                stops: stops.length,
+                link: `${this.baseUrl.replace(/\/$/, '')}/m/${route.accessToken}`,
+              }),
+            });
+          }
+        }
+      }
 
       return route;
     });

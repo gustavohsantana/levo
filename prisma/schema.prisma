@@ -86,6 +86,12 @@ model Establishment {
   /// Sem isto o cardapio sai em ordem alfabetica, e uma pizzaria abre com
   /// "Acai" porque comeca com A. Ordem de cardapio e decisao comercial.
   categoryOrder    String[] @default([])
+  /// Manda a rota para o motoboy no WhatsApp assim que ela e planejada.
+  ///
+  /// Desligado por padrao, e de proposito: mensagem automatica sai de um numero
+  /// que pode ser banido, e ligar isso e uma decisao do dono — nao um padrao que
+  /// ele descobre quando o motoboy reclama.
+  whatsappRoutes   Boolean  @default(false)
   lat              Float
   lng              Float
   createdAt        DateTime @default(now())
@@ -101,6 +107,7 @@ model Establishment {
   products            Product[]
   optionGroups        OptionGroup[]
   deliveryFeeRules    DeliveryFeeRule[]
+  courierNotifications CourierNotification[]
 }
 
 model User {
@@ -389,6 +396,32 @@ model IntegrationEvent {
 ///
 /// Então a transação grava a intenção aqui, e o worker entrega depois. O aviso
 /// sobrevive a queda de rede, a plataforma fora do ar e a reinício do processo.
+/// Caixa de saida das mensagens para o motoboy.
+///
+/// Mesmo padrao do aviso ao marketplace: WhatsApp fora do ar nao pode derrubar o
+/// despacho da rota. O motoboy sai para entregar de qualquer jeito, e a mensagem
+/// tenta de novo no ciclo seguinte do worker.
+model CourierNotification {
+  id              String    @id @default(uuid())
+  establishmentId String
+  routeId         String
+  /// So digitos, com DDI. E o que a WAHA espera antes do @c.us.
+  phone           String
+  text            String
+  createdAt       DateTime  @default(now())
+  /// Nulo enquanto pendente; preenchido quando a WAHA aceitou.
+  sentAt          DateTime?
+  attempts        Int       @default(0)
+  lastError       String?
+
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+
+  /// Uma mensagem por rota. Replanejar a mesma rota nao manda dois WhatsApp, e a
+  /// unicidade torna o enfileiramento idempotente sem logica extra.
+  @@unique([routeId])
+  @@index([establishmentId, sentAt])
+}
+
 model MarketplaceCommand {
   id              String                 @id @default(uuid())
   establishmentId String

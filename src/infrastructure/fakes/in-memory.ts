@@ -5,7 +5,7 @@ import {
   type CourierPingRepository,
   type CourierRepository,
   type DomainEvent,
-  type Establishment,
+  Establishment,
   type EstablishmentRepository,
   type EventStore,
   type GeocodeCacheRepository,
@@ -53,7 +53,9 @@ export class InMemoryDatabase {
   productGroups = new Map<string, string[]>();
   /** Aceite automático de pedido de marketplace. */
   autoConfirmOrders = false;
+  whatsappRoutes = false;
   categoryOrder: string[] = [];
+  notificacoes = new Map<string, { routeId: string; phone: string; text: string }>();
   acordos = new Map<string, CourierPayAgreement>();
   products = new Map<string, Product>();
   deliveryFeeBands: DeliveryFeeBand[] = [];
@@ -217,11 +219,35 @@ function buildRepositories(db: InMemoryDatabase): Repositories {
 
   const establishments: EstablishmentRepository = {
     async current() {
-      return db.establishment;
+      /*
+       * Reflete os interruptores que o próprio fake guarda.
+       *
+       * Devolver a entidade fixa fazia `setAutoConfirm` e `setWhatsappRoutes`
+       * gravarem num campo que ninguém lia de volta — o teste passava com o
+       * recurso ligado e desligado igual, que é o pior tipo de fake: o que
+       * concorda com qualquer coisa.
+       */
+      const e = db.establishment;
+      return new Establishment(
+        e.id,
+        e.name,
+        e.address,
+        e.coordinates,
+        e.city,
+        e.state,
+        e.deliveryFee,
+        e.slug,
+        db.autoConfirmOrders,
+        db.whatsappRoutes,
+      );
     },
 
     async setAutoConfirm(ligado) {
       db.autoConfirmOrders = ligado;
+    },
+
+    async setWhatsappRoutes(ligado) {
+      db.whatsappRoutes = ligado;
     },
 
     async deliveryFeeBands() {
@@ -338,6 +364,12 @@ function buildRepositories(db: InMemoryDatabase): Repositories {
     },
   };
 
+  const courierNotifications = {
+    async enqueue(input: { routeId: string; phone: string; text: string }) {
+      db.notificacoes.set(input.routeId, input);
+    },
+  };
+
   const geocodeCache: GeocodeCacheRepository = {
     async get(key) {
       return db.geocodeCache.get(key) ?? null;
@@ -351,6 +383,7 @@ function buildRepositories(db: InMemoryDatabase): Repositories {
     orders,
     payments,
     routes,
+    courierNotifications,
     couriers,
     establishments,
     pings,

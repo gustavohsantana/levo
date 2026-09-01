@@ -59,6 +59,16 @@ const schema = z.object({
   BLOB_READ_WRITE_TOKEN: z.string().optional(),
 
   WEBHOOK_SECRET: z.string().optional(),
+  /*
+   * WAHA: a ponte com o WhatsApp que manda a rota para o motoboy.
+   *
+   * Fica só no worker. A Vercel é serverless e não alcançaria a WAHA, que roda
+   * presa no localhost da VM — e é assim que deve ser: quem tem a chave manda
+   * mensagem pelo WhatsApp da loja.
+   */
+  WAHA_URL: z.string().optional(),
+  WAHA_API_KEY: z.string().optional(),
+  WAHA_SESSION: z.string().default('default'),
 
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),

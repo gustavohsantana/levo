@@ -363,6 +363,13 @@ export class PrismaEstablishmentRepository extends TenantScoped implements Estab
     });
   }
 
+  async setWhatsappRoutes(ligado: boolean): Promise<void> {
+    await this.tx.establishment.update({
+      where: { id: this.establishmentId },
+      data: { whatsappRoutes: ligado },
+    });
+  }
+
   async categoryOrder(): Promise<string[]> {
     const row = await this.tx.establishment.findUnique({
       where: { id: this.establishmentId },
@@ -513,6 +520,27 @@ export class PrismaMarketplaceOutbox implements MarketplaceOutbox {
     if (entries.length === 0) return;
 
     await this.tx.marketplaceCommand.createMany({ data: entries, skipDuplicates: true });
+  }
+}
+
+export class PrismaCourierNotificationOutbox extends TenantScoped {
+  /**
+   * Enfileira a mensagem da rota.
+   *
+   * `routeId` e unico: replanejar a mesma rota nao manda dois WhatsApp, e a
+   * idempotencia sai do banco em vez de virar logica aqui.
+   */
+  async enqueue(input: { routeId: string; phone: string; text: string }): Promise<void> {
+    await this.tx.courierNotification.upsert({
+      where: { routeId: input.routeId },
+      create: {
+        establishmentId: this.establishmentId,
+        routeId: input.routeId,
+        phone: input.phone,
+        text: input.text,
+      },
+      update: {},
+    });
   }
 }
 
@@ -772,6 +800,7 @@ export function buildRepositories(tx: Tx, establishmentId: string): Repositories
     events: new PrismaEventStore(tx),
     marketplace: new PrismaMarketplaceOutbox(tx),
     geocodeCache: new PrismaGeocodeCacheRepository(tx),
+    courierNotifications: new PrismaCourierNotificationOutbox(tx, establishmentId),
   };
 }
 

@@ -12,6 +12,7 @@ import {
 import { AiqfomeOrderSource } from '../src/infrastructure/integrations/aiqfome/adapter';
 import { aiqfomeAccessTokenFor } from '../src/infrastructure/integrations/aiqfome/factory';
 import { marketplaceCommandsFor } from '../src/infrastructure/integrations/marketplace-factory';
+import { WahaSender } from '../src/infrastructure/messaging/waha';
 import type { MarketplaceCommands, OrderSource } from '../src/core';
 
 /**
@@ -226,6 +227,73 @@ async function drenarAvisos(): Promise<void> {
   }
 }
 
+/** Depois disto, para de tentar. Número errado não vira certo insistindo. */
+const MAX_TENTATIVAS_WHATSAPP = 4;
+
+/**
+ * Manda para o motoboy a rota que acabou de ser planejada.
+ *
+ * O envio vive aqui, e não na Vercel, por três razões que apontam para o mesmo
+ * lugar: a WAHA fica presa no localhost desta VM, o espaçamento entre mensagens
+ * só funciona com um processo único enviando, e a fila precisa sobreviver a
+ * falha — coisas que serverless não faz.
+ *
+ * Sem WAHA configurada isto não faz nada. Quem não ligou o recurso não paga
+ * consulta ao banco a cada 30 segundos por ele.
+ */
+async function drenarWhatsApp(): Promise<void> {
+  if (!config.WAHA_URL || !config.WAHA_API_KEY) return;
+
+  const prisma = getPrismaClient(config.DATABASE_URL);
+
+  const pendentes = await prisma.courierNotification.findMany({
+    where: { sentAt: null, attempts: { lt: MAX_TENTATIVAS_WHATSAPP } },
+    orderBy: { createdAt: 'asc' },
+    take: 20,
+  });
+
+  if (pendentes.length === 0) return;
+
+  const waha = new WahaSender({
+    baseUrl: config.WAHA_URL,
+    apiKey: config.WAHA_API_KEY,
+    session: config.WAHA_SESSION,
+  });
+
+  /*
+   * Confere a sessão uma vez por rodada, e não por mensagem.
+   *
+   * Sessão caída é o caso comum de falha — alguém abriu o WhatsApp Web no
+   * celular e derrubou o pareamento. Tentar enviar assim gastaria tentativa de
+   * cada mensagem da fila por um motivo que não é delas.
+   */
+  const status = await waha.sessionStatus().catch(() => 'INDISPONIVEL');
+  if (status !== 'WORKING') {
+    logger.warn({ status, pendentes: pendentes.length }, 'whatsapp.sessao_fora');
+    return;
+  }
+
+  for (const aviso of pendentes) {
+    try {
+      await waha.sendText(aviso.phone, aviso.text);
+      await prisma.courierNotification.update({
+        where: { id: aviso.id },
+        data: { sentAt: new Date(), attempts: { increment: 1 }, lastError: null },
+      });
+      logger.info({ routeId: aviso.routeId }, 'whatsapp.rota_enviada');
+    } catch (cause) {
+      await prisma.courierNotification.update({
+        where: { id: aviso.id },
+        data: { attempts: { increment: 1 }, lastError: String(cause).slice(0, 500) },
+      });
+      logger.error(
+        { routeId: aviso.routeId, tentativa: aviso.attempts + 1, cause: String(cause) },
+        'whatsapp.envio_falhou',
+      );
+    }
+  }
+}
+
 /**
  * Quanto esperar antes de perguntar ao gateway sobre um pagamento pendente.
  *
@@ -311,6 +379,7 @@ async function tick(): Promise<void> {
 
   // Depois de importar: o que entrou nesta rodada pode ter gerado aviso.
   await drenarAvisos();
+  await drenarWhatsApp();
 
   /*
    * Isolado por estabelecimento: gateway fora do ar numa loja não pode impedir

@@ -139,7 +139,7 @@ export function containerFor(establishmentId: string): Container {
             })
           )?.autoConfirmOrders ?? false,
       ),
-      planRoute: new PlanRoute(uow, routing, optimizer, ids, clock),
+      planRoute: new PlanRoute(uow, routing, optimizer, ids, clock, undefined, config.PUBLIC_BASE_URL),
       startRoute: new StartRoute(uow, clock),
       completeStop: new CompleteStop(uow, clock),
       recordPing: new RecordCourierPing(uow, clock),

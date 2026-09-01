@@ -74,6 +74,8 @@ export interface EstablishmentRepository {
    * vazio apagaria o que estava certo.
    */
   setAutoConfirm(ligado: boolean): Promise<void>;
+  /** Manda a rota para o motoboy no WhatsApp assim que ela e planejada. */
+  setWhatsappRoutes(ligado: boolean): Promise<void>;
   saveSettings(
     city: string | null,
     state: string | null,
@@ -203,6 +205,17 @@ export interface PaymentRepository {
 }
 
 /** Tudo que um caso de uso enxerga dentro de uma transação. */
+/**
+ * Caixa de saida das mensagens para o motoboy.
+ *
+ * Enfileirar e sincrono com o planejamento; enviar e do worker. WhatsApp fora do
+ * ar nao pode derrubar o despacho — o motoboy sai para entregar de qualquer
+ * jeito, e a mensagem tenta de novo no ciclo seguinte.
+ */
+export interface CourierNotificationOutbox {
+  enqueue(input: { routeId: string; phone: string; text: string }): Promise<void>;
+}
+
 export interface Repositories {
   orders: OrderRepository;
   payments: PaymentRepository;
@@ -215,6 +228,7 @@ export interface Repositories {
   events: EventStore;
   marketplace: MarketplaceOutbox;
   geocodeCache: GeocodeCacheRepository;
+  courierNotifications: CourierNotificationOutbox;
 }
 
 /**

@@ -313,6 +313,28 @@ export async function alternarAceiteAutomaticoAction(ligado: boolean): Promise<A
 }
 
 /**
+ * Liga o envio da rota pelo WhatsApp do motoboy.
+ *
+ * Separado do formulário de configurações pelo mesmo motivo do aceite
+ * automático: é um interruptor que o dono vira sozinho, e junto exigiria
+ * reenviar cidade, estado e slug — um deles chegando vazio apagaria o que
+ * estava certo.
+ */
+export async function alternarRotaNoWhatsappAction(ligado: boolean): Promise<ActionResult> {
+  try {
+    const session = await requireSession();
+    await containerFor(session.establishmentId).read((repos) =>
+      repos.establishments.setWhatsappRoutes(ligado),
+    );
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+
+  revalidatePath('/dashboard/configuracoes');
+  return { ok: true };
+}
+
+/**
  * Conclui as entregas escolhidas de uma rota.
  *
  * Existe porque nem toda entrega é confirmada pelo motoboy: ele esquece, o

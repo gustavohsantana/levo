@@ -39,6 +39,7 @@ export const EstablishmentMapper = {
       Money.fromCents(row.deliveryFeeCents),
       row.slug,
       row.autoConfirmOrders,
+      row.whatsappRoutes,
     );
   },
 };

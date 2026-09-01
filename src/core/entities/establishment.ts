@@ -29,6 +29,14 @@ export class Establishment extends Entity {
      * que ninguém cumpre olhando a tela numa cozinha cheia.
      */
     readonly autoConfirmOrders: boolean = false,
+    /**
+     * Manda a rota para o motoboy no WhatsApp assim que ela é planejada.
+     *
+     * Desligado por padrão de propósito: mensagem automática sai de um número
+     * que pode ser banido, e ligar isso é decisão do dono — não um padrão que
+     * ele descobre quando o motoboy reclama.
+     */
+    readonly whatsappRoutes: boolean = false,
   ) {
     super(id);
   }
