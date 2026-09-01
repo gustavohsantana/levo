@@ -11,6 +11,7 @@ import type { DeliveryFeeBand } from '../../services/delivery-fee';
 import type { OptionGroupSpec } from '../../services/option-selection';
 import type { DomainEvent } from '../../events/domain-event';
 import type { Coordinates } from '../../value-objects';
+import type { CourierPayAgreement } from '../../services/courier-pay';
 
 /**
  * Toda implementação destas interfaces já nasce amarrada a um estabelecimento.
@@ -47,6 +48,15 @@ export interface CourierRepository {
   findById(id: string): Promise<Courier | null>;
   listActive(): Promise<Courier[]>;
   list(): Promise<Courier[]>;
+  /**
+   * O acordo de pagamento combinado com este motoboy.
+   *
+   * Fora da entidade `Courier` de propósito: é configuração de quanto se paga,
+   * não estado do entregador — ninguém carrega tabela de preço para despachar
+   * uma rota, e todo lugar que hoje lê um `Courier` passaria a arrastar isso.
+   */
+  payAgreement(courierId: string): Promise<CourierPayAgreement>;
+  savePayAgreement(courierId: string, acordo: CourierPayAgreement): Promise<void>;
 }
 
 export interface EstablishmentRepository {

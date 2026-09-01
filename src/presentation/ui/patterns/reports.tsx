@@ -247,17 +247,44 @@ function PorPlataforma({ dados }: { dados: Relatorio }) {
 }
 
 function PorEntregador({ dados }: { dados: Relatorio }) {
+  const totalAPagar = dados.porEntregador.reduce((t, e) => t + e.aPagarCents, 0);
+
   return (
     <section className="rounded-lg bg-surface p-4 hairline">
-      <h2 className="text-sm font-medium text-ink">Por entregador</h2>
-      <ul className="mt-3 flex flex-col gap-2 text-sm">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-sm font-medium text-ink">Por entregador</h2>
+        {totalAPagar > 0 ? (
+          <span className="numeric text-sm text-ink-muted">
+            a pagar: <strong className="text-ink">{currency(totalAPagar)}</strong>
+          </span>
+        ) : null}
+      </div>
+
+      <ul className="mt-3 flex flex-col gap-2.5 text-sm">
         {dados.porEntregador.map((e) => (
           <li key={e.id} className="flex items-baseline justify-between gap-3">
-            <span className="truncate text-ink">{e.nome}</span>
-            <span className="numeric shrink-0 text-ink-muted">
-              {e.entregas} · {currency(e.valorCents)}
-              {e.tempoMedioMinutos !== null ? ` · ${e.tempoMedioMinutos} min` : ''}
+            <span className="min-w-0 truncate text-ink">
+              {e.nome}
+              <span className="ml-2 text-xs text-ink-faint">
+                {e.entregas} entregas
+                {e.tempoMedioMinutos !== null ? ` · ${e.tempoMedioMinutos} min` : ''}
+              </span>
             </span>
+
+            {/*
+              Acordo em branco mostra o aviso, não R$ 0,00: zero pareceria uma
+              conta fechada, e o dono só descobriria o buraco no dia do acerto.
+            */}
+            {e.semAcordo ? (
+              <Link
+                href={`/dashboard/entregadores/${e.id}`}
+                className="shrink-0 text-xs text-ink-muted underline underline-offset-2"
+              >
+                definir acordo
+              </Link>
+            ) : (
+              <span className="numeric shrink-0 text-ink">{currency(e.aPagarCents)}</span>
+            )}
           </li>
         ))}
         {dados.porEntregador.length === 0 ? (

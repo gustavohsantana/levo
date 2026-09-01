@@ -281,6 +281,7 @@ export async function getCourierMonth(courierId: string, month: Date) {
 
   return container.read(async (repos) => {
     const courier = await repos.couriers.findById(courierId);
+    const acordo = await repos.couriers.payAgreement(courierId);
     const routes = await repos.routes.listByCourier(courierId, from, to);
 
     /*
@@ -347,6 +348,15 @@ export async function getCourierMonth(courierId: string, month: Date) {
         : null,
       days: [...porDia.values()].sort((a, b) => a.date.localeCompare(b.date)),
       routes: detalhes,
+      acordo: {
+        model: acordo.model,
+        perDeliveryCents: acordo.perDelivery.cents,
+        dailyCents: acordo.daily.cents,
+        bands: acordo.bands.map((b) => ({
+          uptoMeters: b.uptoMeters,
+          amountCents: b.amount.cents,
+        })),
+      },
     };
   });
 }

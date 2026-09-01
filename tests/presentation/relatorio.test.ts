@@ -23,6 +23,8 @@ function linha(over: Partial<LinhaRelatorio> = {}): LinhaRelatorio {
     cliente: 'Maria',
     endereco: 'Rua A, 10',
     entregador: 'Jefferson',
+    entregadorId: 'c-1',
+    metros: 2000,
     totalCents: 5000,
     taxaCents: 500,
     status: 'DELIVERED',

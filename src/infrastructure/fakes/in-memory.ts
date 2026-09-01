@@ -28,6 +28,8 @@ import {
   type OptionGroupRepository,
   type OptionGroupSpec,
 } from '@/core';
+import { Money } from '@/core';
+import type { CourierPayAgreement } from '@/core/services/courier-pay';
 
 /**
  * Implementações em memória das ports, para teste.
@@ -52,6 +54,7 @@ export class InMemoryDatabase {
   /** Aceite automático de pedido de marketplace. */
   autoConfirmOrders = false;
   categoryOrder: string[] = [];
+  acordos = new Map<string, CourierPayAgreement>();
   products = new Map<string, Product>();
   deliveryFeeBands: DeliveryFeeBand[] = [];
   events: DomainEvent[] = [];
@@ -149,6 +152,19 @@ function buildRepositories(db: InMemoryDatabase): Repositories {
     },
     async list() {
       return [...db.couriers.values()];
+    },
+    async payAgreement(courierId) {
+      return (
+        db.acordos.get(courierId) ?? {
+          model: 'POR_ENTREGA',
+          perDelivery: Money.fromCents(0),
+          daily: Money.fromCents(0),
+          bands: [],
+        }
+      );
+    },
+    async savePayAgreement(courierId, acordo) {
+      db.acordos.set(courierId, acordo);
     },
   };
 

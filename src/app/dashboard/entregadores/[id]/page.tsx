@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getCourierMonth } from '@/presentation/queries';
 import { CourierMonth } from '@/presentation/ui/patterns/courier-month';
+import { CourierPayForm } from '@/presentation/ui/patterns/courier-pay-form';
 
 export const metadata: Metadata = { title: 'Entregador · Levô' };
 export const dynamic = 'force-dynamic';
@@ -27,12 +28,20 @@ export default async function EntregadorPage({
   if (!dados.courier) notFound();
 
   return (
-    <CourierMonth
-      courier={dados.courier}
-      mes={referencia}
-      days={dados.days}
-      routes={dados.routes}
-    />
+    <div className="flex flex-col gap-6">
+      <CourierMonth
+        courier={dados.courier}
+        mes={referencia}
+        days={dados.days}
+        routes={dados.routes}
+      />
+
+      {/*
+        O acordo fica embaixo do mês, e não numa tela à parte: quem vem conferir
+        quanto o motoboy rodou é quem vai acertar com ele.
+      */}
+      <CourierPayForm courierId={dados.courier.id} inicial={dados.acordo} />
+    </div>
   );
 }
 

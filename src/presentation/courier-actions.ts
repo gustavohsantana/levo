@@ -50,3 +50,33 @@ export async function alternarEntregadorAction(
     return { ok: false, error: toFormError(cause) };
   }
 }
+
+/**
+ * Grava o acordo de pagamento de um motoboy.
+ *
+ * As faixas chegam em quilômetros porque é assim que o dono negocia; o banco
+ * guarda metros, que é a unidade da rota.
+ */
+export async function salvarAcordoAction(
+  courierId: string,
+  acordo: {
+    model: 'POR_ENTREGA' | 'POR_FAIXA' | 'DIARIA_E_ENTREGA';
+    perDeliveryCents: number;
+    dailyCents: number;
+    bands: Array<{ uptoMeters: number; amountCents: number }>;
+  },
+): Promise<ActionResult> {
+  try {
+    const session = await requireSession();
+    await containerFor(session.establishmentId).useCases.saveCourierPay.execute({
+      courierId,
+      ...acordo,
+    });
+
+    revalidatePath(`/dashboard/entregadores/${courierId}`);
+    revalidatePath('/dashboard/relatorios');
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}

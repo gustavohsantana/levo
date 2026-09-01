@@ -1,3 +1,4 @@
+import { fecharPagamento, type CourierPayAgreement } from '@/core/services/courier-pay';
 /**
  * A parte do relatório que não precisa de banco.
  *
@@ -64,6 +65,9 @@ export interface LinhaRelatorio {
   cliente: string;
   endereco: string;
   entregador: string | null;
+  entregadorId: string | null;
+  /** Distância da perna até este cliente. Base do pagamento por faixa. */
+  metros: number | null;
   totalCents: number;
   taxaCents: number;
   status: string;
@@ -95,6 +99,10 @@ export interface Relatorio {
     entregas: number;
     valorCents: number;
     tempoMedioMinutos: number | null;
+    /** O que ele tem a receber no período, pelo acordo dele. */
+    aPagarCents: number;
+    /** O acordo ainda não foi combinado — a tela precisa dizer, não somar zero. */
+    semAcordo: boolean;
   }>;
   porDia: Array<{ dia: string; pedidos: number; valorCents: number }>;
   linhas: LinhaRelatorio[];
@@ -113,6 +121,7 @@ export interface Relatorio {
 export function consolidar(
   linhas: LinhaRelatorio[],
   entregadores: Array<{ id: string; name: string }> = [],
+  acordos: Map<string, CourierPayAgreement> = new Map(),
 ): Pick<Relatorio, 'resumo' | 'porPlataforma' | 'porEntregador' | 'porDia'> {
   const entregues = linhas.filter((l) => l.status === 'DELIVERED');
   const cancelados = linhas.filter((l) => l.status === 'CANCELLED');
@@ -144,12 +153,29 @@ export function consolidar(
     (l) => l.entregador!,
   ).map(([nome, itens]) => {
     const meus = itens.map((l) => l.minutosAteEntregar).filter((x): x is number => x !== null);
+    const id = itens[0].entregadorId ?? entregadores.find((e) => e.name === nome)?.id ?? nome;
+
+    /*
+     * O que ele tem a receber sai do acordo dele, não de uma média da casa:
+     * dois motoboys na mesma loja podem ter combinados diferentes, e é assim
+     * mesmo — o veterano tem faixa, o que entrou hoje tem fixo.
+     */
+    const acordo = acordos.get(id);
+    const fechamento = acordo
+      ? fecharPagamento(
+          itens.map((l) => ({ meters: l.metros ?? 0, dia: diaDe(new Date(l.quando)) })),
+          acordo,
+        )
+      : null;
+
     return {
-      id: entregadores.find((e) => e.name === nome)?.id ?? nome,
+      id,
       nome,
       entregas: itens.length,
       valorCents: itens.reduce((t, l) => t + l.totalCents, 0),
       tempoMedioMinutos: meus.length ? Math.round(media(meus)) : null,
+      aPagarCents: fechamento?.totalCents ?? 0,
+      semAcordo: fechamento ? fechamento.semAcordo : true,
     };
   });
   porEntregador.sort((a, b) => b.entregas - a.entregas);

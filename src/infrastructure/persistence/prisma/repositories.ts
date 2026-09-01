@@ -33,6 +33,7 @@ import {
   type OptionGroupSpec,
 } from '@/core';
 import { CourierMapper, EstablishmentMapper, OrderMapper, PaymentMapper, RouteMapper } from './mappers';
+import type { CourierPayAgreement } from '@/core/services/courier-pay';
 
 type Tx = Prisma.TransactionClient;
 
@@ -292,6 +293,55 @@ export class PrismaCourierRepository extends TenantScoped implements CourierRepo
     });
     return rows.map(CourierMapper.toDomain);
   }
+
+  async payAgreement(courierId: string): Promise<CourierPayAgreement> {
+    const row = await this.tx.courier.findFirst({
+      where: { id: courierId, establishmentId: this.establishmentId },
+      select: {
+        payModel: true,
+        payPerDeliveryCents: true,
+        payDailyCents: true,
+        payBands: { orderBy: { uptoMeters: 'asc' }, select: { uptoMeters: true, amountCents: true } },
+      },
+    });
+
+    return {
+      model: row?.payModel ?? 'POR_ENTREGA',
+      perDelivery: Money.fromCents(row?.payPerDeliveryCents ?? 0),
+      daily: Money.fromCents(row?.payDailyCents ?? 0),
+      bands: (row?.payBands ?? []).map((b) => ({
+        uptoMeters: b.uptoMeters,
+        amount: Money.fromCents(b.amountCents),
+      })),
+    };
+  }
+
+  async savePayAgreement(courierId: string, acordo: CourierPayAgreement): Promise<void> {
+    await this.tx.courier.update({
+      where: { id: courierId },
+      data: {
+        payModel: acordo.model,
+        payPerDeliveryCents: acordo.perDelivery.cents,
+        payDailyCents: acordo.daily.cents,
+      },
+    });
+
+    /*
+     * Reescreve as faixas em vez de comparar linha a linha — mesma razão das
+     * faixas de taxa: meia dúzia de linhas editadas de uma vez na tela.
+     */
+    await this.tx.courierPayBand.deleteMany({ where: { courierId } });
+    if (acordo.bands.length === 0) return;
+
+    await this.tx.courierPayBand.createMany({
+      data: acordo.bands.map((b) => ({
+        courierId,
+        uptoMeters: b.uptoMeters,
+        amountCents: b.amount.cents,
+      })),
+    });
+  }
+
 }
 
 export class PrismaEstablishmentRepository extends TenantScoped implements EstablishmentRepository {

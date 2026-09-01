@@ -1,3 +1,4 @@
+import { Money } from '@/core';
 import 'server-only';
 import { getPrismaClient } from '@/infrastructure/persistence/prisma/client';
 import { env } from '@/env';
@@ -61,6 +62,8 @@ export async function getRelatorio(filtro: FiltroRelatorio): Promise<Relatorio> 
       amountCents: true,
       deliveryFeeCents: true,
       routeId: true,
+      // A distância da perna é a base do pagamento por faixa do motoboy.
+      stop: { select: { legDistanceMeters: true } },
     },
   });
 
@@ -78,11 +81,18 @@ export async function getRelatorio(filtro: FiltroRelatorio): Promise<Relatorio> 
     : [];
   const porRota = new Map(rotas.map((r) => [r.id, { id: r.courierId, nome: r.courier.name }]));
 
-  const entregadores = await prisma.courier.findMany({
+  const entregadoresCompletos = await prisma.courier.findMany({
     where: { establishmentId },
     orderBy: { name: 'asc' },
-    select: { id: true, name: true },
+    select: {
+      id: true,
+      name: true,
+      payModel: true,
+      payPerDeliveryCents: true,
+      payDailyCents: true,
+    },
   });
+  const entregadores = entregadoresCompletos.map((c) => ({ id: c.id, name: c.name }));
 
   // O filtro por entregador é aplicado aqui porque ele mora na rota, não no
   // pedido — levá-lo para o `where` exigiria um join que o Prisma só faz por
@@ -92,7 +102,7 @@ export async function getRelatorio(filtro: FiltroRelatorio): Promise<Relatorio> 
     : pedidos;
 
   const linhas: LinhaRelatorio[] = doFiltro.map((p) => {
-    const entregador = p.routeId ? (porRota.get(p.routeId)?.nome ?? null) : null;
+    const daRota = p.routeId ? porRota.get(p.routeId) : undefined;
     const minutos =
       p.deliveredAt != null
         ? Math.round((p.deliveredAt.getTime() - p.createdAt.getTime()) / 60_000)
@@ -105,7 +115,9 @@ export async function getRelatorio(filtro: FiltroRelatorio): Promise<Relatorio> 
       plataforma: p.source as Plataforma,
       cliente: p.customerName,
       endereco: p.address,
-      entregador,
+      entregador: daRota?.nome ?? null,
+      entregadorId: daRota?.id ?? null,
+      metros: p.stop?.legDistanceMeters ?? null,
       totalCents: p.amountCents,
       taxaCents: p.deliveryFeeCents,
       status: p.status,
@@ -113,7 +125,31 @@ export async function getRelatorio(filtro: FiltroRelatorio): Promise<Relatorio> 
     };
   });
 
-  const consolidado = consolidar(linhas, entregadores);
+  /*
+   * Os acordos de todos os entregadores, numa consulta. Sem eles o relatório
+   * some com a única pergunta que o dono faz no domingo: quanto eu pago.
+   */
+  const bandas = await prisma.courierPayBand.findMany({
+    where: { courier: { establishmentId } },
+    orderBy: { uptoMeters: 'asc' },
+    select: { courierId: true, uptoMeters: true, amountCents: true },
+  });
+
+  const acordos = new Map(
+    entregadoresCompletos.map((c) => [
+      c.id,
+      {
+        model: c.payModel,
+        perDelivery: Money.fromCents(c.payPerDeliveryCents),
+        daily: Money.fromCents(c.payDailyCents),
+        bands: bandas
+          .filter((b) => b.courierId === c.id)
+          .map((b) => ({ uptoMeters: b.uptoMeters, amount: Money.fromCents(b.amountCents) })),
+      },
+    ]),
+  );
+
+  const consolidado = consolidar(linhas, entregadores, acordos);
 
   return {
     filtro,

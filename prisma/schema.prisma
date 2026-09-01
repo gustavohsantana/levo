@@ -116,18 +116,54 @@ model User {
   @@index([establishmentId])
 }
 
+/// Como o motoboy e pago. Os tres acordos que o mercado usa de verdade.
+enum CourierPayModel {
+  /// Valor unico por corrida, independente da distancia. O mais comum em
+  /// cidade pequena, onde tudo e perto.
+  POR_ENTREGA
+  /// Faixas de distancia, como a taxa do cliente — mas com outros numeros: se
+  /// cobra R$ 12 e se paga R$ 8.
+  POR_FAIXA
+  /// Diaria garantida mais um valor por corrida. Usado com motoboy fixo, para
+  /// ele nao sair no prejuizo em dia fraco.
+  DIARIA_E_ENTREGA
+}
+
 model Courier {
   id              String   @id @default(uuid())
   establishmentId String
   name            String
   phone           String
   active          Boolean  @default(true)
+  /// O acordo combinado com este motoboy.
+  ///
+  /// Fica no motoboy, e nao no estabelecimento, porque acordo e pessoal: o
+  /// veterano tem faixa e o que entra hoje ganha fixo, na mesma loja.
+  payModel            CourierPayModel @default(POR_ENTREGA)
+  /// Quanto por corrida. Vale em POR_ENTREGA e em DIARIA_E_ENTREGA.
+  payPerDeliveryCents Int             @default(0)
+  /// A diaria garantida, contada uma vez por dia em que ele rodou.
+  payDailyCents       Int             @default(0)
   createdAt       DateTime @default(now())
 
-  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+  establishment Establishment    @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
   routes        Route[]
+  payBands      CourierPayBand[]
 
   @@index([establishmentId, active])
+}
+
+/// Faixa de pagamento por distancia, de um motoboy.
+model CourierPayBand {
+  id          String @id @default(uuid())
+  courierId   String
+  /// Limite superior da faixa. A ultima cobre tudo acima dela.
+  uptoMeters  Int
+  amountCents Int
+
+  courier Courier @relation(fields: [courierId], references: [id], onDelete: Cascade)
+
+  @@index([courierId, uptoMeters])
 }
 
 model Order {
