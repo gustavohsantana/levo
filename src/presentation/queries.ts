@@ -113,8 +113,21 @@ function toOrderView(order: Order, whatsapp: string | null, trackingUrl: string)
   };
 }
 
+/** Um grupo de opções como a tela precisa dele. */
+export interface OptionGroupView {
+  id: string;
+  name: string;
+  min: number;
+  max: number;
+  options: Array<{ id: string; name: string; priceCents: number }>;
+  /** Quantos produtos já oferecem este grupo. */
+  produtos: number;
+}
+
 export interface ProductView {
   id: string;
+  /** Os grupos que este produto oferece, na ordem da tela. */
+  optionGroupIds: string[];
   name: string;
   description: string | null;
   priceCents: number;
@@ -130,9 +143,15 @@ export async function getCatalog(): Promise<ProductView[]> {
 
   return container.read(async (repos) => {
     const produtos = await repos.products.list();
+    /*
+     * Em lote: o catálogo tem dezenas de produtos, e uma consulta por produto
+     * seria N+1 numa tela que o dono abre o tempo todo.
+     */
+    const grupos = await repos.optionGroups.forProducts(produtos.map((p) => p.id));
 
     return produtos.map((p) => ({
       id: p.id,
+      optionGroupIds: (grupos.get(p.id) ?? []).map((g) => g.id),
       name: p.name,
       description: p.description,
       priceCents: p.price.cents,
@@ -151,6 +170,36 @@ export interface CourierView {
   phone: string;
   active: boolean;
   busy: boolean;
+}
+
+/**
+ * Os grupos do estabelecimento, com quantos produtos usam cada um.
+ *
+ * A contagem existe para o dono não apagar sem saber o estrago: "Frutas" usado
+ * por quatro produtos é decisão diferente de um grupo órfão.
+ */
+export async function getOptionGroups(): Promise<OptionGroupView[]> {
+  const { container } = await currentContainer();
+
+  return container.read(async (repos) => {
+    const grupos = await repos.optionGroups.list();
+    const produtos = await repos.products.list();
+    const porProduto = await repos.optionGroups.forProducts(produtos.map((p) => p.id));
+
+    const uso = new Map<string, number>();
+    for (const lista of porProduto.values()) {
+      for (const g of lista) uso.set(g.id, (uso.get(g.id) ?? 0) + 1);
+    }
+
+    return grupos.map((g) => ({
+      id: g.id,
+      name: g.name,
+      min: g.min,
+      max: g.max,
+      options: g.options.map((o) => ({ id: o.id, name: o.name, priceCents: o.price.cents })),
+      produtos: uso.get(g.id) ?? 0,
+    }));
+  });
 }
 
 export async function getCouriers(): Promise<CourierView[]> {

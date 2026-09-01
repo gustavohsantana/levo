@@ -33,7 +33,7 @@ export async function salvarProdutoAction(formData: FormData): Promise<ActionRes
     const session = await requireSession();
     const { useCases } = containerFor(session.establishmentId);
 
-    await useCases.saveProduct.execute({
+    const produto = await useCases.saveProduct.execute({
       id: parsed.data.id || null,
       name: parsed.data.name,
       description: parsed.data.description || null,
@@ -41,6 +41,25 @@ export async function salvarProdutoAction(formData: FormData): Promise<ActionRes
       category: parsed.data.category || null,
       imageUrl: parsed.data.imageUrl || null,
     });
+
+    /*
+     * Os grupos vão junto, com o id que o `saveProduct` acabou de devolver.
+     *
+     * Numa ação separada, o produto novo nasceria sem eles até um segundo
+     * clique — e o dono só descobriria pela tela do cliente, com o pedido já
+     * chegando sem sabor escolhido.
+     *
+     * O campo vem como CSV porque `FormData` não representa lista sem inventar
+     * convenção de nome; vazio significa "nenhum grupo", que é resposta válida.
+     */
+    const grupos = String(formData.get('optionGroupIds') ?? '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+
+    await containerFor(session.establishmentId).read((repos) =>
+      repos.optionGroups.setForProduct(produto.id, grupos),
+    );
 
     revalidatePath('/dashboard/catalogo');
     return { ok: true };

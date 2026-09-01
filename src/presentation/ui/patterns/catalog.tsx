@@ -9,7 +9,8 @@ import {
   salvarProdutoAction,
 } from '@/presentation/catalog-actions';
 import { enviarImagemAction } from '@/presentation/upload-actions';
-import type { ProductView } from '@/presentation/queries';
+import type { OptionGroupView, ProductView } from '@/presentation/queries';
+import { OptionGroups } from './option-groups';
 import { Button, EmptyState, Field, Input, Textarea } from '../primitives';
 import { currency } from '../format';
 
@@ -42,7 +43,13 @@ const CATEGORIAS_PADRAO = [
   'Sobremesas',
 ];
 
-export function Catalog({ produtos }: { produtos: ProductView[] }) {
+export function Catalog({
+  produtos,
+  grupos,
+}: {
+  produtos: ProductView[];
+  grupos: OptionGroupView[];
+}) {
   const [editando, setEditando] = useState<ProductView | null>(null);
   const [criando, setCriando] = useState(false);
 
@@ -89,6 +96,7 @@ export function Catalog({ produtos }: { produtos: ProductView[] }) {
         <ProductForm
           produto={editando}
           categorias={categorias}
+          grupos={grupos}
           onDone={() => {
             setCriando(false);
             setEditando(null);
@@ -117,6 +125,14 @@ export function Catalog({ produtos }: { produtos: ProductView[] }) {
           ))}
         </div>
       )}
+
+      {/*
+        Depois dos produtos, e não antes: quem chega aqui vem cadastrar o que
+        vende. Grupo é a camada seguinte, e uma marmitaria nunca precisa dela.
+      */}
+      <div className="border-t pt-6">
+        <OptionGroups grupos={grupos} categorias={categorias} />
+      </div>
     </div>
   );
 }
@@ -311,12 +327,17 @@ function ProductRow({
 function ProductForm({
   produto,
   categorias,
+  grupos,
   onDone,
 }: {
   produto: ProductView | null;
   categorias: string[];
+  grupos: OptionGroupView[];
   onDone: () => void;
 }) {
+  const [gruposDoProduto, setGruposDoProduto] = useState<string[]>(
+    produto?.optionGroupIds ?? [],
+  );
   const [erro, setErro] = useState<string | null>(null);
   const [pendente, submit] = useTransition();
   const [imagem, setImagem] = useState(produto?.imageUrl ?? '');
@@ -338,6 +359,7 @@ function ProductForm({
 
   function handleSubmit(formData: FormData) {
     setErro(null);
+    formData.set('optionGroupIds', gruposDoProduto.join(','));
 
     submit(async () => {
       const resultado = await salvarProdutoAction(formData);
@@ -438,6 +460,46 @@ function ProductForm({
           </div>
         </Field>
       </div>
+
+      {/*
+        Só aparece quando já existe grupo cadastrado. Um campo vazio com
+        "nenhum grupo" faria toda marmitaria se perguntar o que está faltando.
+      */}
+      {grupos.length > 0 ? (
+        <div className="mt-4 border-t pt-4">
+          <h3 className="text-xs font-medium uppercase tracking-wide text-ink-faint">
+            Opções deste produto
+          </h3>
+          <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+            O cliente escolhe estas opções ao pedir. A ordem aqui é a ordem na tela dele.
+          </p>
+
+          <div className="mt-2 flex flex-col gap-1">
+            {grupos.map((grupo) => (
+              <label
+                key={grupo.id}
+                className="flex cursor-pointer items-center gap-2.5 rounded-sm px-1 py-1.5 text-sm text-ink hover:bg-raised"
+              >
+                <input
+                  type="checkbox"
+                  checked={gruposDoProduto.includes(grupo.id)}
+                  onChange={() =>
+                    setGruposDoProduto((atual) =>
+                      atual.includes(grupo.id)
+                        ? atual.filter((id) => id !== grupo.id)
+                        : [...atual, grupo.id],
+                    )
+                  }
+                />
+                <span className="flex-1 truncate">{grupo.name}</span>
+                <span className="shrink-0 text-xs text-ink-faint">
+                  {grupo.min > 0 ? 'obrigatório' : 'opcional'}
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {erro ? <p className="mt-3 text-sm text-danger">{erro}</p> : null}
 
