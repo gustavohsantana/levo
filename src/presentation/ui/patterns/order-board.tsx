@@ -54,6 +54,27 @@ interface Props {
   origin: { lat: number; lng: number };
 }
 
+/**
+ * A cor de cada coluna, e o motivo de cada uma.
+ *
+ * Não é enfeite: reaproveita cores que já significam algo no produto, para o
+ * dono não precisar aprender um segundo vocabulário. `moving` já é "em rota" na
+ * etiqueta de status e na barra de progresso; `warning` já é urgência.
+ *
+ * NOVOS é âmbar porque ali o relógio corre — o iFood dá 3 minutos para aceitar
+ * e piora a posição da loja quem passa disso. MONTANDO fica neutro de
+ * propósito: é trabalho em curso, não decisão pendente, e colorir tudo faz cor
+ * nenhuma chamar atenção.
+ */
+const TONS = {
+  espera: { fundo: 'bg-warning-soft/40', icone: 'text-warning' },
+  cozinha: { fundo: 'bg-raised/60', icone: 'text-ink-faint' },
+  pronto: { fundo: 'bg-accent-soft/40', icone: 'text-accent-ink' },
+  rua: { fundo: 'bg-moving-soft/40', icone: 'text-moving' },
+} as const;
+
+type Tom = keyof typeof TONS;
+
 export function OrderBoard({
   novos,
   montando,
@@ -70,6 +91,7 @@ export function OrderBoard({
         icone={Package}
         pedidos={novos}
         vazio="Nada novo agora."
+        tom="espera"
         acao={{ rotulo: 'Aceitar', stage: 'CONFIRMED' }}
         selected={selected}
         onToggle={onToggle}
@@ -80,6 +102,7 @@ export function OrderBoard({
         icone={ChefHat}
         pedidos={montando}
         vazio="Nada na cozinha."
+        tom="cozinha"
         acao={{ rotulo: 'Pronto', stage: 'READY' }}
         selected={selected}
         onToggle={onToggle}
@@ -90,14 +113,14 @@ export function OrderBoard({
         icone={Check}
         pedidos={prontos}
         vazio="Nada esperando motoboy."
-        destaque
+        tom="pronto"
         selected={selected}
         onToggle={onToggle}
         origin={origin}
       />
-      <section className="flex min-w-0 flex-col rounded-lg bg-raised/60 p-2.5">
+      <section className={`flex min-w-0 flex-col rounded-lg p-2.5 ${TONS.rua.fundo}`}>
         <header className="mb-2 flex items-center gap-2 px-1">
-          <Truck className="size-3.5 text-ink-faint" aria-hidden />
+          <Truck className={`size-3.5 ${TONS.rua.icone}`} aria-hidden />
           <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
             Em rota
           </h3>
@@ -173,7 +196,7 @@ function Column({
   pedidos,
   vazio,
   acao,
-  destaque,
+  tom,
   somenteLeitura,
   selected,
   onToggle,
@@ -184,7 +207,7 @@ function Column({
   pedidos: OrderView[];
   vazio: string;
   acao?: { rotulo: string; stage: 'CONFIRMED' | 'READY' };
-  destaque?: boolean;
+  tom: Tom;
   somenteLeitura?: boolean;
   selected: Set<string>;
   onToggle: (id: string, shiftKey: boolean) => void;
@@ -192,12 +215,10 @@ function Column({
 }) {
   return (
     <section
-      className={`flex min-w-0 flex-col rounded-lg p-2.5 ${
-        destaque ? 'bg-accent-soft/40' : 'bg-raised/60'
-      }`}
+      className={`flex min-w-0 flex-col rounded-lg p-2.5 ${TONS[tom].fundo}`}
     >
       <header className="mb-2 flex items-center gap-2 px-1">
-        <Icone className="size-3.5 text-ink-faint" aria-hidden />
+        <Icone className={`size-3.5 ${TONS[tom].icone}`} aria-hidden />
         <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
           {titulo}
         </h3>
