@@ -55,6 +55,21 @@ describe('phoneDisplay', () => {
     expect(phoneDisplay('35988880001')).toBe('(35) 98888-0001');
   });
 
+  /*
+   * O iFood manda 0800 700 3020 como contato do cliente. A versao anterior
+   * assumia que os dois primeiros digitos sao sempre DDD e exibia
+   * "(08) 00700-3020" — um numero que ninguem consegue discar, na tela que
+   * existe justamente para ligar para o cliente.
+   */
+  it('numero de servico nao tem DDD', () => {
+    expect(phoneDisplay('08007003020')).toBe('0800 700 3020');
+  });
+
+  it('devolve como veio o que nao cabe no formato brasileiro', () => {
+    expect(phoneDisplay('123')).toBe('123');
+    expect(phoneDisplay('551199998888777')).toBe('551199998888777');
+  });
+
   it('formata fixo com oito dígitos', () => {
     expect(phoneDisplay('3532221234')).toBe('(35) 3222-1234');
   });

@@ -46,7 +46,15 @@ export class WhatsAppLinkBuilder {
 
   /** `null` quando o pedido não tem telefone válido — a tela esconde o botão. */
   dispatchLink(order: Order, establishmentName: string): string | null {
-    if (!order.customerPhone) return null;
+    /*
+     * Sem telefone, ou com número de serviço, não há link.
+     *
+     * O iFood manda 0800 como contato em alguns pedidos, e sem esta guarda o
+     * link sairia como `wa.me/null` — um botão que abre conversa com ninguém,
+     * bem na hora em que o dono avisa o cliente que a comida saiu.
+     */
+    const numero = order.customerPhone?.whatsapp;
+    if (!numero) return null;
 
     const message = [
       `Oi, ${firstName(order.customerName)}! Aqui é do ${establishmentName}.`,
@@ -55,7 +63,7 @@ export class WhatsAppLinkBuilder {
       `Acompanhe o entregador em tempo real: ${this.trackingUrl(order)}`,
     ].join('\n');
 
-    return `https://wa.me/${order.customerPhone.whatsapp}?text=${encodeURIComponent(message)}`;
+    return `https://wa.me/${numero}?text=${encodeURIComponent(message)}`;
   }
 }
 

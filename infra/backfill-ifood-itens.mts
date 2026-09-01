@@ -24,7 +24,7 @@ const alvos = await prisma.order.findMany({
   where: {
     establishmentId: est!.id,
     source: 'IFOOD',
-    OR: [{ items: { none: {} } }, { displayId: null }],
+    OR: [{ items: { none: {} } }, { displayId: null }, { items: { some: { options: { isEmpty: true } } } }],
   },
   select: { id: true, externalId: true, amountCents: true, displayId: true, _count: { select: { items: true } } },
 });
@@ -42,8 +42,18 @@ for (const pedido of alvos) {
   const bruto = await r.json();
   const mapeado = mapIfoodOrder(bruto, pedido.externalId!, bruto.createdAt);
 
-  // Itens so entram quando ainda nao ha nenhum: rodar de novo nao duplica.
-  const gravarItens = pedido._count.items === 0 && (mapeado.items?.length ?? 0) > 0;
+  /*
+   * Reescreve os itens quando eles existem mas sem complementos separados —
+   * sao os importados antes de `options` existir, com tudo concatenado no nome.
+   * Apagar e recriar e seguro: a fonte da verdade e o iFood, nao a nossa copia.
+   */
+  const semComplementos = await prisma.orderItem.count({
+    where: { orderId: pedido.id, options: { isEmpty: true } },
+  });
+  const gravarItens = (mapeado.items?.length ?? 0) > 0 && (pedido._count.items === 0 || semComplementos > 0);
+  if (gravarItens && pedido._count.items > 0) {
+    await prisma.orderItem.deleteMany({ where: { orderId: pedido.id } });
+  }
 
   await prisma.$transaction([
     ...(gravarItens
@@ -53,6 +63,7 @@ for (const pedido of alvos) {
               orderId: pedido.id,
               productId: null,
               name: i.name,
+              options: i.options ?? [],
               quantity: i.quantity,
               unitPriceCents: i.unitPriceCents,
               discountCents: 0,

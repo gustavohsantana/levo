@@ -42,6 +42,7 @@ export const OrderMapper = {
       items: (row.items ?? []).map((item) => ({
         productId: item.productId,
         name: item.name,
+        options: item.options,
         unitPrice: Money.fromCents(item.unitPriceCents),
         quantity: item.quantity,
         discount: Money.fromCents(item.discountCents),

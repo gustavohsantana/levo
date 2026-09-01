@@ -429,6 +429,15 @@ model OrderItem {
   productId      String?
   /// Cópia no momento do pedido.
   name           String
+  /// Complementos e customizacoes, como o marketplace os descreve.
+  ///
+  /// Lista separada, e nao concatenada no nome, porque a cozinha LE isto: o
+  /// combo do iFood traz sete complementos, e enfiados no nome viram um
+  /// paragrafo que ninguem consegue conferir enquanto monta o pedido.
+  ///
+  /// Sem preco proprio de proposito — `unitPriceCents` ja inclui todos eles, e
+  /// repetir valor por linha faria a soma na tela discordar do total.
+  options        String[]
   unitPriceCents Int
   quantity       Int
   /// Desconto ja aplicado, em centavos, sobre a linha inteira.

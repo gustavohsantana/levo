@@ -33,6 +33,8 @@ export interface OrderView {
   readyAt: string | null;
   items: Array<{
     name: string;
+    /** Complementos, como o marketplace os descreve. Vazio no pedido manual. */
+    options: string[];
     quantity: number;
     unitPriceCents: number;
     discountCents: number;
@@ -97,6 +99,7 @@ function toOrderView(order: Order, whatsapp: string | null, trackingUrl: string)
     stage: order.stage,
     items: order.items.map((item) => ({
       name: item.name,
+      options: item.options ?? [],
       quantity: item.quantity,
       unitPriceCents: item.unitPrice.cents,
       discountCents: item.discount.cents,

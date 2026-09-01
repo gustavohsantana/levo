@@ -83,6 +83,7 @@ export class PrismaOrderRepository extends TenantScoped implements OrderReposito
         orderId: order.id,
         productId: item.productId,
         name: item.name,
+        options: item.options ?? [],
         unitPriceCents: item.unitPrice.cents,
         quantity: item.quantity,
         discountCents: item.discount.cents,

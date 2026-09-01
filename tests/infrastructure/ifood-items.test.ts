@@ -43,14 +43,42 @@ describe('mapIfoodOrder — itens', () => {
     expect(r.items?.[0]).toMatchObject({ name: 'PRODUTO 1', quantity: 1, unitPriceCents: 500 });
   });
 
-  it('põe complementos e customizações no nome, não em linhas próprias', () => {
+  /*
+   * Este teste ja exigiu o contrario: os complementos concatenados dentro do
+   * nome. Funcionava para o dinheiro e falhava para quem le — um combo do
+   * iFood virava um paragrafo de sete linhas no detalhe do pedido, impossivel
+   * de conferir enquanto se monta.
+   *
+   * Linha propria por complemento continua fora de questao: o preco da linha
+   * ja os inclui, e daria dinheiro contado duas vezes. Lista ao lado resolve
+   * os dois lados.
+   */
+  it('separa complementos e customizações do nome, numa lista', () => {
     const r = mapIfoodOrder(pedido, 'fb', '2026-08-31T14:44:11.353Z');
 
-    expect(r.items?.[1].name).toBe(
-      'PRODUTO 2 (COMBO) (Complemento 1, Complemento 2, Complemento 4, Customização 1, Customização 2)',
-    );
+    expect(r.items?.[1].name).toBe('PRODUTO 2 (COMBO)');
+    expect(r.items?.[1].options).toEqual([
+      'Complemento 1',
+      'Complemento 2',
+      'Complemento 4',
+      'Customização 1',
+      'Customização 2',
+    ]);
     // O preço da linha já inclui os complementos: 5 do item + 8 + 3.
     expect(r.items?.[1].unitPriceCents).toBe(1600);
+  });
+
+  it('a observação do cliente entra junto dos complementos', () => {
+    const comObs = {
+      ...pedido,
+      items: [{ name: 'PRODUTO 1', quantity: 1, totalPrice: 5, observations: 'sem cebola' }],
+    };
+
+    const r = mapIfoodOrder(comObs, 'fb', '2026-08-31T14:44:11.353Z');
+
+    // Para quem monta o pedido, "sem cebola" e "molho extra" sao a mesma
+    // categoria de instrucao.
+    expect(r.items?.[0].options).toEqual(['sem cebola']);
   });
 
   it('fecha a conta no centavo — taxa é a diferença até o total da plataforma', () => {

@@ -33,6 +33,8 @@ export interface OrderItem {
   /** Procedência. Nulo quando o produto é apagado do catálogo. */
   productId: string | null;
   name: string;
+  /** Complementos, como o marketplace os descreve. Vazio no pedido manual. */
+  options?: string[];
   unitPrice: Money;
   quantity: number;
   /**

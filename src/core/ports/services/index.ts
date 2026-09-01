@@ -55,12 +55,17 @@ export interface RouteOptimizer {
 
 /** Uma linha do pedido, como a plataforma de origem a descreve. */
 export interface ExternalOrderItem {
-  /**
-   * O que a cozinha precisa ler. Complementos e customizações vêm dentro do
-   * nome porque o domínio tem uma linha por item, não uma árvore: o preço já
-   * os inclui, e separá-los em linhas próprias contaria o dinheiro duas vezes.
-   */
+  /** O nome do produto, limpo. */
   name: string;
+  /**
+   * Complementos e customizações, em lista.
+   *
+   * Separados do nome porque a cozinha lê isto: um combo do iFood traz sete, e
+   * concatenados viram um parágrafo impossível de conferir enquanto se monta o
+   * pedido. Sem preço próprio — `unitPriceCents` já os inclui, e repetir valor
+   * por linha faria a soma da tela discordar do total.
+   */
+  options?: string[];
   quantity: number;
   /** Preço unitário da linha, complementos incluídos. */
   unitPriceCents: number;

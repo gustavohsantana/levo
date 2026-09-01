@@ -113,17 +113,35 @@ export function OrderDetailDialog({
 
                 <ul className="mt-1">
                   {pedido.items.map((item, indice) => (
-                    <li key={indice} className="flex items-start gap-2 py-1 text-sm">
-                      <span className="numeric shrink-0 text-ink-muted">{item.quantity}×</span>
-                      <span className="min-w-0 flex-1 text-ink">{item.name}</span>
-                      <span className="numeric shrink-0 text-ink-muted">
-                        {currency(item.unitPriceCents * item.quantity - item.discountCents)}
-                        {item.discountCents > 0 ? (
-                          <span className="ml-1 text-xs text-accent-ink">
-                            −{currency(item.discountCents)}
-                          </span>
-                        ) : null}
-                      </span>
+                    <li key={indice} className="py-1.5 text-sm">
+                      <div className="flex items-start gap-2">
+                        <span className="numeric shrink-0 text-ink-muted">{item.quantity}×</span>
+                        <span className="min-w-0 flex-1 text-ink">{item.name}</span>
+                        <span className="numeric shrink-0 text-ink-muted">
+                          {currency(item.unitPriceCents * item.quantity - item.discountCents)}
+                          {item.discountCents > 0 ? (
+                            <span className="ml-1 text-xs text-accent-ink">
+                              −{currency(item.discountCents)}
+                            </span>
+                          ) : null}
+                        </span>
+                      </div>
+
+                      {/*
+                        Um por linha, recuado sob o item. Concatenados, os sete
+                        complementos de um combo do iFood viravam um parágrafo
+                        que ninguém confere enquanto monta o pedido — e conferir
+                        é exatamente o que se faz com esta lista na mão.
+                      */}
+                      {item.options.length > 0 ? (
+                        <ul className="mt-0.5 ml-6 space-y-0.5">
+                          {item.options.map((opcao, i) => (
+                            <li key={i} className="text-xs leading-snug text-ink-muted">
+                              {opcao}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
                     </li>
                   ))}
                 </ul>

@@ -391,9 +391,10 @@ function taxaQueFechaOTotal(itens: ExternalOrderItem[], totalCents: number): num
 /**
  * Achata os três níveis do iFood numa linha por item.
  *
- * `totalPrice` já inclui complementos e customizações, então eles entram no
- * NOME e não como linhas próprias — linha própria contaria o dinheiro duas
- * vezes. O que a cozinha precisa é ler o pedido inteiro de uma vez.
+ * `totalPrice` já inclui complementos e customizações, então eles vão numa
+ * LISTA ao lado do item, não como linhas próprias — linha própria contaria o
+ * dinheiro duas vezes. Eles já estiveram concatenados no nome, e um combo
+ * virava um parágrafo de sete linhas que ninguém conferia.
  */
 function mapItens(items: IfoodItem[]): ExternalOrderItem[] {
   return items.map((item) => {
@@ -402,7 +403,6 @@ function mapItens(items: IfoodItem[]): ExternalOrderItem[] {
       ...(opcao.customizations ?? []).map((c) => c.name?.trim()),
     ]);
 
-    const detalhes = extras.filter(Boolean).join(', ');
     const base = item.name?.trim() || 'Item';
     const observacao = item.observations?.trim();
 
@@ -416,9 +416,10 @@ function mapItens(items: IfoodItem[]): ExternalOrderItem[] {
     const linhaCents = Math.max(0, Math.round((item.totalPrice ?? item.price ?? 0) * 100));
 
     return {
-      name: [detalhes ? `${base} (${detalhes})` : base, observacao ? `— ${observacao}` : '']
-        .filter(Boolean)
-        .join(' '),
+      name: base,
+      // A observação do cliente entra junto dos complementos: para quem monta o
+      // pedido, "sem cebola" e "molho extra" são a mesma categoria de instrução.
+      options: [...extras.filter((x): x is string => Boolean(x)), ...(observacao ? [observacao] : [])],
       quantity: quantidade,
       // `totalPrice` é da linha inteira. O domínio guarda unitário e multiplica
       // de volta, então dividimos aqui — a sobra do arredondamento é absorvida

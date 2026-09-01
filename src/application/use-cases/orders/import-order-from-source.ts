@@ -194,6 +194,7 @@ export class ImportOrderFromSource {
       const itens = (external.items ?? []).map((item) => ({
         productId: null,
         name: item.name,
+        options: item.options ?? [],
         quantity: item.quantity,
         unitPrice: Money.fromCents(item.unitPriceCents),
         discount: Money.zero(),

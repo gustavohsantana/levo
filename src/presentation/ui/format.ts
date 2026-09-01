@@ -57,6 +57,22 @@ export function timeAgo(date: Date | string): string {
 }
 
 export function phoneDisplay(digits: string): string {
+  /*
+   * Número de serviço — 0800, 0300, 4004 — não tem DDD.
+   *
+   * Sem isto, o 0800 700 3020 que o iFood manda como contato do cliente vira
+   * "(08) 00700-3020": a função assumia que os dois primeiros dígitos são
+   * sempre DDD. Um número que ninguém consegue discar, na tela que existe
+   * justamente para ligar para o cliente.
+   */
+  if (digits.startsWith('0')) {
+    return `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`.trim();
+  }
+
+  // Fora do formato brasileiro conhecido, devolve como veio: inventar máscara
+  // sobre número estrangeiro ou truncado esconde mais do que ajuda.
+  if (digits.length !== 10 && digits.length !== 11) return digits;
+
   const rest = digits.slice(2);
   const split = digits.length === 11 ? 5 : 4;
   return `(${digits.slice(0, 2)}) ${rest.slice(0, split)}-${rest.slice(split)}`;
