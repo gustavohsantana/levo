@@ -23,7 +23,7 @@ const prisma = getPrismaClient(c.DATABASE_URL);
 const est = await prisma.establishment.findFirst({ select: { id: true, name: true } });
 if (!est) throw new Error('nenhum estabelecimento');
 
-const CATEGORIAS = ['Pizzas Salgadas', 'Pizzas por Sabor', 'Açaí', 'Marmitas'];
+const CATEGORIAS = ['Pizzas Salgadas', 'Pizzas por Sabor', 'Pizzas', 'Açaí', 'Marmitas'];
 
 console.log(`${est.name}\n`);
 
@@ -38,7 +38,7 @@ if (antigos.length > 0) {
 await prisma.optionGroup.deleteMany({
   where: {
     establishmentId: est.id,
-    name: { in: ['Massas', 'Sabores 35cm', 'Sabores 25cm', 'Tamanho da pizza', 'Borda 35cm', 'Borda 25cm', 'Base do açaí', 'Frutas', 'Cremes e lácteos', 'Cereais', 'Prato da marmita'] },
+    name: { in: ['Massas', 'Sabores 35cm', 'Sabores 25cm', 'Tamanho da pizza', 'Borda 35cm', 'Borda 25cm', 'Base do açaí', 'Frutas', 'Cremes e lácteos', 'Cereais', 'Prato da marmita', 'Tamanho', 'Sabor'] },
   },
 });
 
@@ -91,26 +91,38 @@ const borda25 = await grupo('Borda 25cm', 0, 1, [['Catupiry', 11.9], ['Cheddar',
 await produto('Pizza Grande de 35cm (8 pedaços)', 0, 'Pizzas Salgadas', [massas, sabores35, borda35], 'Serve 4 pessoas. Escolha até 2 sabores.');
 await produto('Pizza Broto de 25cm (6 pedaços)', 0, 'Pizzas Salgadas', [massas, sabores25, borda25], 'Serve 2 pessoas.');
 
-console.log('\nPIZZARIA ESTILO "SABOR E O PRODUTO" (Skina)');
+console.log('\nPIZZARIA ESTILO "PRECO IGUAL POR TAMANHO" (Skina) — UM produto');
+/*
+ * Mesma logica do acai: quando todo sabor custa o mesmo, sabor e tamanho sao
+ * dois grupos do MESMO produto, e o cardapio tem uma linha em vez de trinta.
+ */
 const tamanho = await grupo('Tamanho da pizza', 1, 1, [['Broto 25cm', 0], ['Média 30cm', 12], ['Grande 35cm', 24]]);
-for (const [nome, desc] of [
-  ['Pizza Calabresa', 'mussarela, molho, calabresa e orégano'],
-  ['Pizza Marguerita', 'mussarela, molho, tomate e manjericão'],
-  ['Pizza Quatro Queijos', 'mussarela, parmesão, provolone, catupiry'],
-] as const) {
-  await produto(nome, 45, 'Pizzas por Sabor', [tamanho], desc);
-}
+const saborUnico = await grupo('Sabor', 1, 1, [
+  ['Calabresa', 0], ['Marguerita', 0], ['Quatro Queijos', 0], ['Portuguesa', 0], ['Frango com Catupiry', 0],
+]);
+await produto('Pizza', 45, 'Pizzas', [tamanho, saborUnico], 'Escolha o tamanho e o sabor.');
 
-console.log('\nAÇAÍ — tamanho e o produto, adicionais somam');
+console.log('\nAÇAÍ — UM produto, tamanho e mais um grupo');
+/*
+ * Um cartao so, e nao quatro.
+ *
+ * O que permite isso e o preco do adicional NAO depender do tamanho: Nutella
+ * custa R$ 10,50 no copo de 200ml e no de 500ml. Quando isso vale, tamanho e
+ * so mais uma escolha, e quatro cartoes iguais variando o ml sao repeticao.
+ *
+ * O preco-base e o do menor copo; os maiores somam a diferenca. Assim o
+ * "a partir de" sai certo sozinho — R$ 13,00, o 200ml.
+ */
+const tamanhoAcai = await grupo('Tamanho', 1, 1, [
+  ['200ml', 0], ['300ml', 2], ['400ml', 4], ['500ml', 7],
+]);
 const baseAcai = await grupo('Base do açaí', 1, 1, [['Açaí', 0], ['Creme de Ninho', 0], ['Misto', 0]]);
 const frutas = await grupo('Frutas', 0, 3, [['Banana', 5], ['Morango', 6], ['Kiwi', 6]]);
 const cremes = await grupo('Cremes e lácteos', 0, 4, [
   ['Leite condensado', 5], ['Leite em pó', 5], ['Nutella', 10.5], ['Creme de Ovomaltine', 10.5],
 ]);
 const cereais = await grupo('Cereais', 0, 8, [['Castanha', 4.5], ['Granola', 4.5], ['Paçoca', 5], ['Creme de pistache', 11]]);
-for (const [nome, preco] of [['Açaí 200ml', 13], ['Açaí 300ml', 15], ['Açaí 400ml', 17], ['Açaí 500ml', 20]] as const) {
-  await produto(nome, preco, 'Açaí', [baseAcai, frutas, cremes, cereais]);
-}
+await produto('Açaí', 13, 'Açaí', [tamanhoAcai, baseAcai, frutas, cremes, cereais], 'Monte do seu jeito: 200ml a 500ml.');
 
 console.log('\nMARMITEX — tamanho e o produto, prato e a escolha');
 /*
