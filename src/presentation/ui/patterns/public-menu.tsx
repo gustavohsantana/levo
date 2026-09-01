@@ -113,7 +113,22 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
       </header>
 
       <div className="flex flex-col gap-6">
-        {menu.categorias.map((categoria) => (
+        {menu.categorias.map((categoria) => {
+          /*
+           * A coluna da foto vale por seção, não por produto.
+           *
+           * Sem isto a lista fica serrilhada: quem tem foto começa num recuo,
+           * quem não tem começa na borda, e a seção parece quebrada. Numa
+           * lanchonete de verdade a maioria dos produtos começa sem foto — o
+           * caso comum é o vazio, então ele precisa parecer proposital.
+           *
+           * Decidir por seção, e não pelo cardápio inteiro, evita o outro
+           * extremo: uma única foto em bebidas abriria um quadrado cinza ao
+           * lado de todas as sobremesas que não têm nenhuma.
+           */
+          const comFoto = categoria.produtos.some((produto) => produto.imageUrl);
+
+          return (
           <section key={categoria.nome}>
             <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">
               {categoria.nome}
@@ -136,14 +151,29 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
                     key={produto.id}
                     className="flex items-center gap-3 rounded-lg bg-surface p-3 hairline"
                   >
-                    {produto.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={produto.imageUrl}
-                        alt=""
-                        className="size-14 shrink-0 rounded-md object-cover"
-                        loading="lazy"
-                      />
+                    {comFoto ? (
+                      produto.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={produto.imageUrl}
+                          alt=""
+                          className="size-14 shrink-0 rounded-md object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        /*
+                         * Marca do lugar da foto para quem ainda não tem uma. A
+                         * inicial ancora a linha sem fingir que existe imagem —
+                         * um quadrado vazio pareceria foto que falhou ao
+                         * carregar.
+                         */
+                        <span
+                          aria-hidden
+                          className="grid size-14 shrink-0 place-items-center rounded-md bg-raised text-lg font-semibold text-ink-faint"
+                        >
+                          {produto.name.trim().charAt(0).toUpperCase()}
+                        </span>
+                      )
                     ) : null}
 
                     <div className="min-w-0 flex-1">
@@ -256,7 +286,8 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
               })}
             </ul>
           </section>
-        ))}
+          );
+        })}
       </div>
 
       {itens.length > 0 ? (
