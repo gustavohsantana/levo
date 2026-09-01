@@ -38,6 +38,14 @@ export class SaveProduct {
           price,
           category,
           imageUrl: input.imageUrl,
+          /*
+           * Entra no fim da categoria, não no começo.
+           *
+           * Produto novo não tem razão para passar na frente do que já vende —
+           * e chegar no topo do cardápio a cada cadastro obrigaria o dono a
+           * reordenar depois de cada item que ele criasse.
+           */
+          position: await this.proximaPosicao(repos, category),
         });
 
         await repos.products.save(product);
@@ -52,6 +60,12 @@ export class SaveProduct {
        * WhatsApp costuma ser diferente do preço do marketplace. A procedência
        * fica registrada, mas não vira cadeado — e nada é escrito de volta lá.
        */
+      /*
+       * Mudou de categoria: vai para o fim da nova. A posição antiga não quer
+       * dizer nada lá — seria um número emprestado de outra lista.
+       */
+      const trocouDeCategoria = (product.category ?? '') !== (category ?? '');
+
       product.edit({
         name: input.name,
         description: input.description,
@@ -60,9 +74,23 @@ export class SaveProduct {
         imageUrl: input.imageUrl,
       });
 
+      if (trocouDeCategoria) {
+        product.moverPara(await this.proximaPosicao(repos, category));
+      }
+
       await repos.products.save(product);
       return product;
     });
+  }
+
+  /** Uma a mais que a última da categoria. Categoria vazia começa em 1. */
+  private async proximaPosicao(
+    repos: { products: { list(): Promise<Product[]> } },
+    category: string | null,
+  ): Promise<number> {
+    const todos = await repos.products.list();
+    const daCategoria = todos.filter((p) => (p.category ?? '') === (category ?? ''));
+    return daCategoria.reduce((maior, p) => Math.max(maior, p.position), 0) + 1;
   }
 
   /**

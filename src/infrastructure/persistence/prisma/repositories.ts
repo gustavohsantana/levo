@@ -306,6 +306,21 @@ export class PrismaEstablishmentRepository extends TenantScoped implements Estab
       data: { autoConfirmOrders: ligado },
     });
   }
+
+  async categoryOrder(): Promise<string[]> {
+    const row = await this.tx.establishment.findUnique({
+      where: { id: this.establishmentId },
+      select: { categoryOrder: true },
+    });
+    return row?.categoryOrder ?? [];
+  }
+
+  async saveCategoryOrder(nomes: string[]): Promise<void> {
+    await this.tx.establishment.update({
+      where: { id: this.establishmentId },
+      data: { categoryOrder: nomes },
+    });
+  }
   async saveSettings(
     city: string | null,
     state: string | null,
@@ -490,6 +505,7 @@ export class PrismaProductRepository implements ProductRepository {
       category: product.category,
       imageUrl: product.imageUrl,
       active: product.active,
+      position: product.position,
       source: product.source,
       externalId: product.externalId,
     };
@@ -526,6 +542,7 @@ function toProduct(row: {
   category: string | null;
   imageUrl: string | null;
   active: boolean;
+  position: number;
   source: OrderSourceKind;
   externalId: string | null;
 }): Product {
@@ -538,6 +555,7 @@ function toProduct(row: {
     category: row.category,
     imageUrl: row.imageUrl,
     active: row.active,
+    position: row.position,
     source: row.source,
     externalId: row.externalId,
   });

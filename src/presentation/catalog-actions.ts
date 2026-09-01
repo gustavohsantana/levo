@@ -110,3 +110,44 @@ export async function renomearCategoriaAction(
     return { ok: false, error: toFormError(cause) };
   }
 }
+
+/**
+ * Move um produto uma posição dentro da categoria.
+ *
+ * Setas em vez de arrastar: no celular — que é onde o dono mexe no cardápio
+ * entre um pedido e outro — arrastar numa lista que rola briga com a rolagem, e
+ * um toque errado reordena sem ele perceber. Seta é reversível e óbvia.
+ */
+export async function moverProdutoAction(
+  id: string,
+  direcao: 'cima' | 'baixo',
+): Promise<ActionResult> {
+  try {
+    const session = await requireSession();
+    await containerFor(session.establishmentId).useCases.reorderCatalog.moverProduto(id, direcao);
+
+    revalidatePath('/dashboard/catalogo');
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+/** Move uma categoria inteira uma posição no cardápio. */
+export async function moverCategoriaAction(
+  nome: string,
+  direcao: 'cima' | 'baixo',
+): Promise<ActionResult> {
+  try {
+    const session = await requireSession();
+    await containerFor(session.establishmentId).useCases.reorderCatalog.moverCategoria(
+      nome,
+      direcao,
+    );
+
+    revalidatePath('/dashboard/catalogo');
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}

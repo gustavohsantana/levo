@@ -19,6 +19,13 @@ export interface ProductProps {
   category: string | null;
   imageUrl: string | null;
   active: boolean;
+  /**
+   * Posição dentro da categoria. Menor primeiro, empate desempata pelo nome.
+   *
+   * Ordem de cardápio é decisão comercial: o que vende mais fica em cima. Sem
+   * isto a lista sai em ordem alfabética, e uma pizzaria abre com "Açaí".
+   */
+  position: number;
   source: OrderSourceKind;
   externalId: string | null;
 }
@@ -37,6 +44,7 @@ export class Product extends Entity {
     category?: string | null;
     imageUrl?: string | null;
     active?: boolean;
+    position?: number;
     source?: OrderSourceKind;
     externalId?: string | null;
   }): Product {
@@ -57,6 +65,7 @@ export class Product extends Entity {
       category: input.category?.trim() || null,
       imageUrl: input.imageUrl?.trim() || null,
       active: input.active ?? true,
+      position: input.position ?? 0,
       source: input.source ?? 'MANUAL',
       externalId: input.externalId ?? null,
     });
@@ -67,6 +76,13 @@ export class Product extends Entity {
   }
 
   get establishmentId() { return this.props.establishmentId; }
+  get position() { return this.props.position; }
+
+  /** Troca de lugar na categoria. Quem decide a ordem é a tela, não a entidade. */
+  moverPara(position: number): void {
+    this.props.position = position;
+  }
+
   get name() { return this.props.name; }
   get description() { return this.props.description; }
   get price() { return this.props.price; }

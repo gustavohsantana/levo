@@ -63,7 +63,15 @@ export async function getMenuPublico(slug: string): Promise<MenuPublico | null> 
 
   const establishment = await prisma.establishment.findUnique({
     where: { slug },
-    select: { id: true, name: true, slug: true, deliveryFeeCents: true, city: true, state: true },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      deliveryFeeCents: true,
+      city: true,
+      state: true,
+      categoryOrder: true,
+    },
   });
 
   if (!establishment?.slug) return null;
@@ -84,7 +92,11 @@ export async function getMenuPublico(slug: string): Promise<MenuPublico | null> 
    */
   const produtos = await prisma.product.findMany({
     where: { establishmentId: establishment.id, active: true },
-    orderBy: [{ category: 'asc' }, { name: 'asc' }],
+    /*
+     * Posição, e não nome: quem manda na ordem é o dono. A ordem entre
+     * categorias vem depois, de `categoryOrder`.
+     */
+    orderBy: [{ position: 'asc' }, { name: 'asc' }],
     select: {
       id: true,
       name: true,
@@ -157,7 +169,10 @@ export async function getMenuPublico(slug: string): Promise<MenuPublico | null> 
       state: establishment.state,
     },
     pixOnlineDisponivel: !!credencial,
-    categorias: [...porCategoria.entries()].map(([nome, produtos]) => ({ nome, produtos })),
+    categorias: ordenarCategorias(
+      [...porCategoria.entries()].map(([nome, produtos]) => ({ nome, produtos })),
+      establishment.categoryOrder,
+    ),
   };
 }
 
@@ -755,4 +770,30 @@ function parseItens(bruto: FormDataEntryValue | null) {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Põe as categorias na ordem que o dono escolheu.
+ *
+ * Quem não está na lista vai para o fim, em ordem alfabética: categoria criada
+ * agora aparece no cardápio na hora, só não passa na frente de quem já foi
+ * posicionado. O contrário — sumir até alguém ordenar — esconderia produto que
+ * está à venda.
+ */
+/*
+ * Sem `export`: este arquivo é 'use server', e ali todo export precisa ser
+ * função assíncrona — o Next trata cada um como uma ação chamável pelo
+ * navegador. Auxiliar de ordenação não é ação de ninguém.
+ */
+function ordenarCategorias<T extends { nome: string }>(
+  categorias: T[],
+  ordem: string[],
+): T[] {
+  const posicao = new Map(ordem.map((nome, i) => [nome, i]));
+  return [...categorias].sort((a, b) => {
+    const pa = posicao.get(a.nome) ?? Number.MAX_SAFE_INTEGER;
+    const pb = posicao.get(b.nome) ?? Number.MAX_SAFE_INTEGER;
+    if (pa !== pb) return pa - pb;
+    return a.nome.localeCompare(b.nome, 'pt-BR');
+  });
 }

@@ -51,6 +51,7 @@ export class InMemoryDatabase {
   productGroups = new Map<string, string[]>();
   /** Aceite automático de pedido de marketplace. */
   autoConfirmOrders = false;
+  categoryOrder: string[] = [];
   products = new Map<string, Product>();
   deliveryFeeBands: DeliveryFeeBand[] = [];
   events: DomainEvent[] = [];
@@ -216,6 +217,13 @@ function buildRepositories(db: InMemoryDatabase): Repositories {
     async saveSettings() {
       // O fake guarda o estabelecimento imutável; a região não é lida em
       // nenhum teste de regra, e fingir persistência aqui só criaria estado.
+    },
+
+    async categoryOrder() {
+      return db.categoryOrder;
+    },
+    async saveCategoryOrder(nomes) {
+      db.categoryOrder = nomes;
     },
   };
 

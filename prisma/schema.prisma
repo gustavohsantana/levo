@@ -76,6 +76,16 @@ model Establishment {
   /// vai sair. Quem liga isto esta dizendo que aceita tudo o que chegar, e essa
   /// decisao e do dono, nao nossa.
   autoConfirmOrders Boolean @default(false)
+  /// Ordem das categorias no cardapio, pelo nome.
+  ///
+  /// Categoria e texto livre no produto, entao a ordem nao tem onde morar do
+  /// lado dela — mora aqui. Nome que nao estiver nesta lista vai para o fim, em
+  /// ordem alfabetica: categoria recem-criada aparece, so nao na frente de quem
+  /// ja foi posicionado.
+  ///
+  /// Sem isto o cardapio sai em ordem alfabetica, e uma pizzaria abre com
+  /// "Acai" porque comeca com A. Ordem de cardapio e decisao comercial.
+  categoryOrder    String[] @default([])
   lat              Float
   lng              Float
   createdAt        DateTime @default(now())
@@ -401,6 +411,11 @@ model Product {
   /// grava o endereço aqui do mesmo jeito.
   imageUrl        String?
   active          Boolean         @default(true)
+  /// Posição dentro da categoria. Menor primeiro; empate desempata pelo nome.
+  ///
+  /// O que vende mais precisa estar em cima, e isso é escolha do dono — não do
+  /// alfabeto.
+  position        Int             @default(0)
   /// De onde veio. `MANUAL` é cadastro próprio; o resto é procedência.
   source          OrderSourceKind @default(MANUAL)
   externalId      String?

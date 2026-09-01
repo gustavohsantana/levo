@@ -70,6 +70,16 @@ export interface EstablishmentRepository {
     deliveryFeeCents: number,
     slug: string,
   ): Promise<void>;
+  /**
+   * Ordem das categorias no cardápio, pelo nome.
+   *
+   * Fica aqui, e não numa tabela de categoria, porque categoria é texto livre
+   * no produto — não existe linha dela para carregar uma posição. Estreito como
+   * `setAutoConfirm` pelo mesmo motivo: é um arrasta-e-solta, não um formulário
+   * que o dono salva inteiro.
+   */
+  categoryOrder(): Promise<string[]>;
+  saveCategoryOrder(nomes: string[]): Promise<void>;
 }
 
 /** Posição do motoboy. Tabela mais escrita do sistema — ver retenção na Parte 3. */

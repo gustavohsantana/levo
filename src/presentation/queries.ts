@@ -2,6 +2,7 @@ import 'server-only';
 import { containerFor } from '@/composition-root';
 import type { Order, Route } from '@/core';
 import { requireSession } from './http/session';
+import { completar } from '@/application/use-cases/catalog/reorder-catalog';
 
 /**
  * Leituras das telas do dono.
@@ -136,6 +137,21 @@ export interface ProductView {
   active: boolean;
   source: string;
   importado: boolean;
+}
+
+/**
+ * A ordem das categorias escolhida pelo dono, já completada com as que
+ * apareceram depois — categoria nasce de um produto, não de um cadastro.
+ */
+export async function getOrdemCategorias(): Promise<string[]> {
+  const { container } = await currentContainer();
+  return container.read(async (repos) => {
+    const [guardada, produtos] = await Promise.all([
+      repos.establishments.categoryOrder(),
+      repos.products.list(),
+    ]);
+    return completar(guardada, produtos);
+  });
 }
 
 export async function getCatalog(): Promise<ProductView[]> {

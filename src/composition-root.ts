@@ -23,6 +23,7 @@ import { CreatePayment } from '@/application/use-cases/payments/create-payment';
 import { ConfirmPayment } from '@/application/use-cases/payments/confirm-payment';
 import { RenameCategory } from '@/application/use-cases/catalog/rename-category';
 import { SaveProduct } from '@/application/use-cases/catalog/save-product';
+import { ReorderCatalog } from '@/application/use-cases/catalog/reorder-catalog';
 import { SetProductActive } from '@/application/use-cases/catalog/set-product-active';
 import { RemoveProduct } from '@/application/use-cases/catalog/remove-product';
 import { CompleteStop } from './application/use-cases/routes/complete-stop';
@@ -58,6 +59,7 @@ export interface Container {
     recordPing: RecordCourierPing;
     tracking: GetTrackingSnapshot;
     saveProduct: SaveProduct;
+    reorderCatalog: ReorderCatalog;
     setProductActive: SetProductActive;
     removeProduct: RemoveProduct;
     renameCategory: RenameCategory;
@@ -140,6 +142,7 @@ export function containerFor(establishmentId: string): Container {
       completeStop: new CompleteStop(uow, clock),
       recordPing: new RecordCourierPing(uow, clock),
       saveProduct: new SaveProduct(uow, ids, establishmentId),
+      reorderCatalog: new ReorderCatalog(uow),
       setProductActive: new SetProductActive(uow),
       removeProduct: new RemoveProduct(uow),
       renameCategory: new RenameCategory(uow),

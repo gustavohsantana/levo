@@ -1,11 +1,24 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
-import { BookOpen, Check, LoaderCircle, Pencil, Plus, Trash2 } from 'lucide-react';
+import {
+  BookOpen,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  ImageOff,
+  LoaderCircle,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+} from 'lucide-react';
 import {
   alternarProdutoAction,
-  renomearCategoriaAction,
+  moverCategoriaAction,
+  moverProdutoAction,
   removerProdutoAction,
+  renomearCategoriaAction,
   salvarProdutoAction,
 } from '@/presentation/catalog-actions';
 import { enviarImagemAction } from '@/presentation/upload-actions';
@@ -46,14 +59,39 @@ const CATEGORIAS_PADRAO = [
 export function Catalog({
   produtos,
   grupos,
+  ordemCategorias,
 }: {
   produtos: ProductView[];
   grupos: OptionGroupView[];
+  ordemCategorias: string[];
 }) {
   const [editando, setEditando] = useState<ProductView | null>(null);
   const [criando, setCriando] = useState(false);
+  const [busca, setBusca] = useState('');
+  const [soSemFoto, setSoSemFoto] = useState(false);
 
-  const porCategoria = agrupar(produtos);
+  const semFoto = produtos.filter((p) => !p.imageUrl).length;
+
+  /*
+   * Busca e filtro escondem produto, então enquanto algum dos dois está ligado
+   * as setas de mover somem: mover na lista filtrada trocaria a posição com um
+   * vizinho que o dono não está vendo.
+   */
+  const filtrando = busca.trim().length > 0 || soSemFoto;
+
+  const visiveis = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return produtos.filter((p) => {
+      if (soSemFoto && p.imageUrl) return false;
+      if (!termo) return true;
+      return [p.name, p.description ?? '', p.category ?? '']
+        .join(' ')
+        .toLowerCase()
+        .includes(termo);
+    });
+  }, [produtos, busca, soSemFoto]);
+
+  const porCategoria = agrupar(visiveis, ordemCategorias);
 
   /*
    * As que o lojista já usou vêm primeiro na lista de sugestões, porque são as
@@ -104,6 +142,47 @@ export function Catalog({
         />
       ) : null}
 
+      {produtos.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-56 flex-1">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-faint"
+              aria-hidden
+            />
+            <input
+              type="search"
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Buscar por nome, descrição ou categoria"
+              aria-label="Buscar no catálogo"
+              className="h-10 w-full rounded-lg bg-surface pl-9 pr-3 text-sm text-ink hairline outline-none placeholder:text-ink-faint focus:ring-2 focus:ring-accent/40"
+            />
+          </div>
+
+          {/*
+            Só aparece quando há o que filtrar. Um botão que não muda nada é pior
+            do que botão nenhum: o dono clica e desconfia que travou.
+          */}
+          {semFoto > 0 ? (
+            <Button
+              variant={soSemFoto ? 'primary' : 'outline'}
+              onClick={() => setSoSemFoto((x) => !x)}
+            >
+              <ImageOff />
+              Sem foto ({semFoto})
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {filtrando ? (
+        <p className="-mt-4 text-xs text-ink-faint">
+          {visiveis.length === 0
+            ? 'Nenhum produto encontrado.'
+            : `${visiveis.length} de ${produtos.length} itens. As setas de ordenar voltam quando você limpar a busca.`}
+        </p>
+      ) : null}
+
       {produtos.length === 0 && !criando ? (
         <EmptyState
           icon={BookOpen}
@@ -114,11 +193,20 @@ export function Catalog({
         <div className="flex flex-col gap-6">
           {porCategoria.map(([categoria, itens]) => (
             <section key={categoria}>
-              <CategoryHeader categoria={categoria} quantidade={itens.length} />
+              <CategoryHeader
+                  categoria={categoria}
+                  quantidade={itens.length}
+                  podeMover={!filtrando}
+                />
 
               <ul className="overflow-hidden rounded-lg bg-surface hairline">
                 {itens.map((produto) => (
-                  <ProductRow key={produto.id} produto={produto} onEdit={setEditando} />
+                  <ProductRow
+                    key={produto.id}
+                    produto={produto}
+                    onEdit={setEditando}
+                    podeMover={!filtrando}
+                  />
                 ))}
               </ul>
             </section>
@@ -150,9 +238,11 @@ export function Catalog({
 function CategoryHeader({
   categoria,
   quantidade,
+  podeMover,
 }: {
   categoria: string;
   quantidade: number;
+  podeMover: boolean;
 }) {
   const [editando, setEditando] = useState(false);
   const [nome, setNome] = useState(categoria);
@@ -238,16 +328,67 @@ function CategoryHeader({
           <Pencil className="size-3" aria-hidden />
         </button>
       ) : null}
+
+      {editavel && podeMover ? (
+        <Setas
+          rotulo={categoria}
+          pendente={pendente}
+          onMover={(direcao) =>
+            startTransition(async () => void (await moverCategoriaAction(categoria, direcao)))
+          }
+        />
+      ) : null}
     </div>
+  );
+}
+
+/**
+ * Subir e descer, um passo por toque.
+ *
+ * Setas em vez de arrastar porque o dono mexe no cardápio pelo celular, entre
+ * um pedido e outro: arrastar numa lista que rola briga com a rolagem, e um
+ * toque errado reordena sem ele perceber. Seta erra pouco e desfaz com o toque
+ * de volta.
+ */
+function Setas({
+  rotulo,
+  pendente,
+  onMover,
+}: {
+  rotulo: string;
+  pendente: boolean;
+  onMover: (direcao: 'cima' | 'baixo') => void;
+}) {
+  return (
+    <span className="ml-auto flex shrink-0 items-center">
+      {(['cima', 'baixo'] as const).map((direcao) => (
+        <button
+          key={direcao}
+          type="button"
+          disabled={pendente}
+          onClick={() => onMover(direcao)}
+          aria-label={`Mover ${rotulo} para ${direcao}`}
+          className="rounded p-1 text-ink-faint transition hover:bg-raised hover:text-ink disabled:opacity-40"
+        >
+          {direcao === 'cima' ? (
+            <ChevronUp className="size-4" aria-hidden />
+          ) : (
+            <ChevronDown className="size-4" aria-hidden />
+          )}
+        </button>
+      ))}
+    </span>
   );
 }
 
 function ProductRow({
   produto,
   onEdit,
+  podeMover,
 }: {
   produto: ProductView;
   onEdit: (p: ProductView) => void;
+  podeMover: boolean;
 }) {
   const [pendente, startTransition] = useTransition();
 
@@ -257,6 +398,16 @@ function ProductRow({
         produto.active ? '' : 'opacity-55'
       }`}
     >
+      {podeMover ? (
+        <Setas
+          rotulo={produto.name}
+          pendente={pendente}
+          onMover={(direcao) =>
+            startTransition(async () => void (await moverProdutoAction(produto.id, direcao)))
+          }
+        />
+      ) : null}
+
       {produto.imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element -- a imagem é de
         // domínio de terceiro (iFood, aiqfome) e muda sem aviso; o otimizador
@@ -267,7 +418,15 @@ function ProductRow({
           className="size-9 shrink-0 rounded object-cover"
           loading="lazy"
         />
-      ) : null}
+      ) : (
+        /* Sem foto é o caso comum, e o dono precisa enxergar quais são. */
+        <span
+          title="Sem foto"
+          className="grid size-9 shrink-0 place-items-center rounded bg-raised text-ink-faint"
+        >
+          <ImageOff className="size-4" aria-hidden />
+        </span>
+      )}
 
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium text-ink">
@@ -517,7 +676,10 @@ function ProductForm({
 }
 
 /** Sem categoria vai para o fim: é o balde de quem ainda não organizou. */
-function agrupar(produtos: ProductView[]): Array<[string, ProductView[]]> {
+function agrupar(
+  produtos: ProductView[],
+  ordem: string[],
+): Array<[string, ProductView[]]> {
   const mapa = new Map<string, ProductView[]>();
 
   for (const produto of produtos) {
@@ -527,9 +689,18 @@ function agrupar(produtos: ProductView[]): Array<[string, ProductView[]]> {
     else mapa.set(chave, [produto]);
   }
 
+  /*
+   * A ordem é a que o dono escolheu. "Sem categoria" fica sempre no fim: é o
+   * balde de quem ainda não foi organizado, não uma categoria de verdade.
+   */
+  const posicao = new Map(ordem.map((nome, i) => [nome, i]));
+
   return [...mapa.entries()].sort(([a], [b]) => {
     if (a === 'Sem categoria') return 1;
     if (b === 'Sem categoria') return -1;
-    return a.localeCompare(b);
+    const pa = posicao.get(a) ?? Number.MAX_SAFE_INTEGER;
+    const pb = posicao.get(b) ?? Number.MAX_SAFE_INTEGER;
+    if (pa !== pb) return pa - pb;
+    return a.localeCompare(b, 'pt-BR');
   });
 }
