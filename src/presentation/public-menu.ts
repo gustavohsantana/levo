@@ -9,6 +9,7 @@ import { toFormError } from './http/error-mapper';
 import { checkRateLimit } from './http/rate-limit';
 import { montarEndereco } from './address-parts';
 import { cidadePorCoordenada } from '@/infrastructure/geocoding/reverse-city';
+import { buscarCep, type EnderecoDoCep } from '@/infrastructure/geocoding/cep';
 
 /**
  * O cardápio público e o pedido feito pelo próprio cliente.
@@ -617,6 +618,23 @@ export async function pagarCartaoAction(
   } catch (cause) {
     return { ok: false, error: toFormError(cause) };
   }
+}
+
+/**
+ * Endereço a partir do CEP.
+ *
+ * Roda no servidor por dois motivos: mantém a dependência externa do nosso
+ * lado, onde dá para trocar de provedor sem tocar na tela, e passa pelo mesmo
+ * limite de taxa do resto do cardápio público.
+ */
+export async function buscarCepAction(
+  cep: string,
+): Promise<{ ok: true; endereco: EnderecoDoCep } | { ok: false }> {
+  const limite = checkRateLimit('geo:cep', { max: 40, windowMs: 60_000 });
+  if (!limite.allowed) return { ok: false };
+
+  const endereco = await buscarCep(cep);
+  return endereco ? { ok: true, endereco } : { ok: false };
 }
 
 export async function sugerirCidadeAction(

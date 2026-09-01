@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Layers, LoaderCircle, Plus, Trash2, X } from 'lucide-react';
+import { Copy, Layers, LoaderCircle, Plus, Trash2, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button, Field, Input } from '../primitives';
 import type { OptionGroupView } from '@/presentation/queries';
@@ -129,8 +129,30 @@ function GrupoDialog({
   );
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [ajuste, setAjuste] = useState('');
   const [pendente, startTransition] = useTransition();
   const router = useRouter();
+
+  /**
+   * Aplica o mesmo ajuste a todos os preços de uma vez.
+   *
+   * Somar serve para "o broto custa R$ 20 a mais"; multiplicar, para reajuste
+   * percentual. Arredonda em centavos porque `0,1 + 0,2` em ponto flutuante dá
+   * 0,30000000000000004, e isso viraria preço na tela.
+   */
+  function aplicarAjuste(modo: 'somar' | 'multiplicar') {
+    const valor = Number(ajuste.replace(',', '.'));
+    if (!Number.isFinite(valor) || valor === 0) return;
+
+    setLinhas((atual) =>
+      atual.map((linha) => {
+        const preco = Number(linha.preco.replace(',', '.')) || 0;
+        const novo = modo === 'somar' ? preco + valor : preco * valor;
+        return { ...linha, preco: Math.max(0, Math.round(novo * 100) / 100).toFixed(2) };
+      }),
+    );
+    setAjuste('');
+  }
 
   function alterar(indice: number, campo: keyof LinhaOpcao, valor: string) {
     setLinhas((atual) =>
@@ -215,6 +237,33 @@ function GrupoDialog({
               </Button>
             </div>
 
+            {/*
+              Ajuste em lote.
+              Uma pizzaria com 57 sabores precisa da mesma lista em dois
+              tamanhos, com preços diferentes. Sem isto são 57 campos digitados
+              de novo; com isto é duplicar e aplicar "+20" ou "×1,45", revisando
+              só as exceções. Foi o atalho que justificou o modelo inteiro.
+            */}
+            {linhas.length > 1 ? (
+              <div className="mt-1.5 flex items-center gap-1.5">
+                <span className="text-xs text-ink-faint">Ajustar todos:</span>
+                <Input
+                  value={ajuste}
+                  onChange={(e) => setAjuste(e.target.value)}
+                  placeholder="20"
+                  inputMode="decimal"
+                  className="h-7 w-16 text-xs"
+                  aria-label="Valor do ajuste"
+                />
+                <Button variant="ghost" size="sm" onClick={() => aplicarAjuste('somar')}>
+                  + R$
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => aplicarAjuste('multiplicar')}>
+                  ×
+                </Button>
+              </div>
+            ) : null}
+
             <ul className="mt-1 flex flex-col gap-2">
               {linhas.map((linha, indice) => (
                 <li key={indice} className="flex items-center gap-2">
@@ -290,6 +339,42 @@ function GrupoDialog({
           </div>
 
           <div className="flex items-center gap-2 border-t px-5 py-3">
+            {grupo ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={pendente}
+                onClick={() =>
+                  startTransition(async () => {
+                    setErro(null);
+                    /*
+                     * Duplicar SALVA uma cópia e fecha. Deixar a cópia só na
+                     * tela faria o dono ajustar 57 preços e perder tudo se
+                     * fechasse sem salvar.
+                     */
+                    const r = await salvarGrupoAction({
+                      name: `${nome} (cópia)`,
+                      min: Number(min) || 0,
+                      max: Number(max) || 1,
+                      options: linhas.map((linha) => ({
+                        name: linha.name,
+                        priceReais: Number(linha.preco.replace(',', '.')) || 0,
+                      })),
+                    });
+                    if (!r.ok) {
+                      setErro(r.error ?? 'Não foi possível duplicar.');
+                      return;
+                    }
+                    onClose();
+                    router.refresh();
+                  })
+                }
+              >
+                <Copy />
+                Duplicar
+              </Button>
+            ) : null}
+
             {grupo ? (
               <Button
                 variant="ghost"

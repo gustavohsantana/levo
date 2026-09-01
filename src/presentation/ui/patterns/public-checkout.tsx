@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { LoaderCircle } from 'lucide-react';
 import {
+  buscarCepAction,
   criarPedidoPublicoAction,
   sugerirCidadeAction,
   type MenuPublico,
@@ -42,6 +43,15 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
   const [enviando, enviar] = useTransition();
   const [cidade, setCidade] = useState(menu.establishment.city);
   const cidadeEditada = useRef(false);
+  /*
+   * Bairro e rua passam a ser controlados porque o CEP os preenche. Cidade já
+   * era, por causa do GPS.
+   */
+  const [bairro, setBairro] = useState('');
+  const [rua, setRua] = useState('');
+  const [cep, setCep] = useState('');
+  const [buscandoCep, setBuscandoCep] = useState(false);
+  const [avisoCep, setAvisoCep] = useState<string | null>(null);
   const gpsPedido = useRef(false);
 
   useEffect(() => {
@@ -54,6 +64,8 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
       cidadeEditada.current = true;
       setCidade(rascunhoSalvo.city);
     }
+    if (rascunhoSalvo?.neighborhood) setBairro(rascunhoSalvo.neighborhood);
+    if (rascunhoSalvo?.street) setRua(rascunhoSalvo.street);
     setPronto(true);
   }, [slug]);
 
@@ -92,6 +104,37 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
       { enableHighAccuracy: false, timeout: 8_000, maximumAge: 300_000 },
     );
   }, []);
+
+  /**
+   * Busca o endereço quando os oito dígitos estão completos.
+   *
+   * Não sobrescreve o que o cliente já digitou: CEP de cidade pequena cobre o
+   * município inteiro e volta sem rua, e apagar o que ele escreveu seria
+   * castigá-lo por tentar ajudar.
+   */
+  async function completarPeloCep(valor: string) {
+    const digitos = valor.replace(/\D/g, '');
+    if (digitos.length !== 8) return;
+
+    setBuscandoCep(true);
+    setAvisoCep(null);
+    try {
+      const r = await buscarCepAction(digitos);
+      if (!r.ok) {
+        setAvisoCep('CEP não encontrado. Preencha o endereço abaixo.');
+        return;
+      }
+      cidadeEditada.current = true;
+      setCidade(r.endereco.cidade);
+      if (r.endereco.bairro) setBairro(r.endereco.bairro);
+      if (r.endereco.rua) setRua(r.endereco.rua);
+      if (!r.endereco.rua) {
+        setAvisoCep('Este CEP cobre a cidade toda — informe a rua.');
+      }
+    } finally {
+      setBuscandoCep(false);
+    }
+  }
 
   function enviarPedido(formData: FormData) {
     setErro(null);
@@ -257,6 +300,31 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
           />
         </Field>
 
+        {/*
+          O CEP vem primeiro porque é o atalho: oito dígitos preenchem cidade,
+          bairro e rua. Quem não sabe o CEP pula e digita — por isso não é
+          obrigatório.
+        */}
+        <Field label="CEP">
+          <Input
+            name="cep"
+            inputMode="numeric"
+            autoComplete="postal-code"
+            placeholder="00000-000"
+            maxLength={9}
+            value={cep}
+            onChange={(evento) => {
+              setCep(evento.target.value);
+              void completarPeloCep(evento.target.value);
+            }}
+          />
+          <p className="mt-1 text-xs text-ink-faint">
+            {buscandoCep
+              ? 'Buscando endereço…'
+              : (avisoCep ?? 'Preenche cidade, bairro e rua. Opcional.')}
+          </p>
+        </Field>
+
         <Field label="Cidade">
           <Input
             name="city"
@@ -275,7 +343,8 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
             name="neighborhood"
             required
             autoComplete="address-level3"
-            defaultValue={rascunho?.neighborhood}
+            value={bairro}
+            onChange={(evento) => setBairro(evento.target.value)}
           />
         </Field>
 
@@ -285,7 +354,8 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
               name="street"
               required
               autoComplete="address-line1"
-              defaultValue={rascunho?.street}
+              value={rua}
+              onChange={(evento) => setRua(evento.target.value)}
             />
           </Field>
           <Field label="Número">
