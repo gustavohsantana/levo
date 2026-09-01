@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  BarChart3,
   Bike,
   BookOpen,
   ClipboardList,
@@ -27,6 +28,7 @@ const GRUPOS = [
     itens: [
       { href: '/dashboard', rotulo: 'Pedidos', icone: ClipboardList },
       { href: '/dashboard/entregadores', rotulo: 'Entregadores', icone: Bike },
+      { href: '/dashboard/relatorios', rotulo: 'Relatórios', icone: BarChart3 },
     ],
   },
   {
