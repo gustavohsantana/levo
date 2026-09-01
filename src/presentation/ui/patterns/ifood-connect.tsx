@@ -68,13 +68,13 @@ export function IfoodConnect({ conectado, lojaAtual }: Props) {
 
   if (conectado && !codigo) {
     return (
-      <div className="rounded-lg bg-surface p-5 hairline">
+      <div className="flex h-full flex-col rounded-lg bg-surface p-5 hairline">
         <div className="flex items-start gap-3">
           <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-md bg-accent-soft text-accent-ink">
             <Check className="size-4" aria-hidden />
           </span>
 
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0">
             <h3 className="font-semibold text-ink">iFood conectado</h3>
             <p className="mt-1 text-sm text-ink-muted">
               {/*
@@ -94,17 +94,18 @@ export function IfoodConnect({ conectado, lojaAtual }: Props) {
               )}
             </p>
           </div>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={pendente}
-            onClick={() => startTransition(async () => void (await desconectarIfood()))}
-          >
-            <Unlink />
-            Desconectar
-          </Button>
         </div>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mt-auto self-start pt-4"
+          disabled={pendente}
+          onClick={() => startTransition(async () => void (await desconectarIfood()))}
+        >
+          <Unlink />
+          Desconectar
+        </Button>
 
         {erro ? <p className="mt-3 text-sm text-danger">{erro}</p> : null}
       </div>
@@ -112,7 +113,7 @@ export function IfoodConnect({ conectado, lojaAtual }: Props) {
   }
 
   return (
-    <div className="rounded-lg bg-surface p-5 hairline">
+    <div className="flex h-full flex-col rounded-lg bg-surface p-5 hairline">
       <h3 className="font-semibold text-ink">Conectar o iFood</h3>
       <p className="mt-1 text-sm leading-relaxed text-ink-muted">
         Os pedidos aceitos no iFood passam a entrar aqui automaticamente, sem digitação.

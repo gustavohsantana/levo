@@ -120,35 +120,52 @@ export default async function IntegracoesPage({
       : null;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       <div>
         <h1 className="text-xl font-semibold tracking-tight text-ink">Integrações</h1>
         <p className="mt-1 text-sm text-ink-muted">
-          Conecte as plataformas onde você recebe pedidos — eles entram aqui sem digitação — e a
-          conta que recebe o pagamento do seu cardápio.
+          Pedido entra sem digitação. Dinheiro do cardápio cai na conta da loja.
         </p>
       </div>
 
-      <IfoodConnect
-        conectado={Boolean(ifood)}
-        lojaAtual={ifood?.merchantId ? { id: ifood.merchantId, nome: nomeDaLoja } : null}
-      />
+      <section>
+        <h2 className="text-xs font-medium uppercase tracking-wide text-ink-faint">
+          Plataformas de pedido
+        </h2>
+        <p className="mt-1 text-sm text-ink-muted">
+          iFood e aiqfome. O pedido chega aqui sozinho.
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <IfoodConnect
+            conectado={Boolean(ifood)}
+            lojaAtual={ifood?.merchantId ? { id: ifood.merchantId, nome: nomeDaLoja } : null}
+          />
 
-      <AiqfomeConnect
-        conectado={Boolean(aiqfome)}
-        lojaAtual={aiqfome ? { id: aiqfome.merchantId ?? '', nome: nomeAiq } : null}
-        lojas={lojasAiq}
-      />
+          <AiqfomeConnect
+            conectado={Boolean(aiqfome)}
+            lojaAtual={aiqfome ? { id: aiqfome.merchantId ?? '', nome: nomeAiq } : null}
+            lojas={lojasAiq}
+          />
+        </div>
+      </section>
 
-      <MercadoPagoConnect
-        estado={estadoMp}
-        conta={contaMp ? { nome: contaMp.nome, email: contaMp.email } : null}
-        disponivel={env().mercadoPagoEnabled}
-        oauthDisponivel={env().mercadoPagoOAuthEnabled}
-        prodDisponivel={env().mercadoPagoProdEnabled}
-        testeDisponivel={env().mercadoPagoTestEnabled}
-        aviso={resultadoMp ?? null}
-      />
+      <section>
+        <h2 className="text-xs font-medium uppercase tracking-wide text-ink-faint">Pagamento</h2>
+        <p className="mt-1 text-sm text-ink-muted">
+          A conta do Mercado Pago que recebe o Pix e o cartão do cardápio.
+        </p>
+        <div className="mt-3 max-w-xl">
+          <MercadoPagoConnect
+            estado={estadoMp}
+            conta={contaMp ? { nome: contaMp.nome, email: contaMp.email } : null}
+            disponivel={env().mercadoPagoEnabled}
+            oauthDisponivel={env().mercadoPagoOAuthEnabled}
+            prodDisponivel={env().mercadoPagoProdEnabled}
+            testeDisponivel={env().mercadoPagoTestEnabled}
+            aviso={resultadoMp ?? null}
+          />
+        </div>
+      </section>
     </div>
   );
 }

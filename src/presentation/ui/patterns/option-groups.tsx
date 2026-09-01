@@ -5,12 +5,13 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { Copy, Layers, LoaderCircle, Plus, Trash2, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button, Field, Input } from '../primitives';
-import type { OptionGroupView } from '@/presentation/queries';
+import type { OptionGroupView, ProductView } from '@/presentation/queries';
 import {
   anexarGrupoNaCategoriaAction,
   removerGrupoAction,
   salvarGrupoAction,
 } from '@/presentation/actions';
+import { agruparPorUso, regra } from './option-group-layout';
 
 interface LinhaOpcao {
   id?: string;
@@ -18,23 +19,39 @@ interface LinhaOpcao {
   preco: string;
 }
 
+export type GrupoSalvo = {
+  id: string;
+  name: string;
+  min: number;
+  max: number;
+  options: Array<{ id: string; name: string; priceCents: number }>;
+};
+
 /**
- * Os grupos de opção do estabelecimento: tamanhos, sabores, bordas, adicionais.
+ * Biblioteca das listas que vários produtos compartilham.
  *
- * Ficam numa seção própria, e não dentro de cada produto, porque é isso que
- * eles são: objetos do estabelecimento, usados por vários produtos. "Frutas"
- * serve os quatro tamanhos de açaí, e reajustar a Nutella é um número — não
- * quatro.
+ * Não é o lugar onde as opções nascem — isso acontece no produto. Aqui o dono
+ * acha "Frutas" ou "Sabores 35cm" para reajustar um preço que vale em todos.
+ * Agrupar pela categoria dos produtos que usam evita a grade misturada de
+ * pizza, açaí e marmita no mesmo bloco.
  */
 export function OptionGroups({
   grupos,
+  produtos,
   categorias,
+  ordemCategorias,
 }: {
   grupos: OptionGroupView[];
+  produtos: ProductView[];
   categorias: string[];
+  ordemCategorias: string[];
 }) {
   const [editando, setEditando] = useState<OptionGroupView | null>(null);
   const [criando, setCriando] = useState(false);
+
+  if (grupos.length === 0) return null;
+
+  const porUso = agruparPorUso(grupos, produtos, ordemCategorias);
 
   return (
     <section>
@@ -42,51 +59,53 @@ export function OptionGroups({
         <div>
           <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
             <Layers className="size-4 text-ink-faint" aria-hidden />
-            Grupos de opções
+            Opções compartilhadas
           </h2>
           <p className="mt-1 text-sm leading-relaxed text-ink-muted">
-            Tamanhos, sabores, bordas, adicionais. Você cria uma vez e usa em quantos produtos
-            quiser — mudar o preço aqui muda em todos.
+            Listas que vários produtos usam. Mudar o preço da Nutella aqui muda em todos os
+            açaís — não precisa abrir produto por produto.
           </p>
         </div>
 
         <Button variant="outline" size="sm" onClick={() => setCriando(true)}>
           <Plus />
-          Novo grupo
+          Nova lista
         </Button>
       </div>
 
-      {grupos.length === 0 ? (
-        <p className="mt-4 rounded-lg bg-raised px-4 py-6 text-sm text-ink-muted">
-          Nenhum grupo ainda. Crie um se você vende algo com tamanho, sabor ou adicional — uma
-          marmitaria, por exemplo, não precisa de nenhum.
-        </p>
-      ) : (
-        <ul className="mt-4 grid gap-2 sm:grid-cols-2">
-          {grupos.map((grupo) => (
-            <li key={grupo.id}>
-              <button
-                type="button"
-                onClick={() => setEditando(grupo)}
-                className="w-full rounded-lg bg-surface p-3 text-left hairline hover:bg-raised"
-              >
-                <div className="flex items-baseline gap-2">
-                  <span className="truncate text-sm font-medium text-ink">{grupo.name}</span>
-                  <span className="shrink-0 text-xs text-ink-faint">{regra(grupo)}</span>
-                </div>
-                <p className="mt-1 truncate text-xs text-ink-muted">
-                  {grupo.options.map((o) => o.name).join(' · ')}
-                </p>
-                <p className="mt-1.5 text-xs text-ink-faint">
-                  {grupo.produtos === 0
-                    ? 'sem produto ainda'
-                    : `em ${grupo.produtos} ${grupo.produtos === 1 ? 'produto' : 'produtos'}`}
-                </p>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="mt-4 flex flex-col gap-5">
+        {porUso.map(({ categoria, grupos: daCategoria }) => (
+          <div key={categoria}>
+            <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-faint">
+              {categoria}
+            </h3>
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {daCategoria.map((grupo) => (
+                <li key={grupo.id}>
+                  <button
+                    type="button"
+                    onClick={() => setEditando(grupo)}
+                    className="w-full rounded-lg bg-surface p-3 text-left hairline hover:bg-raised"
+                  >
+                    <div className="flex items-baseline gap-2">
+                      <span className="truncate text-sm font-medium text-ink">{grupo.name}</span>
+                      <span className="shrink-0 text-xs text-ink-faint">{regra(grupo)}</span>
+                    </div>
+                    <p className="mt-1 truncate text-xs text-ink-muted">
+                      {grupo.options.map((o) => o.name).join(' · ')}
+                    </p>
+                    <p className="mt-1.5 text-xs text-ink-faint">
+                      {grupo.produtos === 0
+                        ? 'ainda sem produto'
+                        : `em ${grupo.produtos} ${grupo.produtos === 1 ? 'produto' : 'produtos'}`}
+                    </p>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
 
       {criando || editando ? (
         <GrupoDialog
@@ -102,20 +121,17 @@ export function OptionGroups({
   );
 }
 
-/** "obrigatório · 1" ou "opcional · até 3" — a regra em linguagem de gente. */
-function regra(grupo: { min: number; max: number }): string {
-  const quantos = grupo.max === 1 ? '1' : `até ${grupo.max}`;
-  return grupo.min > 0 ? `obrigatório · ${grupo.min === grupo.max ? grupo.min : quantos}` : `opcional · ${quantos}`;
-}
-
-function GrupoDialog({
+export function GrupoDialog({
   grupo,
   categorias,
   onClose,
+  onSaved,
 }: {
   grupo: OptionGroupView | null;
   categorias: string[];
   onClose: () => void;
+  /** Depois de gravar: o formulário do produto anexa a lista na hora. */
+  onSaved?: (grupo: GrupoSalvo) => void;
 }) {
   const [nome, setNome] = useState(grupo?.name ?? '');
   const [min, setMin] = useState(String(grupo?.min ?? 0));
@@ -167,7 +183,7 @@ function GrupoDialog({
         <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[min(34rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg bg-surface shadow-xl">
           <div className="flex items-start justify-between gap-4 border-b px-5 py-4">
             <Dialog.Title className="text-sm font-semibold text-ink">
-              {grupo ? 'Editar grupo' : 'Novo grupo'}
+              {grupo ? 'Editar opções' : 'Novas opções'}
             </Dialog.Title>
             <Dialog.Close asChild>
               <Button variant="ghost" size="icon" aria-label="Fechar">
@@ -186,11 +202,11 @@ function GrupoDialog({
               </p>
             ) : null}
 
-            <Field label="Nome do grupo">
+            <Field label="Nome desta lista" hint="como o cliente vê: Sabores, Borda, Adicionais…">
               <Input
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
-                placeholder="Tamanho, Sabores, Borda, Adicionais…"
+                placeholder="Sabores, Borda, Adicionais…"
               />
             </Field>
 
@@ -303,7 +319,7 @@ function GrupoDialog({
                   Aplicar de uma vez
                 </h3>
                 <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-                  Anexa este grupo a todos os produtos de uma categoria. Quem já tem não é
+                  Anexa esta lista a todos os produtos de uma categoria. Quem já tem não é
                   duplicado.
                 </p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
@@ -323,7 +339,7 @@ function GrupoDialog({
                           }
                           setAviso(
                             r.afetados === 0
-                              ? `Todos de "${categoria}" já tinham este grupo.`
+                              ? `Todos de "${categoria}" já tinham esta lista.`
                               : `Anexado a ${r.afetados} produto${r.afetados === 1 ? '' : 's'} de "${categoria}".`,
                           );
                           router.refresh();
@@ -341,6 +357,7 @@ function GrupoDialog({
           <div className="flex items-center gap-2 border-t px-5 py-3">
             {grupo ? (
               <Button
+                type="button"
                 variant="ghost"
                 size="sm"
                 disabled={pendente}
@@ -377,6 +394,7 @@ function GrupoDialog({
 
             {grupo ? (
               <Button
+                type="button"
                 variant="ghost"
                 size="sm"
                 className="text-danger hover:bg-danger-soft"
@@ -404,6 +422,7 @@ function GrupoDialog({
                 </Button>
               </Dialog.Close>
               <Button
+                type="button"
                 size="sm"
                 variant="primary"
                 disabled={pendente}
@@ -425,6 +444,7 @@ function GrupoDialog({
                       setErro(r.error ?? 'Não foi possível salvar.');
                       return;
                     }
+                    onSaved?.(r.grupo);
                     onClose();
                     router.refresh();
                   })

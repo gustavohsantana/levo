@@ -26,7 +26,7 @@ export function AiqfomeConnect({ conectado, lojaAtual, lojas }: Props) {
 
   if (!conectado) {
     return (
-      <div className="rounded-lg bg-surface p-5 hairline">
+      <div className="flex h-full flex-col rounded-lg bg-surface p-5 hairline">
         <h3 className="font-semibold text-ink">Conectar o aiqfome</h3>
         <p className="mt-1 text-sm leading-relaxed text-ink-muted">
           Os pedidos do aiqfome passam a entrar aqui automaticamente, sem digitação.
@@ -48,13 +48,13 @@ export function AiqfomeConnect({ conectado, lojaAtual, lojas }: Props) {
   }
 
   return (
-    <div className="rounded-lg bg-surface p-5 hairline">
+    <div className="flex h-full flex-col rounded-lg bg-surface p-5 hairline">
       <div className="flex items-start gap-3">
         <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-md bg-accent-soft text-accent-ink">
           <Check className="size-4" aria-hidden />
         </span>
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0">
           <h3 className="font-semibold text-ink">aiqfome conectado</h3>
           <p className="mt-1 text-sm text-ink-muted">
             {lojaAtual?.nome ? (
@@ -66,17 +66,18 @@ export function AiqfomeConnect({ conectado, lojaAtual, lojas }: Props) {
             )}
           </p>
         </div>
-
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={pendente}
-          onClick={() => startTransition(async () => void (await desconectarAiqfome()))}
-        >
-          {pendente ? <LoaderCircle className="animate-spin" /> : <Unlink />}
-          Desconectar
-        </Button>
       </div>
+
+      <Button
+        variant="ghost"
+        size="sm"
+        className="mt-auto self-start pt-4"
+        disabled={pendente}
+        onClick={() => startTransition(async () => void (await desconectarAiqfome()))}
+      >
+        {pendente ? <LoaderCircle className="animate-spin" /> : <Unlink />}
+        Desconectar
+      </Button>
 
       {escolhendo || !lojaAtual?.id ? (
         lojas.length > 0 ? (

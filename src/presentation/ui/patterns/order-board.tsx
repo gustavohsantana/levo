@@ -43,10 +43,10 @@ interface Props {
   montando: OrderView[];
   prontos: OrderView[];
   /**
-   * As rotas na rua, não os pedidos delas.
+   * As rotas em andamento, não os pedidos delas.
    *
    * Um pedido em rota, sozinho, não diz nada acionável: o que o dono quer
-   * saber é quem está na rua, quanto já entregou e como falar com ele. E
+   * saber é quem está em rota, quanto já entregou e como falar com ele. E
    * antes isso vivia numa seção abaixo do quadro, que exigia rolar a página
    * inteira num dia movimentado.
    */
@@ -124,52 +124,135 @@ export function OrderBoard({
         onToggle={onToggle}
         origin={origin}
       />
-      <section className="flex min-w-0 flex-col overflow-hidden rounded-lg bg-raised">
-        <div className={`h-[3px] ${TONS.rua.risco}`} />
-        <div className="flex min-h-0 flex-1 flex-col p-2.5">
+      <EmRota rotas={rotas} />
+    </div>
+  );
+}
+
+/**
+ * Pedidos ainda em rota, não o número de motoboys.
+ *
+ * Duas rotas com cinco paradas cada são dez sacolas em rota. Contar rotas
+ * escondia o volume — e o dono olha esta coluna justamente para sentir o
+ * tamanho da leva.
+ */
+function EmRota({ rotas }: { rotas: RouteView[] }) {
+  const paradas = rotas.flatMap((rota) => rota.stops);
+  const naRua = paradas.filter((parada) => parada.status === 'PENDING').length;
+
+  return (
+    <section className="flex min-w-0 flex-col overflow-hidden rounded-lg bg-raised">
+      <div className={`h-[3px] ${TONS.rua.risco}`} />
+      <div className="flex min-h-0 flex-1 flex-col p-2.5">
         <header className="mb-2 flex items-center gap-2 px-1">
           <Truck className={`size-3.5 ${TONS.rua.icone}`} aria-hidden />
           <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
             Em rota
           </h3>
           <span className={`numeric ml-auto rounded-xs px-1.5 text-xs ${TONS.rua.selo}`}>
-            {rotas.length}
+            {naRua}
           </span>
         </header>
 
         {rotas.length === 0 ? (
-          <p className="px-1 py-3 text-xs text-ink-faint">Ninguém na rua.</p>
+          <p className="px-1 py-3 text-xs text-ink-faint">Ninguém em rota.</p>
         ) : (
-          <ul className="flex max-h-[60dvh] flex-col gap-2 overflow-y-auto">
-            {rotas.map((rota) => (
-              <RouteCard key={rota.id} rota={rota} />
-            ))}
-          </ul>
+          <>
+            <div className="mb-2 px-1">
+              <PontosDeParada paradas={paradas} />
+              <p className="mt-1 text-[11px] leading-snug text-ink-faint">
+                {fraseNaRua(naRua, rotas.length)}
+              </p>
+            </div>
+
+            <ul className="flex max-h-[60dvh] flex-col gap-2 overflow-y-auto">
+              {rotas.map((rota) => (
+                <RouteCard key={rota.id} rota={rota} />
+              ))}
+            </ul>
+          </>
         )}
-        </div>
-      </section>
+      </div>
+    </section>
+  );
+}
+
+const LIMITE_PONTOS = 12;
+
+/**
+ * Um ponto por pedido. Cheio ainda está em rota; apagado já foi entregue.
+ *
+ * É o tamanho da leva num relance — melhor que uma barra, que some o
+ * "quantos" num percentual, e melhor que dez ícones de moto, que não cabem
+ * nesta coluna.
+ */
+function PontosDeParada({ paradas }: { paradas: RouteView['stops'] }) {
+  if (paradas.length === 0) return null;
+
+  const visiveis = paradas.slice(0, LIMITE_PONTOS);
+  const resto = paradas.length - visiveis.length;
+  const pendentes = paradas.filter((parada) => parada.status === 'PENDING').length;
+
+  return (
+    <div
+      className="flex flex-wrap items-center gap-1"
+      role="img"
+      aria-label={
+        pendentes === 1 ? '1 pedido ainda em rota' : `${pendentes} pedidos ainda em rota`
+      }
+    >
+      {visiveis.map((parada) => (
+        <span
+          key={parada.id}
+          title={
+            parada.status === 'PENDING'
+              ? parada.customerName
+              : `${parada.customerName} · entregue`
+          }
+          className={
+            parada.status === 'PENDING'
+              ? 'size-2.5 rounded-full bg-moving'
+              : 'size-2.5 rounded-full bg-line-strong/45'
+          }
+        />
+      ))}
+      {resto > 0 ? (
+        <span className="numeric text-[10px] text-ink-faint">+{resto}</span>
+      ) : null}
     </div>
   );
 }
 
-/** Uma rota na rua: quem está, quanto já entregou e como falar com ele. */
+function fraseNaRua(pendentes: number, motoboys: number) {
+  const leva =
+    pendentes === 0
+      ? 'Nada pendente nesta leva.'
+      : pendentes === 1
+        ? '1 pedido ainda em rota.'
+        : `${pendentes} pedidos ainda em rota.`;
+
+  if (motoboys <= 1) return leva;
+  return `${leva} ${motoboys} motoboys.`;
+}
+
+/** Uma rota em andamento: quem está, quanto já entregou e como falar com ele. */
 function RouteCard({ rota }: { rota: RouteView }) {
   const feitas = rota.stops.filter((stop) => stop.status !== 'PENDING').length;
-  const progresso = rota.stops.length > 0 ? (feitas / rota.stops.length) * 100 : 0;
+  const pendentes = rota.stops.length - feitas;
 
   return (
     <li className="rounded-md bg-surface p-3 hairline">
       <p className="truncate text-sm font-medium text-ink">{rota.courierName}</p>
       <p className="text-xs text-ink-faint">
-        {rota.status === 'PLANNED' ? 'aguardando saída' : 'na rua'} ·{' '}
+        {rota.status === 'PLANNED' ? 'aguardando saída' : 'em rota'} ·{' '}
         <span className="numeric">
-          {feitas}/{rota.stops.length}
+          {pendentes}/{rota.stops.length}
         </span>{' '}
-        entregues
+        {pendentes === 1 ? 'parada' : 'paradas'}
       </p>
 
-      <div className="mt-2 h-1 overflow-hidden rounded-full bg-raised">
-        <div className="h-full rounded-full bg-moving" style={{ width: `${progresso}%` }} />
+      <div className="mt-2">
+        <PontosDeParada paradas={rota.stops} />
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-1">
@@ -183,7 +266,7 @@ function RouteCard({ rota }: { rota: RouteView }) {
         {/*
           Fechar entrega pelo painel, sem depender do motoboy tocar na tela
           dele — ele esquece, o celular descarrega, ou ele nao usa. So aparece
-          com a rota na rua e com parada pendente: antes de sair nao ha o que
+          com a rota em andamento e com parada pendente: antes de sair nao ha o que
           concluir, e sem pendencia o botao abriria um dialogo vazio.
         */}
         {rota.status === 'IN_PROGRESS' && rota.stops.some((s) => s.status === 'PENDING') ? (
@@ -273,7 +356,7 @@ function Column({
         /*
          * Cada coluna rola por dentro. Sem isso, catorze pedidos numa coluna
          * empurram o resto da tela para baixo e o dono precisa rolar a página
-         * inteira para ver quem está na rua — que é a informação mais urgente
+         * inteira para ver quem está em rota — que é a informação mais urgente
          * justamente no dia movimentado.
          */
         <ul className="flex max-h-[60dvh] flex-col gap-2 overflow-y-auto">

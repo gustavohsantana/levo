@@ -60,7 +60,7 @@ export function Couriers({ entregadores }: { entregadores: CourierView[] }) {
           description="Cadastre quem entrega para poder montar rotas e mandar o link pelo WhatsApp."
         />
       ) : (
-        <ul className="overflow-hidden rounded-lg bg-surface hairline">
+        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {entregadores.map((entregador) => (
             <CourierRow key={entregador.id} entregador={entregador} onEdit={setEditando} />
           ))}
@@ -81,11 +81,11 @@ function CourierRow({
 
   return (
     <li
-      className={`flex items-center gap-3 border-b px-4 py-3 last:border-b-0 ${
+      className={`flex flex-col rounded-lg bg-surface p-4 hairline ${
         entregador.active ? '' : 'opacity-55'
       }`}
     >
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0">
         <Link
           href={`/dashboard/entregadores/${entregador.id}`}
           className="truncate font-medium text-ink hover:underline"
@@ -96,12 +96,12 @@ function CourierRow({
       </div>
 
       {entregador.busy ? (
-        <span className="shrink-0 rounded-xs bg-accent-soft px-2 py-0.5 text-xs text-accent-ink">
-          na rua
+        <span className="mt-2 w-fit rounded-xs bg-accent-soft px-2 py-0.5 text-xs text-accent-ink">
+          em rota
         </span>
       ) : null}
 
-      <div className="flex shrink-0 items-center gap-1">
+      <div className="mt-3 flex flex-wrap items-center gap-1">
         <Button asChild variant="ghost" size="sm">
           <Link href={`/dashboard/entregadores/${entregador.id}`}>
             <CalendarDays />

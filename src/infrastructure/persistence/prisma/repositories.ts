@@ -150,8 +150,14 @@ export class PrismaOrderRepository extends TenantScoped implements OrderReposito
   }
 
   async listOfDay(day: Date): Promise<Order[]> {
+    /*
+     * Com os itens: Finalizados hoje abre o mesmo detalhe do quadro. Sem isto
+     * o dono via nome e valor e, quando o cliente ligava dizendo que o pedido
+     * veio errado, não tinha o que conferir.
+     */
     const rows = await this.tx.order.findMany({
       where: this.scoped({ createdAt: dayRange(day) }),
+      include: { items: true },
       orderBy: { createdAt: 'desc' },
     });
     return rows.map(OrderMapper.toDomain);

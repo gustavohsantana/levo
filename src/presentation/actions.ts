@@ -347,17 +347,39 @@ export interface GrupoInput {
   options: Array<{ id?: string; name: string; priceReais: number }>;
 }
 
-/** Cria ou edita um grupo de opções: tamanhos, sabores, bordas, adicionais. */
-export async function salvarGrupoAction(grupo: GrupoInput): Promise<ActionResult> {
+/**
+ * Cria ou edita um grupo de opções: tamanhos, sabores, bordas, adicionais.
+ *
+ * Devolve o grupo salvo para a tela anexar na hora — senão o produto novo
+ * nasceria, o diálogo fecharia, e o dono teria que achar o grupo na lista
+ * de baixo e marcar de novo.
+ */
+export async function salvarGrupoAction(
+  grupo: GrupoInput,
+): Promise<{ ok: true; grupo: { id: string; name: string; min: number; max: number; options: Array<{ id: string; name: string; priceCents: number }> } } | { ok: false; error: string }> {
   try {
     const session = await requireSession();
-    await containerFor(session.establishmentId).useCases.saveOptionGroup.execute(grupo);
+    const salvo = await containerFor(session.establishmentId).useCases.saveOptionGroup.execute(
+      grupo,
+    );
+    revalidatePath('/dashboard/catalogo');
+    return {
+      ok: true,
+      grupo: {
+        id: salvo.id,
+        name: salvo.name,
+        min: salvo.min,
+        max: salvo.max,
+        options: salvo.options.map((o) => ({
+          id: o.id,
+          name: o.name,
+          priceCents: o.price.cents,
+        })),
+      },
+    };
   } catch (cause) {
     return { ok: false, error: toFormError(cause) };
   }
-
-  revalidatePath('/dashboard/catalogo');
-  return { ok: true };
 }
 
 export async function removerGrupoAction(id: string): Promise<ActionResult> {

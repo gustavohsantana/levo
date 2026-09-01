@@ -158,7 +158,7 @@ export function OrderDetailDialog({
                   ))}
                 </ul>
               </section>
-            ) : (
+            ) : pedido.source === 'IFOOD' || pedido.source === 'AIQFOME' ? (
               /*
                * Pedido de marketplace não traz item nenhum: o iFood e o aiqfome
                * mandam o total, não a composição. Dizer isso é melhor que uma
@@ -167,6 +167,8 @@ export function OrderDetailDialog({
               <p className="text-sm text-ink-faint">
                 Esta plataforma não envia os itens do pedido — confira no aplicativo dela.
               </p>
+            ) : (
+              <p className="text-sm text-ink-faint">Não há itens registrados neste pedido.</p>
             )}
 
             <section className="rounded-md bg-raised p-3">

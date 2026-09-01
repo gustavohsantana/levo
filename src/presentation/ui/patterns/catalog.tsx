@@ -23,7 +23,8 @@ import {
 } from '@/presentation/catalog-actions';
 import { enviarImagemAction } from '@/presentation/upload-actions';
 import type { OptionGroupView, ProductView } from '@/presentation/queries';
-import { OptionGroups } from './option-groups';
+import { GrupoDialog, OptionGroups } from './option-groups';
+import { gruposDaCategoria, regra } from './option-group-layout';
 import { Button, EmptyState, Field, Input, Textarea } from '../primitives';
 import { currency } from '../format';
 
@@ -205,6 +206,7 @@ export function Catalog({
                   <ProductRow
                     key={produto.id}
                     produto={produto}
+                    grupos={grupos}
                     onEdit={setEditando}
                     podeMover={!filtrando}
                   />
@@ -216,12 +218,20 @@ export function Catalog({
       )}
 
       {/*
-        Depois dos produtos, e não antes: quem chega aqui vem cadastrar o que
-        vende. Grupo é a camada seguinte, e uma marmitaria nunca precisa dela.
+        Biblioteca, não cadastro. Opções nascem no produto; isto só existe
+        para reajustar um preço que vale em vários de uma vez. Some quando
+        não há lista nenhuma — uma marmitaria nunca precisa ver esta seção.
       */}
-      <div className="border-t pt-6">
-        <OptionGroups grupos={grupos} categorias={categorias} />
-      </div>
+      {grupos.length > 0 ? (
+        <div className="border-t pt-6">
+          <OptionGroups
+            grupos={grupos}
+            produtos={produtos}
+            categorias={categorias}
+            ordemCategorias={ordemCategorias}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -384,10 +394,12 @@ function Setas({
 
 function ProductRow({
   produto,
+  grupos,
   onEdit,
   podeMover,
 }: {
   produto: ProductView;
+  grupos: OptionGroupView[];
   onEdit: (p: ProductView) => void;
   podeMover: boolean;
 }) {
@@ -440,6 +452,14 @@ function ProductRow({
         </p>
         {produto.description ? (
           <p className="truncate text-sm text-ink-faint">{produto.description}</p>
+        ) : null}
+        {produto.optionGroupIds.length > 0 ? (
+          <p className="truncate text-xs text-ink-faint">
+            {produto.optionGroupIds
+              .map((id) => grupos.find((g) => g.id === id)?.name)
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
         ) : null}
       </div>
 
@@ -501,13 +521,24 @@ function ProductForm({
   const [gruposDoProduto, setGruposDoProduto] = useState<string[]>(
     produto?.optionGroupIds ?? [],
   );
+  /*
+   * Listas criadas nesta sessão, antes do refresh chegar. Sem isto, "Criar
+   * opções" gravaria no servidor e o produto ainda não enxergaria a lista.
+   */
+  const [criadas, setCriadas] = useState<OptionGroupView[]>([]);
   const [categoria, setCategoria] = useState(produto?.category ?? '');
   const [buscaGrupo, setBuscaGrupo] = useState('');
-  const [verTodos, setVerTodos] = useState(false);
+  const [dialogoGrupo, setDialogoGrupo] = useState<OptionGroupView | null | 'novo'>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [pendente, submit] = useTransition();
   const [imagem, setImagem] = useState(produto?.imageUrl ?? '');
   const [enviando, enviar] = useTransition();
+
+  const gruposVisiveis = useMemo(() => {
+    const porId = new Map(grupos.map((g) => [g.id, g]));
+    for (const g of criadas) porId.set(g.id, g);
+    return [...porId.values()];
+  }, [grupos, criadas]);
 
   function escolherArquivo(arquivo: File | undefined) {
     if (!arquivo) return;
@@ -532,6 +563,14 @@ function ProductForm({
       if (resultado.ok) onDone();
       else setErro(resultado.error);
     });
+  }
+
+  function anexarLista(grupo: { id: string; name: string; min: number; max: number; options: OptionGroupView['options'] }) {
+    setCriadas((atual) => {
+      const sem = atual.filter((g) => g.id !== grupo.id);
+      return [...sem, { ...grupo, produtos: 1 }];
+    });
+    setGruposDoProduto((atual) => (atual.includes(grupo.id) ? atual : [...atual, grupo.id]));
   }
 
   return (
@@ -628,36 +667,29 @@ function ProductForm({
         </Field>
       </div>
 
-      {/*
-        Só aparece quando já existe grupo cadastrado. Um campo vazio com
-        "nenhum grupo" faria toda marmitaria se perguntar o que está faltando.
-      */}
-      {grupos.length > 0 ? (
-        <div className="mt-4 border-t pt-4">
-          <h3 className="text-xs font-medium uppercase tracking-wide text-ink-faint">
-            Opções deste produto
-          </h3>
-          <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-            O cliente escolhe estas opções ao pedir. A ordem aqui é a ordem na tela dele.
-          </p>
+      <OpcoesDoProduto
+        grupos={gruposVisiveis}
+        todos={todos}
+        categoria={categoria}
+        escolhidos={gruposDoProduto}
+        busca={buscaGrupo}
+        setBusca={setBuscaGrupo}
+        onCriar={() => setDialogoGrupo('novo')}
+        onEditar={(g) => setDialogoGrupo(g)}
+        alternar={(id) =>
+          setGruposDoProduto((atual) =>
+            atual.includes(id) ? atual.filter((x) => x !== id) : [...atual, id],
+          )
+        }
+      />
 
-          <ListaDeGrupos
-            grupos={grupos}
-            todos={todos}
-            categoria={categoria}
-            produtoId={produto?.id ?? null}
-            escolhidos={gruposDoProduto}
-            busca={buscaGrupo}
-            setBusca={setBuscaGrupo}
-            verTodos={verTodos}
-            setVerTodos={setVerTodos}
-            alternar={(id) =>
-              setGruposDoProduto((atual) =>
-                atual.includes(id) ? atual.filter((x) => x !== id) : [...atual, id],
-              )
-            }
-          />
-        </div>
+      {dialogoGrupo !== null ? (
+        <GrupoDialog
+          grupo={dialogoGrupo === 'novo' ? null : dialogoGrupo}
+          categorias={categorias}
+          onClose={() => setDialogoGrupo(null)}
+          onSaved={anexarLista}
+        />
       ) : null}
 
       {erro ? <p className="mt-3 text-sm text-danger">{erro}</p> : null}
@@ -706,37 +738,30 @@ function agrupar(
 }
 
 /**
- * Escolher quais grupos o produto oferece.
+ * Opções no próprio produto, filtradas pela categoria.
  *
- * Antes era a lista inteira, plana: editar uma pizza mostrava "Base do açaí",
- * "Cereais" e "Frutas" com o mesmo peso de "Sabores 35cm". Com doze grupos já
- * polui; um cardápio de verdade tem quarenta, e aí ninguém acha nada.
- *
- * A ordem aqui responde à pergunta na ordem em que ela aparece: o que este
- * produto já usa, o que os outros da mesma categoria usam — pizza usa grupo de
- * pizza — e só então o resto, atrás de uma busca.
+ * Cadastrou em Doces: busca o que Doces já tem. Não achou: cria. Pizza não
+ * aparece no meio de doce — a categoria é o recorte, não um detalhe.
  */
-function ListaDeGrupos({
+function OpcoesDoProduto({
   grupos,
   todos,
   categoria,
-  produtoId,
   escolhidos,
   busca,
   setBusca,
-  verTodos,
-  setVerTodos,
+  onCriar,
+  onEditar,
   alternar,
 }: {
   grupos: OptionGroupView[];
   todos: ProductView[];
   categoria: string;
-  produtoId: string | null;
   escolhidos: string[];
   busca: string;
   setBusca: (v: string) => void;
-  verTodos: boolean;
-  setVerTodos: (v: boolean) => void;
+  onCriar: () => void;
+  onEditar: (g: OptionGroupView) => void;
   alternar: (id: string) => void;
 }) {
   const porId = new Map(grupos.map((g) => [g.id, g]));
@@ -745,104 +770,104 @@ function ListaDeGrupos({
     .map((id) => porId.get(id))
     .filter((g): g is OptionGroupView => Boolean(g));
 
-  /*
-   * Sugestão vem dos vizinhos de categoria: se as outras pizzas oferecem
-   * "Borda 35cm", esta provavelmente também. É a única pista honesta que
-   * existe — o sistema não sabe o que é pizza, sabe quem anda junto.
-   */
-  const sugeridos = useMemo(() => {
-    const alvo = categoria.trim().toLowerCase();
-    if (!alvo) return [];
-    const usados = new Set<string>();
-    for (const p of todos) {
-      if (p.id === produtoId) continue;
-      if ((p.category ?? '').trim().toLowerCase() !== alvo) continue;
-      for (const id of p.optionGroupIds) usados.add(id);
-    }
-    return grupos.filter((g) => usados.has(g.id) && !escolhidos.includes(g.id));
-  }, [grupos, todos, categoria, produtoId, escolhidos]);
-
-  const termo = busca.trim().toLowerCase();
-  const resto = grupos.filter(
-    (g) =>
-      !escolhidos.includes(g.id)
-      && !sugeridos.some((x) => x.id === g.id)
-      && (termo ? g.name.toLowerCase().includes(termo) : true),
+  const daCategoria = useMemo(
+    () => gruposDaCategoria(grupos, todos, categoria).filter((g) => !escolhidos.includes(g.id)),
+    [grupos, todos, categoria, escolhidos],
   );
 
-  const mostrarResto = termo.length > 0 || verTodos;
+  const nomeCategoria = categoria.trim();
+  const termo = busca.trim().toLowerCase();
+  const filtrados = termo
+    ? daCategoria.filter((g) => g.name.toLowerCase().includes(termo))
+    : daCategoria;
 
   return (
-    <div className="mt-2 flex flex-col gap-3">
+    <div className="mt-4 border-t pt-4">
+      <h3 className="text-sm font-medium text-ink">O que o cliente escolhe</h3>
+      <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+        {nomeCategoria
+          ? `Opcionais de ${nomeCategoria}. Busca o que já existe — ou cria se ainda não tiver.`
+          : 'Escolha a categoria em cima para ver os opcionais dela, ou crie um novo.'}
+      </p>
+
       {marcados.length > 0 ? (
-        <Bloco titulo="Neste produto">
+        <ul className="mt-3 flex flex-col gap-1.5">
           {marcados.map((g) => (
-            <Escolha key={g.id} grupo={g} marcado onToggle={() => alternar(g.id)} />
-          ))}
-        </Bloco>
-      ) : (
-        <p className="text-sm text-ink-faint">
-          Nenhum grupo ainda. Este produto é vendido do jeito que está.
-        </p>
-      )}
-
-      {sugeridos.length > 0 ? (
-        <Bloco titulo={`Usados em ${categoria.trim()}`}>
-          {sugeridos.map((g) => (
-            <Escolha key={g.id} grupo={g} marcado={false} onToggle={() => alternar(g.id)} />
-          ))}
-        </Bloco>
-      ) : null}
-
-      {grupos.length > marcados.length + sugeridos.length ? (
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search
-                className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-ink-faint"
-                aria-hidden
-              />
-              <input
-                type="search"
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                placeholder="Buscar outro grupo"
-                aria-label="Buscar grupo de opções"
-                className="h-9 w-full rounded-lg bg-raised pl-8 pr-3 text-sm text-ink hairline outline-none placeholder:text-ink-faint focus:ring-2 focus:ring-accent/40"
-              />
-            </div>
-            {termo.length === 0 ? (
+            <li
+              key={g.id}
+              className="flex items-center gap-2 rounded-lg bg-raised px-3 py-2"
+            >
               <button
                 type="button"
-                onClick={() => setVerTodos(!verTodos)}
-                className="shrink-0 text-xs text-ink-muted underline-offset-2 hover:underline"
+                onClick={() => onEditar(g)}
+                className="min-w-0 flex-1 text-left"
               >
-                {verTodos ? 'Recolher' : `Ver todos (${resto.length})`}
+                <span className="text-sm font-medium text-ink">{g.name}</span>
+                <span className="ml-2 text-xs text-ink-faint">{regra(g)}</span>
+                <p className="truncate text-xs text-ink-muted">
+                  {g.options.map((o) => o.name).join(' · ')}
+                </p>
               </button>
-            ) : null}
-          </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={`Tirar ${g.name} deste produto`}
+                onClick={() => alternar(g.id)}
+              >
+                <Trash2 className="text-ink-faint" />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
-          {mostrarResto ? (
-            <div className="mt-2 flex flex-col">
-              {resto.map((g) => (
-                <Escolha key={g.id} grupo={g} marcado={false} onToggle={() => alternar(g.id)} />
-              ))}
-              {resto.length === 0 ? (
-                <p className="px-1 py-1.5 text-sm text-ink-faint">Nenhum grupo com esse nome.</p>
-              ) : null}
-            </div>
+      {nomeCategoria ? (
+        <div className="mt-3">
+          {daCategoria.length > 0 ? (
+            <>
+              <div className="relative">
+                <Search
+                  className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-ink-faint"
+                  aria-hidden
+                />
+                <input
+                  type="search"
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  placeholder={`Buscar em ${nomeCategoria}`}
+                  aria-label={`Buscar opcionais de ${nomeCategoria}`}
+                  className="h-9 w-full rounded-lg bg-raised pl-8 pr-3 text-sm text-ink hairline outline-none placeholder:text-ink-faint focus:ring-2 focus:ring-accent/40"
+                />
+              </div>
+
+              {filtrados.length > 0 ? (
+                <div className="mt-1.5 flex flex-col">
+                  {filtrados.map((g) => (
+                    <Escolha key={g.id} grupo={g} marcado={false} onToggle={() => alternar(g.id)} />
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-ink-faint">
+                  Nenhum opcional com esse nome em {nomeCategoria}. Crie um.
+                </p>
+              )}
+            </>
+          ) : marcados.length === 0 ? (
+            <p className="text-sm text-ink-faint">
+              {nomeCategoria} ainda não tem opcional. Crie o primeiro neste produto — os
+              próximos de {nomeCategoria} já encontram.
+            </p>
           ) : null}
         </div>
       ) : null}
-    </div>
-  );
-}
 
-function Bloco({ titulo, children }: { titulo: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <p className="mb-0.5 text-xs text-ink-faint">{titulo}</p>
-      <div className="flex flex-col">{children}</div>
+      <div className="mt-3">
+        <Button type="button" variant="outline" size="sm" onClick={onCriar}>
+          <Plus />
+          {nomeCategoria ? `Criar opcional de ${nomeCategoria}` : 'Criar opções'}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -861,7 +886,6 @@ function Escolha({
       <input type="checkbox" checked={marcado} onChange={onToggle} />
       <span className="min-w-0 flex-1 truncate">
         {grupo.name}
-        {/* As opções em cinza dizem o que o grupo é sem precisar abrir nada. */}
         <span className="ml-2 text-xs text-ink-faint">
           {grupo.options.slice(0, 3).map((o) => o.name).join(' · ')}
           {grupo.options.length > 3 ? '…' : ''}

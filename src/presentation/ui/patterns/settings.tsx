@@ -46,18 +46,27 @@ export function Settings({
   }
 
   return (
-    <div className="flex max-w-xl flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-xl font-semibold tracking-tight text-ink">Configurações</h1>
         <p className="mt-1 text-sm text-ink-muted">Dados da sua operação.</p>
       </div>
 
-      <section className="rounded-lg bg-surface p-5 hairline">
+      {/*
+        Duas colunas no desktop. Uma coluna só deixava a direita vazia e o
+        dono rolando para achar o que já cabia na tela.
+      */}
+      <div className="grid gap-4 lg:grid-cols-2">
+      <section className="h-full rounded-lg bg-surface p-5 hairline">
         <h2 className="font-semibold text-ink">{establishment.name}</h2>
         <p className="mt-0.5 text-sm text-ink-faint">{establishment.address}</p>
       </section>
 
-      <form action={handleSubmit} className="flex flex-col gap-5">
+      {/*
+        `contents` faz os dois cartões do form ocuparem a grade de fora, sem
+        virar uma coluna só dentro do form.
+      */}
+      <form action={handleSubmit} className="contents">
       <section className="rounded-lg bg-surface p-5 hairline">
         <div className="flex items-start gap-3">
           <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-md bg-accent-soft text-accent-ink">
@@ -147,6 +156,7 @@ export function Settings({
       <AceiteAutomatico inicial={establishment.autoConfirmOrders} />
 
       <DeliveryFeeBands inicial={faixas} />
+      </div>
     </div>
   );
 }

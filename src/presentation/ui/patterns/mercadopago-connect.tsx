@@ -55,7 +55,7 @@ export function MercadoPagoConnect({
     const precisaReconectar = estado === 'reconectar';
 
     return (
-      <div className="rounded-lg bg-surface p-5 hairline">
+      <div className="flex h-full flex-col rounded-lg bg-surface p-5 hairline">
         <h3 className="font-semibold text-ink">
           {precisaReconectar ? 'Mercado Pago desconectado' : 'Receber pagamento pelo cardápio'}
         </h3>
@@ -163,7 +163,7 @@ export function MercadoPagoConnect({
   const emTeste = estado === 'teste';
 
   return (
-    <div className="rounded-lg bg-surface p-5 hairline">
+    <div className="flex h-full flex-col rounded-lg bg-surface p-5 hairline">
       <div className="flex items-start gap-3">
         <span
           className={
@@ -179,7 +179,7 @@ export function MercadoPagoConnect({
           )}
         </span>
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0">
           <h3 className="font-semibold text-ink">
             {emTeste ? 'Mercado Pago conectado em teste' : 'Mercado Pago conectado'}
           </h3>
@@ -206,17 +206,18 @@ export function MercadoPagoConnect({
             <p className="mt-0.5 text-xs text-ink-faint">{conta.email}</p>
           ) : null}
         </div>
-
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={pendente}
-          onClick={() => startTransition(async () => void (await desconectarMercadoPago()))}
-        >
-          {pendente ? <LoaderCircle className="animate-spin" /> : <Unlink />}
-          Desconectar
-        </Button>
       </div>
+
+      <Button
+        variant="ghost"
+        size="sm"
+        className="mt-auto self-start pt-4"
+        disabled={pendente}
+        onClick={() => startTransition(async () => void (await desconectarMercadoPago()))}
+      >
+        {pendente ? <LoaderCircle className="animate-spin" /> : <Unlink />}
+        Desconectar
+      </Button>
 
       {mensagem ? <Aviso tom={mensagem.tom}>{mensagem.texto}</Aviso> : null}
       {erroAcao ? <Aviso tom="erro">{erroAcao}</Aviso> : null}

@@ -45,7 +45,7 @@ export function WorkQueue({
   faixas = [],
 }: {
   pending: OrderView[];
-  /** As rotas na rua, para a quarta coluna. */
+  /** As rotas em andamento, para a quarta coluna. */
   rotasAtivas?: RouteView[];
   couriers: Courier[];
   establishment: { name: string; coordinates: { lat: number; lng: number } };

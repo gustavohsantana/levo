@@ -6,13 +6,13 @@ import { distance, minutes } from '../format';
 import { CopyLink } from './copy-link';
 import { StartRouteButton } from './start-route-button';
 
-/** As rotas que estão na rua agora — a segunda coisa que o dono quer ver. */
+/** As rotas que estão em andamento agora — a segunda coisa que o dono quer ver. */
 export function ActiveRoutes({ routes }: { routes: RouteView[] }) {
   if (routes.length === 0) return null;
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-sm font-semibold text-ink">Na rua agora</h2>
+      <h2 className="text-sm font-semibold text-ink">Em rota agora</h2>
 
       <div className="grid gap-3 lg:grid-cols-2">
         {routes.map((route) => {

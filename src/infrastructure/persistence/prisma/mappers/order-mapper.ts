@@ -20,9 +20,8 @@ import {
  */
 export const OrderMapper = {
   /**
-   * `items` chega separado porque nem toda consulta os carrega: a lista do
-   * painel mostra centenas de pedidos e não precisa de item nenhum. Quem
-   * quer os itens pede o `include` e passa aqui.
+   * `items` chega separado porque nem toda consulta os carrega. Quem quer
+   * os itens pede o `include` e passa aqui.
    */
   toDomain(row: OrderRow & { items?: OrderItemRow[] }): Order {
     return Order.restore({
