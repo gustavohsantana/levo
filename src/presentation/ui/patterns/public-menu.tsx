@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Minus, Plus, ShoppingBag } from 'lucide-react';
+import { ChevronRight, Minus, Plus, ShoppingBag } from 'lucide-react';
 import type { MenuPublico } from '@/presentation/public-menu';
 import { gravarCarrinho, lerCarrinho, type LinhaCarrinho } from '@/presentation/menu-session';
 import { MontarProduto } from './montar-produto';
@@ -130,6 +130,16 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
                 const quantidade = doProduto.reduce((t, linha) => t + linha.quantity, 0);
                 const linhaSimples = doProduto.find((linha) => linha.nomes.length === 0);
 
+                /*
+                 * O primeiro grupo obrigatório vira a promessa do cartão —
+                 * "Escolha até 2 sabores" diz mais que "tem opções". Sem
+                 * obrigatório, anuncia que dá para incrementar.
+                 */
+                const obrigatorio = produto.grupos.find((g) => g.min > 0);
+                const escolhaPrincipal =
+                  obrigatorio?.name ??
+                  (produto.grupos.length > 0 ? 'Monte do seu jeito' : null);
+
                 return (
                   <li
                     key={produto.id}
@@ -163,6 +173,20 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
                         ) : null}
                         {currency(produto.precoMinimoCents)}
                       </p>
+
+                      {/*
+                        Diz o que vem depois do toque.
+                        Sem isto, o cartão do açaí é igual ao de uma lata de
+                        refrigerante — e o cliente não tem como saber que vai
+                        abrir uma tela para escolher. Some quando não há grupo:
+                        marmita entra direto e não deve prometer escolha.
+                      */}
+                      {escolhaPrincipal ? (
+                        <p className="mt-0.5 flex items-center gap-1 text-xs text-accent-ink">
+                          {escolhaPrincipal}
+                          <ChevronRight className="size-3" aria-hidden />
+                        </p>
+                      ) : null}
                     </div>
 
                     {/*
@@ -170,22 +194,49 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
                       no carrinho: a proxima pizza pode ter outro sabor, e o
                       "+" simples copiaria a montagem anterior sem avisar.
                     */}
-                    {produto.grupos.length > 0 || quantidade === 0 ? (
+                    {produto.grupos.length > 0 ? (
                       <div className="flex shrink-0 items-center gap-1">
+                        {/*
+                          O menos existe mesmo com opções: sem ele, quem tocou
+                          por engano não consegue desfazer sem ir ao carrinho.
+                          Remove a montagem mais recente deste produto, que é o
+                          que a pessoa acabou de fazer — as outras continuam
+                          visíveis, uma a uma, no resumo do pedido.
+                        */}
                         {quantidade > 0 ? (
-                          <span className="numeric w-5 text-center text-sm text-ink-muted">
-                            {quantidade}
-                          </span>
+                          <>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => {
+                                const ultima = doProduto[doProduto.length - 1];
+                                if (ultima) ajustar(ultima.id, -1);
+                              }}
+                              aria-label={`Menos ${produto.name}`}
+                            >
+                              <Minus />
+                            </Button>
+                            <span className="numeric w-5 text-center text-sm">{quantidade}</span>
+                          </>
                         ) : null}
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => adicionar(produto)}
-                          aria-label={`Adicionar ${produto.name}`}
+                          aria-label={`Escolher ${produto.name}`}
                         >
                           <Plus />
                         </Button>
                       </div>
+                    ) : quantidade === 0 ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => adicionar(produto)}
+                        aria-label={`Adicionar ${produto.name}`}
+                      >
+                        <Plus />
+                      </Button>
                     ) : (
                       <div className="flex shrink-0 items-center gap-1">
                         <Button
