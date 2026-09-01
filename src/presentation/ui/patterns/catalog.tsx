@@ -135,6 +135,7 @@ export function Catalog({
           produto={editando}
           categorias={categorias}
           grupos={grupos}
+          todos={produtos}
           onDone={() => {
             setCriando(false);
             setEditando(null);
@@ -487,16 +488,22 @@ function ProductForm({
   produto,
   categorias,
   grupos,
+  todos,
   onDone,
 }: {
   produto: ProductView | null;
   categorias: string[];
   grupos: OptionGroupView[];
+  /** Todo o catálogo: é dele que sai o que a categoria já costuma usar. */
+  todos: ProductView[];
   onDone: () => void;
 }) {
   const [gruposDoProduto, setGruposDoProduto] = useState<string[]>(
     produto?.optionGroupIds ?? [],
   );
+  const [categoria, setCategoria] = useState(produto?.category ?? '');
+  const [buscaGrupo, setBuscaGrupo] = useState('');
+  const [verTodos, setVerTodos] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [pendente, submit] = useTransition();
   const [imagem, setImagem] = useState(produto?.imageUrl ?? '');
@@ -567,7 +574,8 @@ function ProductForm({
           <Input
             name="category"
             list="categorias-do-catalogo"
-            defaultValue={produto?.category ?? ''}
+            value={categoria}
+            onChange={(e) => setCategoria(e.target.value)}
             placeholder="Pizzas, Bebidas…"
             autoComplete="off"
           />
@@ -633,30 +641,22 @@ function ProductForm({
             O cliente escolhe estas opções ao pedir. A ordem aqui é a ordem na tela dele.
           </p>
 
-          <div className="mt-2 flex flex-col gap-1">
-            {grupos.map((grupo) => (
-              <label
-                key={grupo.id}
-                className="flex cursor-pointer items-center gap-2.5 rounded-sm px-1 py-1.5 text-sm text-ink hover:bg-raised"
-              >
-                <input
-                  type="checkbox"
-                  checked={gruposDoProduto.includes(grupo.id)}
-                  onChange={() =>
-                    setGruposDoProduto((atual) =>
-                      atual.includes(grupo.id)
-                        ? atual.filter((id) => id !== grupo.id)
-                        : [...atual, grupo.id],
-                    )
-                  }
-                />
-                <span className="flex-1 truncate">{grupo.name}</span>
-                <span className="shrink-0 text-xs text-ink-faint">
-                  {grupo.min > 0 ? 'obrigatório' : 'opcional'}
-                </span>
-              </label>
-            ))}
-          </div>
+          <ListaDeGrupos
+            grupos={grupos}
+            todos={todos}
+            categoria={categoria}
+            produtoId={produto?.id ?? null}
+            escolhidos={gruposDoProduto}
+            busca={buscaGrupo}
+            setBusca={setBuscaGrupo}
+            verTodos={verTodos}
+            setVerTodos={setVerTodos}
+            alternar={(id) =>
+              setGruposDoProduto((atual) =>
+                atual.includes(id) ? atual.filter((x) => x !== id) : [...atual, id],
+              )
+            }
+          />
         </div>
       ) : null}
 
@@ -703,4 +703,173 @@ function agrupar(
     if (pa !== pb) return pa - pb;
     return a.localeCompare(b, 'pt-BR');
   });
+}
+
+/**
+ * Escolher quais grupos o produto oferece.
+ *
+ * Antes era a lista inteira, plana: editar uma pizza mostrava "Base do açaí",
+ * "Cereais" e "Frutas" com o mesmo peso de "Sabores 35cm". Com doze grupos já
+ * polui; um cardápio de verdade tem quarenta, e aí ninguém acha nada.
+ *
+ * A ordem aqui responde à pergunta na ordem em que ela aparece: o que este
+ * produto já usa, o que os outros da mesma categoria usam — pizza usa grupo de
+ * pizza — e só então o resto, atrás de uma busca.
+ */
+function ListaDeGrupos({
+  grupos,
+  todos,
+  categoria,
+  produtoId,
+  escolhidos,
+  busca,
+  setBusca,
+  verTodos,
+  setVerTodos,
+  alternar,
+}: {
+  grupos: OptionGroupView[];
+  todos: ProductView[];
+  categoria: string;
+  produtoId: string | null;
+  escolhidos: string[];
+  busca: string;
+  setBusca: (v: string) => void;
+  verTodos: boolean;
+  setVerTodos: (v: boolean) => void;
+  alternar: (id: string) => void;
+}) {
+  const porId = new Map(grupos.map((g) => [g.id, g]));
+
+  const marcados = escolhidos
+    .map((id) => porId.get(id))
+    .filter((g): g is OptionGroupView => Boolean(g));
+
+  /*
+   * Sugestão vem dos vizinhos de categoria: se as outras pizzas oferecem
+   * "Borda 35cm", esta provavelmente também. É a única pista honesta que
+   * existe — o sistema não sabe o que é pizza, sabe quem anda junto.
+   */
+  const sugeridos = useMemo(() => {
+    const alvo = categoria.trim().toLowerCase();
+    if (!alvo) return [];
+    const usados = new Set<string>();
+    for (const p of todos) {
+      if (p.id === produtoId) continue;
+      if ((p.category ?? '').trim().toLowerCase() !== alvo) continue;
+      for (const id of p.optionGroupIds) usados.add(id);
+    }
+    return grupos.filter((g) => usados.has(g.id) && !escolhidos.includes(g.id));
+  }, [grupos, todos, categoria, produtoId, escolhidos]);
+
+  const termo = busca.trim().toLowerCase();
+  const resto = grupos.filter(
+    (g) =>
+      !escolhidos.includes(g.id)
+      && !sugeridos.some((x) => x.id === g.id)
+      && (termo ? g.name.toLowerCase().includes(termo) : true),
+  );
+
+  const mostrarResto = termo.length > 0 || verTodos;
+
+  return (
+    <div className="mt-2 flex flex-col gap-3">
+      {marcados.length > 0 ? (
+        <Bloco titulo="Neste produto">
+          {marcados.map((g) => (
+            <Escolha key={g.id} grupo={g} marcado onToggle={() => alternar(g.id)} />
+          ))}
+        </Bloco>
+      ) : (
+        <p className="text-sm text-ink-faint">
+          Nenhum grupo ainda. Este produto é vendido do jeito que está.
+        </p>
+      )}
+
+      {sugeridos.length > 0 ? (
+        <Bloco titulo={`Usados em ${categoria.trim()}`}>
+          {sugeridos.map((g) => (
+            <Escolha key={g.id} grupo={g} marcado={false} onToggle={() => alternar(g.id)} />
+          ))}
+        </Bloco>
+      ) : null}
+
+      {grupos.length > marcados.length + sugeridos.length ? (
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search
+                className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-ink-faint"
+                aria-hidden
+              />
+              <input
+                type="search"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar outro grupo"
+                aria-label="Buscar grupo de opções"
+                className="h-9 w-full rounded-lg bg-raised pl-8 pr-3 text-sm text-ink hairline outline-none placeholder:text-ink-faint focus:ring-2 focus:ring-accent/40"
+              />
+            </div>
+            {termo.length === 0 ? (
+              <button
+                type="button"
+                onClick={() => setVerTodos(!verTodos)}
+                className="shrink-0 text-xs text-ink-muted underline-offset-2 hover:underline"
+              >
+                {verTodos ? 'Recolher' : `Ver todos (${resto.length})`}
+              </button>
+            ) : null}
+          </div>
+
+          {mostrarResto ? (
+            <div className="mt-2 flex flex-col">
+              {resto.map((g) => (
+                <Escolha key={g.id} grupo={g} marcado={false} onToggle={() => alternar(g.id)} />
+              ))}
+              {resto.length === 0 ? (
+                <p className="px-1 py-1.5 text-sm text-ink-faint">Nenhum grupo com esse nome.</p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Bloco({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="mb-0.5 text-xs text-ink-faint">{titulo}</p>
+      <div className="flex flex-col">{children}</div>
+    </div>
+  );
+}
+
+function Escolha({
+  grupo,
+  marcado,
+  onToggle,
+}: {
+  grupo: OptionGroupView;
+  marcado: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-center gap-2.5 rounded-sm px-1 py-1.5 text-sm text-ink hover:bg-raised">
+      <input type="checkbox" checked={marcado} onChange={onToggle} />
+      <span className="min-w-0 flex-1 truncate">
+        {grupo.name}
+        {/* As opções em cinza dizem o que o grupo é sem precisar abrir nada. */}
+        <span className="ml-2 text-xs text-ink-faint">
+          {grupo.options.slice(0, 3).map((o) => o.name).join(' · ')}
+          {grupo.options.length > 3 ? '…' : ''}
+        </span>
+      </span>
+      <span className="shrink-0 text-xs text-ink-faint">
+        {grupo.min > 0 ? 'obrigatório' : 'opcional'}
+      </span>
+    </label>
+  );
 }
