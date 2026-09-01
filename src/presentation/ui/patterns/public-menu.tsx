@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronRight, Minus, Plus, ShoppingBag } from 'lucide-react';
+import { Minus, Plus, ShoppingBag } from 'lucide-react';
 import type { MenuPublico } from '@/presentation/public-menu';
 import { gravarCarrinho, lerCarrinho, type LinhaCarrinho } from '@/presentation/menu-session';
 import { MontarProduto } from './montar-produto';
@@ -182,9 +182,8 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
                         marmita entra direto e não deve prometer escolha.
                       */}
                       {escolhaPrincipal ? (
-                        <p className="mt-0.5 flex items-center gap-1 text-xs text-accent-ink">
+                        <p className="mt-0.5 truncate text-xs text-ink-faint">
                           {escolhaPrincipal}
-                          <ChevronRight className="size-3" aria-hidden />
                         </p>
                       ) : null}
                     </div>
@@ -219,13 +218,20 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
                             <span className="numeric w-5 text-center text-sm">{quantidade}</span>
                           </>
                         ) : null}
+                        {/*
+                          "Montar", e não "+".
+                          O botão É a promessa: quem olha só ele — que é a
+                          maioria — vê `+` e espera comprar num toque. A dica
+                          abaixo do título ajuda quem lê o cartão inteiro, e
+                          essa não é a pessoa com pressa.
+                        */}
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => adicionar(produto)}
-                          aria-label={`Escolher ${produto.name}`}
+                          aria-label={`Montar ${produto.name}`}
                         >
-                          <Plus />
+                          {quantidade > 0 ? <Plus /> : 'Montar'}
                         </Button>
                       </div>
                     ) : quantidade === 0 ? (
