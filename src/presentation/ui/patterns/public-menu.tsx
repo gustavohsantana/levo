@@ -4,7 +4,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Minus, Plus, ShoppingBag } from 'lucide-react';
 import type { MenuPublico } from '@/presentation/public-menu';
-import { gravarCarrinho, lerCarrinho } from '@/presentation/menu-session';
+import { gravarCarrinho, lerCarrinho, type LinhaCarrinho } from '@/presentation/menu-session';
+import { MontarProduto } from './montar-produto';
+
+type Produto = MenuPublico['categorias'][number]['produtos'][number];
 import { Button } from '../primitives';
 import { currency } from '../format';
 
@@ -17,8 +20,10 @@ import { currency } from '../format';
 export function PublicMenu({ menu }: { menu: MenuPublico }) {
   const router = useRouter();
   const slug = menu.establishment.slug;
-  const [quantidades, setQuantidades] = useState<Record<string, number>>({});
+  const [linhas, setLinhas] = useState<LinhaCarrinho[]>([]);
   const [pronto, setPronto] = useState(false);
+  /** O produto que o cliente está montando. `null` quando nenhum. */
+  const [montando, setMontando] = useState<Produto | null>(null);
 
   const produtos = useMemo(
     () => menu.categorias.flatMap((categoria) => categoria.produtos),
@@ -26,30 +31,73 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
   );
 
   useEffect(() => {
-    setQuantidades(lerCarrinho(slug));
+    setLinhas(lerCarrinho(slug));
     setPronto(true);
   }, [slug]);
 
   useEffect(() => {
     if (!pronto) return;
-    gravarCarrinho(slug, quantidades);
-  }, [pronto, slug, quantidades]);
+    gravarCarrinho(slug, linhas);
+  }, [pronto, slug, linhas]);
 
-  const itens = Object.entries(quantidades).filter(([, q]) => q > 0);
-  const subtotal = itens.reduce((total, [id, quantidade]) => {
-    const produto = produtos.find((p) => p.id === id);
-    return total + (produto?.priceCents ?? 0) * quantidade;
-  }, 0);
+  const itens = linhas.filter((linha) => linha.quantity > 0);
+  /*
+   * O preço da linha, e não o do produto: com opções, duas pizzas do mesmo
+   * tamanho custam valores diferentes conforme o sabor.
+   */
+  const subtotal = itens.reduce(
+    (total, linha) => total + linha.unitPriceCents * linha.quantity,
+    0,
+  );
 
   const taxa = Math.round(menu.establishment.deliveryFeeReais * 100);
   const total = subtotal + (subtotal > 0 ? taxa : 0);
 
-  function ajustar(id: string, delta: number) {
-    setQuantidades((atual) => {
-      const proximo = Math.max(0, (atual[id] ?? 0) + delta);
-      const novo = { ...atual, [id]: proximo };
-      if (proximo === 0) delete novo[id];
-      return novo;
+  /** Ajusta a quantidade de uma LINHA, não de um produto. */
+  function ajustar(linhaId: string, delta: number) {
+    setLinhas((atual) =>
+      atual
+        .map((linha) =>
+          linha.id === linhaId
+            ? { ...linha, quantity: Math.max(0, linha.quantity + delta) }
+            : linha,
+        )
+        .filter((linha) => linha.quantity > 0),
+    );
+  }
+
+  /**
+   * Produto sem opção entra direto, somando na linha que já existe.
+   *
+   * Com opção, abre o diálogo: cada montagem vira uma linha própria, porque
+   * duas pizzas com sabores diferentes não são a mesma coisa.
+   */
+  function adicionar(produto: Produto) {
+    if (produto.grupos.length > 0) {
+      setMontando(produto);
+      return;
+    }
+
+    setLinhas((atual) => {
+      const existente = atual.find(
+        (linha) => linha.productId === produto.id && linha.nomes.length === 0,
+      );
+      if (existente) {
+        return atual.map((linha) =>
+          linha.id === existente.id ? { ...linha, quantity: linha.quantity + 1 } : linha,
+        );
+      }
+      return [
+        ...atual,
+        {
+          id: crypto.randomUUID(),
+          productId: produto.id,
+          quantity: 1,
+          options: {},
+          unitPriceCents: produto.priceCents,
+          nomes: [],
+        },
+      ];
     });
   }
 
@@ -73,7 +121,14 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
 
             <ul className="flex flex-col gap-2">
               {categoria.produtos.map((produto) => {
-                const quantidade = quantidades[produto.id] ?? 0;
+                /*
+                 * A soma das linhas deste produto. Com opções, ele pode estar
+                 * no carrinho três vezes com montagens diferentes — e o número
+                 * no cartão precisa dizer quantos, não quantas montagens.
+                 */
+                const doProduto = linhas.filter((linha) => linha.productId === produto.id);
+                const quantidade = doProduto.reduce((t, linha) => t + linha.quantity, 0);
+                const linhaSimples = doProduto.find((linha) => linha.nomes.length === 0);
 
                 return (
                   <li
@@ -97,26 +152,46 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
                           {produto.description}
                         </p>
                       ) : null}
+                      {/*
+                        "a partir de" quando ha grupo obrigatorio cujo minimo
+                        custa algo. Numa pizzaria em que o sabor carrega o
+                        preco, mostrar o produto (zero) seria anunciar de graca.
+                      */}
                       <p className="numeric mt-0.5 text-sm text-ink">
-                        {currency(produto.priceCents)}
+                        {produto.precoMinimoCents > produto.priceCents ? (
+                          <span className="text-xs text-ink-faint">a partir de </span>
+                        ) : null}
+                        {currency(produto.precoMinimoCents)}
                       </p>
                     </div>
 
-                    {quantidade === 0 ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => ajustar(produto.id, 1)}
-                        aria-label={`Adicionar ${produto.name}`}
-                      >
-                        <Plus />
-                      </Button>
+                    {/*
+                      Produto com opcao SEMPRE abre o dialogo, mesmo ja estando
+                      no carrinho: a proxima pizza pode ter outro sabor, e o
+                      "+" simples copiaria a montagem anterior sem avisar.
+                    */}
+                    {produto.grupos.length > 0 || quantidade === 0 ? (
+                      <div className="flex shrink-0 items-center gap-1">
+                        {quantidade > 0 ? (
+                          <span className="numeric w-5 text-center text-sm text-ink-muted">
+                            {quantidade}
+                          </span>
+                        ) : null}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => adicionar(produto)}
+                          aria-label={`Adicionar ${produto.name}`}
+                        >
+                          <Plus />
+                        </Button>
+                      </div>
                     ) : (
                       <div className="flex shrink-0 items-center gap-1">
                         <Button
                           size="icon"
                           variant="ghost"
-                          onClick={() => ajustar(produto.id, -1)}
+                          onClick={() => linhaSimples && ajustar(linhaSimples.id, -1)}
                           aria-label={`Menos ${produto.name}`}
                         >
                           <Minus />
@@ -125,7 +200,7 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
                         <Button
                           size="icon"
                           variant="ghost"
-                          onClick={() => ajustar(produto.id, 1)}
+                          onClick={() => adicionar(produto)}
                           aria-label={`Mais ${produto.name}`}
                         >
                           <Plus />
@@ -146,7 +221,7 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
             <div className="min-w-0 flex-1">
               <p className="numeric text-sm font-semibold text-ink">{currency(total)}</p>
               <p className="text-xs text-ink-faint">
-                {itens.reduce((n, [, q]) => n + q, 0)} item(ns)
+                {itens.reduce((n, linha) => n + linha.quantity, 0)} item(ns)
                 {taxa > 0 ? ` · entrega ${currency(taxa)}` : ''}
               </p>
             </div>
@@ -160,6 +235,28 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
             </Button>
           </div>
         </div>
+      ) : null}
+
+      {montando ? (
+        <MontarProduto
+          produto={montando}
+          aberto
+          onFechar={() => setMontando(null)}
+          onAdicionar={(options, unitPriceCents, nomes) => {
+            setLinhas((atual) => [
+              ...atual,
+              {
+                id: crypto.randomUUID(),
+                productId: montando.id,
+                quantity: 1,
+                options,
+                unitPriceCents,
+                nomes,
+              },
+            ]);
+            setMontando(null);
+          }}
+        />
       ) : null}
     </main>
   );

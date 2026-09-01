@@ -8,6 +8,26 @@
 
 export type Quantidades = Record<string, number>;
 
+/**
+ * Uma linha do carrinho.
+ *
+ * Linha, e não `produto → quantidade`, porque duas pizzas do mesmo tamanho com
+ * sabores diferentes são coisas diferentes. O mapa antigo não conseguia
+ * representar isso: a segunda escolha sobrescrevia a primeira.
+ */
+export type LinhaCarrinho = {
+  /** Identifica a linha no carrinho, não o produto. */
+  id: string;
+  productId: string;
+  quantity: number;
+  /** O que foi escolhido: ids de opção, por grupo. Vazio em produto simples. */
+  options: Record<string, string[]>;
+  /** Preço unitário já com as opções — para exibir. O servidor recalcula. */
+  unitPriceCents: number;
+  /** Os nomes escolhidos, para o cliente conferir o que montou. */
+  nomes: string[];
+};
+
 export type RascunhoPedido = {
   customerName: string;
   customerPhone: string;
@@ -46,12 +66,25 @@ function gravarJson(key: string, valor: unknown) {
   sessionStorage.setItem(key, JSON.stringify(valor));
 }
 
-export function lerCarrinho(slug: string): Quantidades {
-  return lerJson<Quantidades>(chave('carrinho', slug)) ?? {};
+/**
+ * O carrinho guardado no aparelho.
+ *
+ * Descarta o formato antigo em vez de tentar convertê-lo: quem tinha carrinho
+ * quando isto mudou perde o carrinho, e é melhor que herdar linha sem opção num
+ * produto que agora exige sabor — o pedido seria recusado no fim, depois de o
+ * cliente preencher o endereço.
+ */
+export function lerCarrinho(slug: string): LinhaCarrinho[] {
+  const bruto = lerJson<unknown>(chave('carrinho', slug));
+  if (!Array.isArray(bruto)) return [];
+  return bruto.filter(
+    (linha): linha is LinhaCarrinho =>
+      typeof linha === 'object' && linha !== null && 'productId' in linha && 'id' in linha,
+  );
 }
 
-export function gravarCarrinho(slug: string, quantidades: Quantidades) {
-  gravarJson(chave('carrinho', slug), quantidades);
+export function gravarCarrinho(slug: string, linhas: LinhaCarrinho[]) {
+  gravarJson(chave('carrinho', slug), linhas);
 }
 
 export function lerRascunho(slug: string): RascunhoPedido | null {

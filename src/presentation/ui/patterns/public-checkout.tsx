@@ -15,6 +15,7 @@ import {
   lerCarrinho,
   lerPagamentoPendente,
   lerRascunho,
+  type LinhaCarrinho,
   type RascunhoPedido,
 } from '@/presentation/menu-session';
 import { Button, Field, Input, Select, Textarea } from '../primitives';
@@ -31,7 +32,7 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
   const router = useRouter();
   const slug = menu.establishment.slug;
   const [pronto, setPronto] = useState(false);
-  const [quantidades, setQuantidades] = useState<Record<string, number>>({});
+  const [linhas, setLinhas] = useState<LinhaCarrinho[]>([]);
   const [rascunho, setRascunho] = useState<RascunhoPedido | null>(null);
   const [pagamentoAberto, setPagamentoAberto] = useState<string | null>(null);
   const [modoPagamento, setModoPagamento] = useState<
@@ -45,7 +46,7 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
 
   useEffect(() => {
     const rascunhoSalvo = lerRascunho(slug);
-    setQuantidades(lerCarrinho(slug));
+    setLinhas(lerCarrinho(slug));
     setRascunho(rascunhoSalvo);
     setPagamentoAberto(lerPagamentoPendente(slug)?.orderId ?? null);
     if (rascunhoSalvo?.modoPagamento) setModoPagamento(rascunhoSalvo.modoPagamento);
@@ -61,11 +62,12 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
     [menu],
   );
 
-  const itens = Object.entries(quantidades).filter(([, q]) => q > 0);
-  const subtotal = itens.reduce((total, [id, quantidade]) => {
-    const produto = produtos.find((p) => p.id === id);
-    return total + (produto?.priceCents ?? 0) * quantidade;
-  }, 0);
+  const itens = linhas.filter((linha) => linha.quantity > 0);
+  /* O preço da linha, que já inclui as opções escolhidas. */
+  const subtotal = itens.reduce(
+    (total, linha) => total + linha.unitPriceCents * linha.quantity,
+    0,
+  );
 
   const taxa = Math.round(menu.establishment.deliveryFeeReais * 100);
   const total = subtotal + (subtotal > 0 ? taxa : 0);
@@ -108,9 +110,20 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
     };
     gravarRascunho(slug, rascunhoAtual);
 
+    /*
+     * Vão os ids das opções, nunca o preço: o servidor lê o valor do banco e
+     * recalcula. O que a tela mostrou é conferência para o cliente, não fonte
+     * de verdade sobre dinheiro.
+     */
     formData.set(
       'items',
-      JSON.stringify(itens.map(([productId, quantity]) => ({ productId, quantity }))),
+      JSON.stringify(
+        itens.map((linha) => ({
+          productId: linha.productId,
+          quantity: linha.quantity,
+          options: linha.options,
+        })),
+      ),
     );
     formData.set('modoPagamento', modoPagamento);
 
@@ -191,15 +204,27 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
           </p>
         ) : null}
         <div className="rounded-lg bg-raised p-3">
-          {itens.map(([id, quantidade]) => {
-            const produto = produtos.find((p) => p.id === id)!;
+          {itens.map((linha) => {
+            const produto = produtos.find((p) => p.id === linha.productId)!;
             return (
-              <div key={id} className="flex justify-between py-0.5 text-sm">
-                <span className="min-w-0 truncate text-ink">
-                  {quantidade}× {produto.name}
+              <div key={linha.id} className="flex justify-between gap-2 py-1 text-sm">
+                <span className="min-w-0">
+                  <span className="block truncate text-ink">
+                    {linha.quantity}× {produto.name}
+                  </span>
+                  {/*
+                    O que ele montou, para conferir antes de pagar. Sem isto o
+                    cliente vê "1× Pizza Grande R$ 107,40" sem saber de onde
+                    saiu o valor — e desiste no lugar de perguntar.
+                  */}
+                  {linha.nomes.length > 0 ? (
+                    <span className="block text-xs leading-snug text-ink-faint">
+                      {linha.nomes.join(' · ')}
+                    </span>
+                  ) : null}
                 </span>
                 <span className="numeric shrink-0 text-ink-muted">
-                  {currency(produto.priceCents * quantidade)}
+                  {currency(linha.unitPriceCents * linha.quantity)}
                 </span>
               </div>
             );
