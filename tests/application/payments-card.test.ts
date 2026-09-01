@@ -28,6 +28,7 @@ function gatewayFake(overrides: Partial<PaymentGateway> = {}): PaymentGateway {
     async createPixCharge() {
       throw new Error('não deveria criar Pix neste teste');
     },
+    async cancelPixCharge() {},
     async createCardCheckout() {
       throw new Error('não deveria criar cartão neste teste');
     },

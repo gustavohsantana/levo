@@ -43,6 +43,9 @@ export class CreatePayment {
       );
     });
 
+    const method = input.method ?? 'pix';
+    const now = this.clock.now();
+
     const pedido = await this.uow.run(async (repos) => {
       const order = await repos.orders.findById(input.orderId);
       if (!order) throw new NotFoundError('Pedido', input.orderId);
@@ -56,18 +59,24 @@ export class CreatePayment {
       const existente = await repos.payments.findByOrderId(input.orderId);
       if (existente) {
         const novaTentativa = Boolean(input.card?.token) && existente.status !== 'PAID';
-        if (!novaTentativa) return { existente, order: null };
+        if (novaTentativa) return { existente: null, order, renovar: null };
+        if (precisaDeCodigoNovo(existente, method, now)) {
+          return { existente: null, order, renovar: existente };
+        }
+        return { existente, order: null, renovar: null };
       }
 
-      return { existente: null, order };
+      return { existente: null, order, renovar: null };
     });
 
     if (pedido.existente) {
       return Object.assign(pedido.existente, { ticketUrl: null });
     }
     const order = pedido.order!;
-    const method = input.method ?? 'pix';
-    const now = this.clock.now();
+
+    if (pedido.renovar) {
+      return this.renovarPix(pedido.renovar, order.amount.cents, accessToken, input, now);
+    }
 
     if (method === 'card' && input.card?.token) {
       const charge = await this.gateway.createCardCharge({
@@ -193,4 +202,84 @@ export class CreatePayment {
       return Object.assign(payment, { ticketUrl: charge.ticketUrl });
     });
   }
+  /**
+   * Emite um código Pix novo para um pedido cujo código morreu.
+   *
+   * Cancela o anterior antes de criar o próximo: enquanto não vence, a
+   * cobrança antiga continua pagável, e duas vivas ao mesmo tempo deixariam o
+   * cliente pagar uma que o pedido não acompanha.
+   *
+   * A chave de idempotência carrega o id da cobrança substituída. Assim dois
+   * cliques seguidos em "gerar novo código" produzem a mesma cobrança, e não
+   * duas — mas a renovação seguinte, que parte de outro código, produz outra.
+   */
+  private async renovarPix(
+    anterior: Payment,
+    amountCents: number,
+    accessToken: string,
+    input: { orderId: string; payerEmail?: string; sandbox?: boolean },
+    now: Date,
+  ): Promise<Payment & { ticketUrl: string | null }> {
+    await this.gateway.cancelPixCharge({ accessToken, externalId: anterior.externalId });
+
+    const charge = await this.gateway.createPixCharge({
+      accessToken,
+      orderId: input.orderId,
+      amountCents,
+      payerEmail: input.payerEmail,
+      expiresInMinutes: 30,
+      sandbox: input.sandbox,
+      idempotencyKey: `${input.orderId}-apos-${anterior.externalId}`,
+    });
+
+    return this.uow.run(async (repos) => {
+      const atual = await repos.payments.findByOrderId(input.orderId);
+      /*
+       * Relê dentro da transação: entre decidir renovar e chegar aqui, o
+       * webhook pode ter confirmado o pagamento antigo. Trocar o código nesse
+       * caso apagaria uma confirmação boa.
+       */
+      if (!atual || atual.status === 'PAID') {
+        return Object.assign(atual ?? anterior, { ticketUrl: null });
+      }
+
+      atual.renovarPix({
+        externalId: charge.externalId,
+        qrCode: charge.qrCode,
+        qrCodeBase64: charge.qrCodeBase64,
+        expiresAt: charge.expiresAt,
+        now,
+      });
+      await repos.payments.save(atual);
+      return Object.assign(atual, { ticketUrl: charge.ticketUrl });
+    });
+  }
+
+}
+
+/**
+ * Quanto tempo de vida ainda justifica reaproveitar o código.
+ *
+ * O cliente lê o QR e paga alguns segundos depois. Se o código morre nesse
+ * intervalo, o dinheiro sai e volta — a pior falha possível, porque parece
+ * cobrança recebida para quem pagou e não existe nada para o lojista ver.
+ * Dois minutos cobrem a leitura com folga.
+ */
+const MARGEM_MS = 2 * 60_000;
+
+/**
+ * Um Pix vencido — ou prestes a vencer — precisa de código novo antes de ir
+ * para a tela. Pagamento aprovado nunca é trocado, e cartão não entra aqui:
+ * ele tem outro caminho de nova tentativa.
+ */
+function precisaDeCodigoNovo(
+  existente: Payment,
+  method: 'pix' | 'card',
+  now: Date,
+): boolean {
+  if (method !== 'pix') return false;
+  if (existente.status === 'PAID' || existente.status === 'IN_REVIEW') return false;
+  if (!existente.qrCode) return false;
+  const expira = existente.expiresAt;
+  return expira === null || expira.getTime() - now.getTime() <= MARGEM_MS;
 }

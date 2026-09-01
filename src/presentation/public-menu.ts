@@ -654,6 +654,66 @@ export async function sugerirCidadeAction(
   }
 }
 
+/**
+ * Emite um código Pix novo para um pedido cujo código venceu.
+ *
+ * Antes disto a tela mandava o cliente refazer o pedido — e, pior, continuava
+ * exibindo o QR vencido, que o banco lê normalmente. O dinheiro saía e voltava
+ * uns dois minutos depois, sem gerar pagamento nenhum do lado de cá.
+ */
+export async function renovarPixAction(
+  slug: string,
+  orderId: string,
+): Promise<
+  | { ok: true; qrCode: string; qrCodeBase64: string | null; expiresAt: string }
+  | { ok: false; error: string }
+> {
+  const limite = checkRateLimit(`pix:renovar:${orderId}`, { max: 6, windowMs: 60_000 });
+  if (!limite.allowed) {
+    return { ok: false, error: 'Muitas tentativas seguidas. Espere um instante.' };
+  }
+
+  const prisma = getPrismaClient(env().DATABASE_URL);
+  const establishment = await prisma.establishment.findUnique({
+    where: { slug },
+    select: { id: true },
+  });
+  if (!establishment) return { ok: false, error: 'Cardápio não encontrado.' };
+
+  try {
+    const container = containerFor(establishment.id);
+    const order = await container.read((repos) => repos.orders.findById(orderId));
+    if (!order) return { ok: false, error: 'Pedido não encontrado.' };
+
+    const credencial = await prisma.integrationCredential.findUnique({
+      where: {
+        establishmentId_provider: { establishmentId: establishment.id, provider: 'MERCADO_PAGO' },
+      },
+      select: { liveMode: true },
+    });
+    const sandbox = credencial?.liveMode === false;
+
+    const payment = await container.useCases.createPayment.execute({
+      orderId,
+      payerEmail: emailPixDoCliente(orderId, order.customerPhone?.value, sandbox),
+      sandbox,
+    });
+
+    if (!payment.qrCode || !payment.expiresAt) {
+      return { ok: false, error: 'Não foi possível gerar um código novo. Tente de novo.' };
+    }
+
+    return {
+      ok: true,
+      qrCode: payment.qrCode,
+      qrCodeBase64: payment.qrCodeBase64,
+      expiresAt: payment.expiresAt.toISOString(),
+    };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
 function emailPixDoCliente(
   orderId: string,
   telefone?: string | null,

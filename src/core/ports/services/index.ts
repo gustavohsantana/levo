@@ -212,6 +212,15 @@ export interface PaymentGateway {
     payerEmail?: string;
     expiresInMinutes: number;
     sandbox?: boolean;
+    /**
+     * Diferencia uma cobrança nova das anteriores do mesmo pedido.
+     *
+     * Sem isto a chave de idempotência é o próprio pedido, e o Mercado Pago
+     * devolve para sempre a primeira cobrança — inclusive depois de vencida.
+     * O pedido fica impagável e o QR continua legível: o cliente paga, o
+     * Mercado Pago vê cobrança expirada e estorna em dois minutos.
+     */
+    idempotencyKey?: string;
   }): Promise<{
     externalId: string;
     qrCode: string;
@@ -219,6 +228,15 @@ export interface PaymentGateway {
     ticketUrl: string | null;
     expiresAt: Date;
   }>;
+
+  /**
+   * Mata uma cobrança Pix antes de emitir outra para o mesmo pedido.
+   *
+   * Duas cobranças vivas ao mesmo tempo é pior do que uma vencida: o cliente
+   * pode pagar a antiga, que continua válida até vencer, e o pedido só
+   * acompanha uma. Cancelar primeiro deixa um único código pagável.
+   */
+  cancelPixCharge(input: { accessToken: string; externalId: string }): Promise<void>;
 
   /**
    * Checkout Pro: o cliente paga cartão na página do Mercado Pago.

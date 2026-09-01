@@ -98,6 +98,35 @@ export class Payment extends AggregateRoot {
     this.props.updatedAt = input.now;
   }
 
+  /**
+   * Troca o código Pix vencido por um novo, no mesmo pedido.
+   *
+   * Um QR vencido continua legível pelo banco. O cliente paga, o Mercado Pago
+   * vê a cobrança expirada e devolve o dinheiro uns dois minutos depois — do
+   * lado de cá não chega nem notificação, porque nenhum pagamento chegou a
+   * existir. Para o dono da loja isso aparece como "o Pix nunca funciona".
+   *
+   * Por isso o registro é reaproveitado em vez de criado de novo: `orderId` é
+   * único em Payment, e o que interessa ao pedido é qual código está pagável
+   * agora, não o histórico de códigos mortos.
+   */
+  renovarPix(input: {
+    externalId: string;
+    qrCode: string;
+    qrCodeBase64: string | null;
+    expiresAt: Date;
+    now: Date;
+  }): void {
+    if (this.props.status === PaymentStatus.Paid) return;
+    this.props.externalId = input.externalId;
+    this.props.qrCode = input.qrCode;
+    this.props.qrCodeBase64 = input.qrCodeBase64;
+    this.props.expiresAt = input.expiresAt;
+    this.props.status = PaymentStatus.Pending;
+    this.props.paidAt = null;
+    this.props.updatedAt = input.now;
+  }
+
   markPaid(at: Date): void {
     if (this.props.status === PaymentStatus.Paid) return;
     this.props.status = PaymentStatus.Paid;

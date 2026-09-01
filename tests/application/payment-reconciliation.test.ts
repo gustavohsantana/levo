@@ -36,6 +36,7 @@ function gatewayFake(overrides: Partial<PaymentGateway> = {}): PaymentGateway {
     async createPixCharge() {
       throw new Error('não usado');
     },
+    async cancelPixCharge() {},
     async createCardCheckout() {
       throw new Error('não usado');
     },

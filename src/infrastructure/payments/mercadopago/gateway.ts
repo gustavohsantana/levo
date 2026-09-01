@@ -143,6 +143,7 @@ export class MercadoPagoGateway implements PaymentGateway {
     payerEmail?: string;
     expiresInMinutes: number;
     sandbox?: boolean;
+    idempotencyKey?: string;
   }) {
     const expiresAt = new Date(Date.now() + input.expiresInMinutes * 60_000);
     const webhook = webhookHttps();
@@ -158,7 +159,7 @@ export class MercadoPagoGateway implements PaymentGateway {
       headers: {
         Authorization: `Bearer ${input.accessToken}`,
         'Content-Type': 'application/json',
-        'X-Idempotency-Key': input.orderId,
+        'X-Idempotency-Key': input.idempotencyKey ?? input.orderId,
       },
       body: JSON.stringify({
         transaction_amount: centsToAmountNumber(input.amountCents),
@@ -212,6 +213,25 @@ export class MercadoPagoGateway implements PaymentGateway {
       ticketUrl: tx?.ticket_url ?? null,
       expiresAt,
     };
+  }
+
+  /**
+   * Cancela a cobrança para que só exista um código pagável por pedido.
+   *
+   * Não derruba o fluxo: cobrança já vencida ou já cancelada responde 4xx, e
+   * aí o objetivo — ela não receber mais dinheiro — já está cumprido. Emitir o
+   * código novo importa mais do que confirmar a morte do antigo.
+   */
+  async cancelPixCharge(input: { accessToken: string; externalId: string }): Promise<void> {
+    await fetch(`${PAYMENTS_URL}/${input.externalId}`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${input.accessToken}`,
+        'Content-Type': 'application/json',
+        'X-Idempotency-Key': `cancel-${input.externalId}`,
+      },
+      body: JSON.stringify({ status: 'cancelled' }),
+    }).catch(() => undefined);
   }
 
   async createCardCheckout(input: {
