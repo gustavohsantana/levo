@@ -301,6 +301,20 @@ export class Order extends AggregateRoot {
   }
 
   markDelivered(now = new Date()): void {
+    /*
+     * Já entregue não erra: sai calado.
+     *
+     * O marketplace conclui o pedido por conta própria, e aí o motoboy toca
+     * "entreguei" num pedido que o Levô já dava por entregue. A versão anterior
+     * lançava, a transação inteira voltava atrás — e a parada continuava
+     * pendente. Na tela do motoboy aparecia OK, no painel o pedido seguia em
+     * rota, e não havia erro em lugar nenhum para investigar.
+     *
+     * Confirmar duas vezes é normal nesta operação. O que não pode é a segunda
+     * confirmação desfazer o registro da parada.
+     */
+    if (this.props.status === OrderStatus.Delivered) return;
+
     this.ensureInRoute();
     this.props.status = OrderStatus.Delivered;
     this.props.deliveredAt = now;

@@ -90,17 +90,29 @@ export function OrderDetailDialog({
 
               {pedido.customerPhone ? (
                 <div className="mt-2 flex items-center gap-2">
-                  <span className="numeric text-sm text-ink-muted">
-                    {phoneDisplay(pedido.customerPhone)}
-                  </span>
+                  {/*
+                    O próprio número abre a conversa. Ler o telefone e procurar
+                    o botão ao lado é um passo a mais numa tela onde a pressa é
+                    a regra — e o número é o que o olho já procurou.
+
+                    Sem link quando não há WhatsApp (0800, fixo): aí ele é só
+                    texto, e continua selecionável para copiar e discar.
+                  */}
                   {pedido.whatsappLink ? (
-                    <Button asChild variant="ghost" size="sm">
-                      <a href={pedido.whatsappLink} target="_blank" rel="noreferrer">
-                        <MessageCircle />
-                        WhatsApp
-                      </a>
-                    </Button>
-                  ) : null}
+                    <a
+                      href={pedido.whatsappLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="numeric inline-flex items-center gap-1.5 rounded-sm text-sm text-ink underline decoration-line-strong underline-offset-2 hover:decoration-ink"
+                    >
+                      <MessageCircle className="size-3.5 text-ink-faint" aria-hidden />
+                      {phoneDisplay(pedido.customerPhone)}
+                    </a>
+                  ) : (
+                    <span className="numeric text-sm text-ink-muted">
+                      {phoneDisplay(pedido.customerPhone)}
+                    </span>
+                  )}
                 </div>
               ) : null}
             </section>

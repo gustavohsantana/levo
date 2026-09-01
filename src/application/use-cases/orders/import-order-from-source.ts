@@ -127,8 +127,33 @@ export class ImportOrderFromSource {
           const order = await repos.orders.findBySourceRef(source.kind, change.externalId);
           if (!order) return false;
 
+          const rotaId = order.routeId;
+
           if (change.status === 'CANCELLED') order.markCancelledExternally(this.clock.now());
           else order.markConcludedExternally(this.clock.now());
+
+          /*
+           * A parada acompanha o pedido.
+           *
+           * Sem isto, um pedido concluído pela plataforma virava entregue aqui
+           * e deixava a parada pendente: o motoboy seguia com uma entrega
+           * fantasma na lista, o painel mostrava "0/1 entregues" para algo já
+           * feito, e a rota nunca fechava.
+           */
+          if (rotaId) {
+            const route = await repos.routes.findById(rotaId);
+            if (route) {
+              const resolveu = route.resolveStopForOrder(
+                order.id,
+                change.status === 'CANCELLED' ? 'FAILED' : 'DELIVERED',
+                this.clock.now(),
+              );
+              if (resolveu) {
+                await repos.routes.save(route);
+                await repos.events.append(route.pullEvents());
+              }
+            }
+          }
 
           await repos.orders.save(order);
           /*

@@ -178,6 +178,40 @@ export class Route extends AggregateRoot {
     return stop;
   }
 
+  /**
+   * Resolve a parada de um pedido que foi concluído FORA do Levô.
+   *
+   * O marketplace conclui pedido por conta própria — e quando isso acontece, o
+   * pedido virava entregue aqui mas a parada continuava pendente. Resultado: o
+   * motoboy seguia com uma parada fantasma na lista, o painel mostrava "0/1
+   * entregues" para uma entrega já feita, e a rota nunca fechava.
+   *
+   * Devolve `false` quando não há o que resolver — pedido de outra rota, ou
+   * parada já resolvida. Não é erro: o evento da plataforma chega para todos os
+   * pedidos, e a maioria não tem parada pendente.
+   */
+  resolveStopForOrder(orderId: string, outcome: Exclude<StopStatus, 'PENDING'>, now = new Date()): boolean {
+    if (this.props.status !== RouteStatus.InProgress) return false;
+
+    const stop = this.props.stops.find(
+      (candidate) => candidate.orderId === orderId && candidate.status === StopStatus.Pending,
+    );
+    if (!stop) return false;
+
+    stop.resolve(outcome, null, now);
+    this.record(RouteEvents.StopCompleted, this.props.establishmentId, {
+      stopId: stop.id,
+      orderId,
+      outcome,
+      position: stop.position,
+      /** Marca a origem: quem resolveu foi a plataforma, não o toque do motoboy. */
+      externo: true,
+    }, now);
+
+    if (this.pendingStops.length === 0) this.finish(now);
+    return true;
+  }
+
   private finish(now: Date): void {
     this.props.status = RouteStatus.Finished;
     this.props.finishedAt = now;
