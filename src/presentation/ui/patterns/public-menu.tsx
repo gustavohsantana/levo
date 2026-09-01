@@ -130,15 +130,6 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
                 const quantidade = doProduto.reduce((t, linha) => t + linha.quantity, 0);
                 const linhaSimples = doProduto.find((linha) => linha.nomes.length === 0);
 
-                /*
-                 * O primeiro grupo obrigatório vira a promessa do cartão —
-                 * "Escolha até 2 sabores" diz mais que "tem opções". Sem
-                 * obrigatório, anuncia que dá para incrementar.
-                 */
-                const obrigatorio = produto.grupos.find((g) => g.min > 0);
-                const escolhaPrincipal =
-                  obrigatorio?.name ??
-                  (produto.grupos.length > 0 ? 'Monte do seu jeito' : null);
 
                 return (
                   <li
@@ -181,11 +172,7 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
                         abrir uma tela para escolher. Some quando não há grupo:
                         marmita entra direto e não deve prometer escolha.
                       */}
-                      {escolhaPrincipal ? (
-                        <p className="mt-0.5 truncate text-xs text-ink-faint">
-                          {escolhaPrincipal}
-                        </p>
-                      ) : null}
+
                     </div>
 
                     {/*
