@@ -5,6 +5,8 @@ import { getPrismaClient } from '@/infrastructure/persistence/prisma/client';
 import { requireSession } from '@/presentation/http/session';
 import { IfoodConnect } from '@/presentation/ui/patterns/ifood-connect';
 import { AiqfomeConnect } from '@/presentation/ui/patterns/aiqfome-connect';
+import { WhatsappConnect } from '@/presentation/ui/patterns/whatsapp-connect';
+import { estadoWhatsappAction } from '@/presentation/whatsapp-actions';
 import {
   MercadoPagoConnect,
   type EstadoMercadoPago,
@@ -51,6 +53,8 @@ export default async function IntegracoesPage({
     });
     return null;
   };
+
+  const estadoWhats = await estadoWhatsappAction();
 
   const [ifood, aiqfome, mercadoPago] = await Promise.all([
     store.read(session.establishmentId, 'IFOOD').catch(ilegivel('IFOOD')),
@@ -146,6 +150,16 @@ export default async function IntegracoesPage({
             lojaAtual={aiqfome ? { id: aiqfome.merchantId ?? '', nome: nomeAiq } : null}
             lojas={lojasAiq}
           />
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-xs font-medium uppercase tracking-wide text-ink-faint">Avisos</h2>
+        <p className="mt-1 text-sm text-ink-muted">
+          O WhatsApp que fala com o entregador quando a rota sai.
+        </p>
+        <div className="mt-3 max-w-xl">
+          <WhatsappConnect inicial={estadoWhats} />
         </div>
       </section>
 

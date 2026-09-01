@@ -22,7 +22,6 @@ export default async function ConfiguracoesPage() {
       deliveryFeeReais: atual.deliveryFee.reais,
       slug: atual.slug,
       autoConfirmOrders: atual.autoConfirmOrders,
-      whatsappRoutes: atual.whatsappRoutes,
       baseUrl: env().PUBLIC_BASE_URL,
       },
     };

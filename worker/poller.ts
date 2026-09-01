@@ -227,6 +227,108 @@ async function drenarAvisos(): Promise<void> {
   }
 }
 
+/**
+ * Espelha o estado do WhatsApp para a tela, e conduz o pareamento.
+ *
+ * O painel roda na Vercel e não alcança a WAHA, que fica presa no localhost
+ * desta VM. O worker fala com os dois lados, então ele é a ponte: escreve
+ * status e QR no banco, e a tela só lê.
+ *
+ * A faixa rápida existe porque um QR vive cerca de um minuto — esperar o ciclo
+ * de 30 segundos entregaria uma imagem quase morta. Enquanto o dono está com a
+ * tela aberta, isto consulta de 3 em 3 segundos.
+ *
+ * Roda SOLTO do `tick`, de propósito: preso a ele, dois minutos de pareamento
+ * atrasariam o polling do iFood, que tem janela de 30 segundos.
+ */
+let pareando = false;
+
+async function espelharWhatsApp(): Promise<void> {
+  if (!config.WAHA_URL || !config.WAHA_API_KEY || pareando) return;
+
+  const prisma = getPrismaClient(config.DATABASE_URL);
+  const establishments = await prisma.establishment.findMany({ select: { id: true } });
+  if (establishments.length === 0) return;
+
+  // Uma WAHA por VM: o pareamento é do estabelecimento que a VM atende.
+  const establishmentId = establishments[0].id;
+  const waha = new WahaSender({
+    baseUrl: config.WAHA_URL,
+    apiKey: config.WAHA_API_KEY,
+    session: config.WAHA_SESSION,
+  });
+
+  const linha = await prisma.whatsappSession.findUnique({ where: { establishmentId } });
+  const pedidoRecente =
+    linha?.pairRequestedAt != null
+    && Date.now() - linha.pairRequestedAt.getTime() < 4 * 60_000;
+
+  async function gravar(dados: Record<string, unknown>) {
+    await prisma.whatsappSession.upsert({
+      where: { establishmentId },
+      create: { establishmentId, ...dados },
+      update: dados,
+    });
+  }
+
+  if (!pedidoRecente) {
+    // Fora do pareamento, só mantém o status em dia — é o que a tela mostra.
+    const status = await waha.sessionStatus().catch(() => 'INDISPONIVEL');
+    await gravar({
+      status,
+      connectedAs: status === 'WORKING' ? await waha.connectedAs().catch(() => null) : null,
+      ...(status === 'WORKING' ? { qrBase64: null, pairRequestedAt: null } : {}),
+    });
+    return;
+  }
+
+  pareando = true;
+  try {
+    logger.info({ establishmentId }, 'whatsapp.pareamento_iniciado');
+    await waha.startSession().catch((cause) =>
+      logger.warn({ cause: String(cause) }, 'whatsapp.start_falhou'),
+    );
+
+    for (let i = 0; i < 45; i++) {
+      const status = await waha.sessionStatus().catch(() => 'INDISPONIVEL');
+
+      if (status === 'WORKING') {
+        await gravar({
+          status,
+          qrBase64: null,
+          qrAt: null,
+          pairRequestedAt: null,
+          connectedAs: await waha.connectedAs().catch(() => null),
+        });
+        logger.info({ establishmentId }, 'whatsapp.pareado');
+        return;
+      }
+
+      if (status === 'SCAN_QR_CODE') {
+        const qr = await waha.qrBase64().catch(() => null);
+        if (qr) await gravar({ status, qrBase64: qr, qrAt: new Date() });
+      } else if (status === 'FAILED') {
+        /*
+         * O QR expirou sem ninguém ler e a WAHA derrubou a sessão. Recriar é o
+         * que faz surgir o próximo — sem isto, a tela ficaria mostrando para
+         * sempre uma imagem que não vale mais.
+         */
+        await gravar({ status });
+        await waha.startSession().catch(() => undefined);
+      } else {
+        await gravar({ status });
+      }
+
+      await sleep(3_000);
+    }
+
+    logger.warn({ establishmentId }, 'whatsapp.pareamento_expirou');
+    await gravar({ pairRequestedAt: null });
+  } finally {
+    pareando = false;
+  }
+}
+
 /** Depois disto, para de tentar. Número errado não vira certo insistindo. */
 const MAX_TENTATIVAS_WHATSAPP = 4;
 
@@ -380,6 +482,14 @@ async function tick(): Promise<void> {
   // Depois de importar: o que entrou nesta rodada pode ter gerado aviso.
   await drenarAvisos();
   await drenarWhatsApp();
+
+  /*
+   * Solto: o pareamento pode levar minutos, e o iFood não espera. `void` aqui é
+   * intencional — falha dentro dele já é registrada e não deve derrubar o ciclo.
+   */
+  void espelharWhatsApp().catch((cause) =>
+    logger.error({ cause: String(cause) }, 'whatsapp.espelho_falhou'),
+  );
 
   /*
    * Isolado por estabelecimento: gateway fora do ar numa loja não pode impedir

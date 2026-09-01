@@ -31,7 +31,6 @@ export function Settings({
     deliveryFeeReais: number;
     slug: string | null;
     autoConfirmOrders: boolean;
-    whatsappRoutes: boolean;
     baseUrl: string;
   };
 }) {
@@ -160,8 +159,6 @@ export function Settings({
 
       <AceiteAutomatico inicial={establishment.autoConfirmOrders} />
 
-      <RotaNoWhatsapp inicial={establishment.whatsappRoutes} />
-
       <DeliveryFeeBands inicial={faixas} />
       </div>
     </div>
@@ -221,56 +218,3 @@ function AceiteAutomatico({ inicial }: { inicial: boolean }) {
   );
 }
 
-/**
- * O interruptor do envio da rota pelo WhatsApp.
- *
- * Desligado por padrão de propósito. O aviso do número não é letra miúda: a
- * ponte com o WhatsApp não é canal oficial do Meta, e quem paga por um envio
- * automático mal visto é o número que estiver pareado.
- */
-function RotaNoWhatsapp({ inicial }: { inicial: boolean }) {
-  const [ligado, setLigado] = useState(inicial);
-  const [erro, setErro] = useState<string | null>(null);
-  const [pendente, startTransition] = useTransition();
-
-  return (
-    <section className="rounded-lg bg-surface p-5 hairline">
-      <h2 className="text-sm font-semibold text-ink">Mandar a rota no WhatsApp do motoboy</h2>
-
-      <p className="mt-1 text-sm leading-relaxed text-ink-muted">
-        Assim que a rota é planejada, o entregador recebe uma mensagem com quantas paradas
-        tem e o link da tela dele — sem você copiar e colar nada.
-      </p>
-
-      <p className="mt-2 text-xs leading-relaxed text-ink-faint">
-        Use um número dedicado, não o número que recebe pedido. O envio passa por uma ponte
-        que não é canal oficial do WhatsApp, e um número que automatiza mensagem pode ser
-        bloqueado. Se isso acontecer, você perde a automação — não a linha da loja.
-      </p>
-
-      <label className="mt-4 flex cursor-pointer items-center gap-2.5 text-sm text-ink">
-        <input
-          type="checkbox"
-          checked={ligado}
-          disabled={pendente}
-          onChange={(evento) => {
-            const novo = evento.target.checked;
-            setLigado(novo);
-            setErro(null);
-            startTransition(async () => {
-              const r = await alternarRotaNoWhatsappAction(novo);
-              if (!r.ok) {
-                setLigado(!novo);
-                setErro(r.error ?? 'Não foi possível salvar.');
-              }
-            });
-          }}
-        />
-        {ligado ? 'Ligado' : 'Desligado'}
-        {pendente ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
-      </label>
-
-      {erro ? <p className="mt-2 text-sm text-danger">{erro}</p> : null}
-    </section>
-  );
-}

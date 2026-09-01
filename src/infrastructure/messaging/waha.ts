@@ -39,6 +39,63 @@ export class WahaSender {
     this.proximoEnvio = Date.now() + 1200 + Math.random() * 1600;
   }
 
+  /** O PNG do QR em base64, ou nulo quando a sessão não está pedindo QR. */
+  async qrBase64(): Promise<string | null> {
+    const r = await fetch(
+      `${this.config.baseUrl.replace(/\/$/, '')}/api/${this.config.session}/auth/qr?format=image`,
+      { headers: { 'X-Api-Key': this.config.apiKey } },
+    );
+    if (!r.ok) return null;
+
+    const bytes = Buffer.from(await r.arrayBuffer());
+    return bytes.toString('base64');
+  }
+
+  /** Quem está pareado, para a tela dizer qual número é. */
+  async connectedAs(): Promise<string | null> {
+    const r = await fetch(
+      `${this.config.baseUrl.replace(/\/$/, '')}/api/sessions/${this.config.session}`,
+      { headers: { 'X-Api-Key': this.config.apiKey } },
+    );
+    if (!r.ok) return null;
+
+    const corpo = (await r.json().catch(() => ({}))) as { me?: { id?: string } };
+    return corpo.me?.id?.split('@')[0] ?? null;
+  }
+
+  async startSession(): Promise<void> {
+    const base = this.config.baseUrl.replace(/\/$/, '');
+    const headers = { 'Content-Type': 'application/json', 'X-Api-Key': this.config.apiKey };
+
+    /*
+     * Sessão em FAILED guarda credenciais mortas e fica tentando logar com elas
+     * em vez de mostrar o QR — a tela não sai do lugar e nada explica por quê.
+     * O logout descarta essas credenciais para a sessão poder pedir QR de novo.
+     *
+     * Isto veio do assistente da clínica, onde o problema já custou o tempo de
+     * alguém. Acontece quando o número é aberto em outro WhatsApp Web, ou quando
+     * o QR expira sem ninguém ler.
+     */
+    if ((await this.sessionStatus()) === 'FAILED') {
+      await fetch(`${base}/api/sessions/${this.config.session}/logout`, { method: 'POST', headers });
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+
+    const criar = await fetch(`${base}/api/sessions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name: this.config.session, start: true }),
+    });
+
+    // 422 é "já existe": reiniciar é o que faz ela pedir QR de novo.
+    if (criar.status === 422) {
+      await fetch(`${base}/api/sessions/${this.config.session}/restart`, {
+        method: 'POST',
+        headers,
+      });
+    }
+  }
+
   async sendText(phone: string, text: string): Promise<void> {
     await this.respira();
 

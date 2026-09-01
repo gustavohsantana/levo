@@ -108,6 +108,7 @@ model Establishment {
   optionGroups        OptionGroup[]
   deliveryFeeRules    DeliveryFeeRule[]
   courierNotifications CourierNotification[]
+  whatsappSession      WhatsappSession?
 }
 
 model User {
@@ -396,6 +397,31 @@ model IntegrationEvent {
 ///
 /// Então a transação grava a intenção aqui, e o worker entrega depois. O aviso
 /// sobrevive a queda de rede, a plataforma fora do ar e a reinício do processo.
+/// O estado do pareamento do WhatsApp, espelhado do worker.
+///
+/// A WAHA fica presa no localhost da VM — e e assim que deve ser, porque quem
+/// tem a chave dela manda mensagem pelo WhatsApp da loja. O painel roda na
+/// Vercel e nao alcanca aquele endereco.
+///
+/// Entao o worker e a ponte: ele ja fala com os dois lados. O dono pede o QR
+/// pela tela, isto grava o pedido, o worker ve, busca na WAHA e escreve a
+/// imagem de volta aqui. Nenhuma porta nova aberta para a internet.
+model WhatsappSession {
+  establishmentId String   @id
+  /// STARTING, SCAN_QR_CODE, WORKING, FAILED — como a WAHA reporta.
+  status          String   @default("DESCONHECIDO")
+  /// PNG do QR em base64. Vive minutos: expira e e trocado pelo proximo.
+  qrBase64        String?
+  qrAt            DateTime?
+  /// Quando o dono pediu para parear. O worker acelera enquanto isto e recente.
+  pairRequestedAt DateTime?
+  /// O numero pareado, para a tela dizer qual e.
+  connectedAs     String?
+  updatedAt       DateTime @updatedAt
+
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+}
+
 /// Caixa de saida das mensagens para o motoboy.
 ///
 /// Mesmo padrao do aviso ao marketplace: WhatsApp fora do ar nao pode derrubar o
