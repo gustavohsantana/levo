@@ -18,6 +18,10 @@ import {
   type OrderSourceKind,
   PhoneNumber,
   type UnitOfWork,
+  nomesDaSelecao,
+  precoDaSelecao,
+  validarSelecao,
+  type OptionGroupSpec,
 } from '@/core';
 
 interface Input {
@@ -35,6 +39,14 @@ interface Input {
     quantity: number;
     /** Desconto sobre a linha, em reais. Já resolvido — a tela converte %. */
     discountReais?: number;
+    /**
+     * O que o cliente escolheu: ids de opção, por grupo.
+     *
+     * Só os IDS chegam de fora. O preço é lido do banco e somado aqui — a tela
+     * não manda valor, e não adianta forjar: opção inventada é recusada, e
+     * preço enviado seria ignorado.
+     */
+    options?: Record<string, string[]>;
   }>;
   /** Ausente usa a taxa configurada no estabelecimento. */
   deliveryFeeReais?: number | null;
@@ -149,13 +161,23 @@ export class CreateOrder {
    * reescrever a cada reajuste, e a conta do dia deixaria de fechar.
    */
   private async resolverItens(
-    repos: { products: { findManyByIds(ids: string[]): Promise<Product[]> } },
-    pedidos: Array<{ productId: string; quantity: number; discountReais?: number }>,
+    repos: {
+      products: { findManyByIds(ids: string[]): Promise<Product[]> };
+      optionGroups: { forProducts(ids: string[]): Promise<Map<string, OptionGroupSpec[]>> };
+    },
+    pedidos: Array<{
+      productId: string;
+      quantity: number;
+      discountReais?: number;
+      options?: Record<string, string[]>;
+    }>,
   ): Promise<OrderItem[]> {
     if (pedidos.length === 0) return [];
 
-    const produtos = await repos.products.findManyByIds(pedidos.map((i) => i.productId));
+    const ids = pedidos.map((i) => i.productId);
+    const produtos = await repos.products.findManyByIds(ids);
     const porId = new Map(produtos.map((p) => [p.id, p]));
+    const gruposPorProduto = await repos.optionGroups.forProducts(ids);
 
     return pedidos.map((pedido) => {
       const produto = porId.get(pedido.productId);
@@ -168,10 +190,26 @@ export class CreateOrder {
         });
       }
 
+      const grupos = gruposPorProduto.get(produto.id) ?? [];
+      const escolha = pedido.options ?? {};
+
+      /*
+       * ⭐ Validação e preço no servidor, sempre.
+       *
+       * A tela também valida, mas quem manda o pedido pode ser qualquer coisa
+       * — outra aba, um script, um app antigo em cache. Sem esta conferência,
+       * uma pizza sem sabor sai para a cozinha e uma opção inventada com preço
+       * zero vira pizza de graça.
+       *
+       * O preço NUNCA vem de fora: chegam os ids, o valor é lido do banco.
+       */
+      validarSelecao(grupos, escolha);
+
       return {
         productId: produto.id,
         name: produto.name,
-        unitPrice: produto.price,
+        options: nomesDaSelecao(grupos, escolha),
+        unitPrice: precoDaSelecao(produto.price, grupos, escolha),
         quantity: pedido.quantity,
         discount: Money.fromReais(pedido.discountReais ?? 0),
       };

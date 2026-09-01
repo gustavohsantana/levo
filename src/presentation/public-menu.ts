@@ -1,5 +1,6 @@
 'use server';
 
+import { Money, precoMinimo } from '@/core';
 import { containerFor } from '@/composition-root';
 import { env } from '@/env';
 import { getPrismaClient } from '@/infrastructure/persistence/prisma/client';
@@ -35,8 +36,23 @@ export interface MenuPublico {
       id: string;
       name: string;
       description: string | null;
+      /** O preço-base. Com grupos obrigatórios, o que vale é `precoMinimoCents`. */
       priceCents: number;
+      /**
+       * O menor total possível — o "a partir de" do cardápio.
+       *
+       * Numa pizzaria em que o sabor carrega o preço, o produto vale zero e
+       * este número é o que o cliente vê. Sem ele, o cartão anunciaria R$ 0,00.
+       */
+      precoMinimoCents: number;
       imageUrl: string | null;
+      grupos: Array<{
+        id: string;
+        name: string;
+        min: number;
+        max: number;
+        options: Array<{ id: string; name: string; priceCents: number }>;
+      }>;
     }>;
   }>;
 }
@@ -78,12 +94,56 @@ export async function getMenuPublico(slug: string): Promise<MenuPublico | null> 
     },
   });
 
+  /*
+   * Os grupos de todos os produtos numa consulta. Buscar por produto seria N+1
+   * na tela que o cliente abre — a que menos pode esperar.
+   *
+   * Opção pausada não vem: ingrediente que acabou não pode ser escolhido, e
+   * descobrir isso só na cozinha custa o pedido.
+   */
+  const vinculos = await prisma.productOptionGroup.findMany({
+    where: { productId: { in: produtos.map((p) => p.id) } },
+    orderBy: { position: 'asc' },
+    include: {
+      group: { include: { options: { where: { active: true }, orderBy: { position: 'asc' } } } },
+    },
+  });
+
+  const gruposPorProduto = new Map<string, MenuPublico['categorias'][number]['produtos'][number]['grupos']>();
+  for (const vinculo of vinculos) {
+    const lista = gruposPorProduto.get(vinculo.productId) ?? [];
+    lista.push({
+      id: vinculo.group.id,
+      name: vinculo.group.name,
+      min: vinculo.group.min,
+      max: vinculo.group.max,
+      options: vinculo.group.options.map((o) => ({
+        id: o.id,
+        name: o.name,
+        priceCents: o.priceCents,
+      })),
+    });
+    gruposPorProduto.set(vinculo.productId, lista);
+  }
+
   const porCategoria = new Map<string, MenuPublico['categorias'][number]['produtos']>();
 
   for (const produto of produtos) {
     const chave = produto.category ?? 'Outros';
     const atual = porCategoria.get(chave) ?? [];
-    atual.push(produto);
+    const grupos = gruposPorProduto.get(produto.id) ?? [];
+
+    atual.push({
+      ...produto,
+      grupos,
+      precoMinimoCents: precoMinimo(
+        Money.fromCents(produto.priceCents),
+        grupos.map((g) => ({
+          ...g,
+          options: g.options.map((o) => ({ ...o, price: Money.fromCents(o.priceCents) })),
+        })),
+      ).cents,
+    });
     porCategoria.set(chave, atual);
   }
 
@@ -243,6 +303,7 @@ export async function criarPedidoPublicoAction(
       items: parsed.data.items.map((item) => ({
         productId: item.productId,
         quantity: item.quantity,
+        options: item.options,
       })),
     });
 

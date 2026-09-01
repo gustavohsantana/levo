@@ -42,6 +42,13 @@ export const orderItemSchema = z.object({
   quantity: z.number().int().min(1, 'Quantidade precisa ser ao menos 1'),
   /** Desconto da linha em reais, já resolvido: a tela converte a porcentagem. */
   discountReais: z.number().min(0).optional(),
+  /**
+   * O que o cliente escolheu: ids de opção, por grupo.
+   *
+   * Só ids. Preço não trafega — ele é lido do banco no caso de uso, porque o
+   * que chega daqui é entrada de fora e não fonte de verdade sobre dinheiro.
+   */
+  options: z.record(z.string(), z.array(z.string())).optional(),
 });
 
 export const createOrderSchema = z.object({
