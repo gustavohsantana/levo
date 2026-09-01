@@ -312,6 +312,33 @@ export async function alternarAceiteAutomaticoAction(ligado: boolean): Promise<A
   return { ok: true };
 }
 
+/**
+ * Conclui as entregas escolhidas de uma rota.
+ *
+ * Existe porque nem toda entrega é confirmada pelo motoboy: ele esquece, o
+ * celular fica sem bateria, ou simplesmente não usa a tela. O dono precisa
+ * fechar o dia sem depender disso — e sem ligar para cada um.
+ */
+export async function concluirEntregasAction(
+  routeId: string,
+  stopIds: string[],
+): Promise<ActionResult> {
+  if (stopIds.length === 0) return { ok: false, error: 'Selecione ao menos uma entrega.' };
+
+  try {
+    const session = await requireSession();
+    await containerFor(session.establishmentId).useCases.completeStop.executeMany(
+      routeId,
+      stopIds,
+    );
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+
+  revalidatePath('/dashboard');
+  return { ok: true };
+}
+
 export async function salvarRegiaoAction(formData: FormData): Promise<ActionResult> {
   const city = String(formData.get('city') ?? '').trim();
   const state = String(formData.get('state') ?? '').trim().toUpperCase();

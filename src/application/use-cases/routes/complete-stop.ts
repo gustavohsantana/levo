@@ -53,6 +53,65 @@ export class CompleteStop {
       await repos.events.append([...route.pullEvents(), ...order.pullEvents()]);
     });
   }
+
+/**
+   * Conclui várias paradas da mesma rota, de uma vez.
+   *
+   * Numa transação só, e não em chamadas repetidas: a rota fecha quando a
+   * última parada resolve, e resolver uma por vez faria o `finish` competir
+   * consigo mesmo. Também é o que garante o tudo-ou-nada — o dono marcou cinco
+   * entregas, e não pode acabar com três marcadas e duas não.
+   *
+   * Existe porque nem toda entrega é confirmada pelo motoboy. Ele esquece, o
+   * celular fica sem bateria, ou ele simplesmente não usa a tela — e o dono
+   * precisa fechar o dia sem ligar para ele.
+   */
+  async executeMany(routeId: string, stopIds: string[], occurredAt?: Date): Promise<void> {
+    if (stopIds.length === 0) return;
+
+    const at = occurredAt ?? this.clock.now();
+
+    await this.uow.run(async (repos) => {
+      const route = await repos.routes.findById(routeId);
+      if (!route) throw new NotFoundError('Rota', routeId);
+
+      /*
+       * Confere todas antes de resolver qualquer uma.
+       *
+       * A transação já desfaz em caso de erro, mas depender só dela deixa a
+       * garantia invisível — e é a garantia que importa aqui: o dono marcou
+       * cinco entregas e não pode acabar com três marcadas e duas não. Falhar
+       * antes de tocar em nada torna isso verdade em qualquer repositório,
+       * inclusive nos testes.
+       */
+      const desconhecida = stopIds.find(
+        (id) => !route.stops.some((stop) => stop.id === id),
+      );
+      if (desconhecida) throw new NotFoundError('Parada', desconhecida);
+
+      const pedidos: Order[] = [];
+      const avisos: MarketplaceCommandEntry[] = [];
+
+      for (const stopId of stopIds) {
+        const stop = route.completeStop(stopId, 'DELIVERED', null, at);
+
+        const order = await repos.orders.findById(stop.orderId);
+        if (!order) throw new NotFoundError('Pedido', stop.orderId);
+
+        order.markDelivered(at);
+        pedidos.push(order);
+        avisos.push(...avisoDeEntrega(route.establishmentId, order));
+      }
+
+      await repos.marketplace.enqueue(avisos);
+      await repos.routes.save(route);
+      await repos.orders.saveMany(pedidos);
+      await repos.events.append([
+        ...route.pullEvents(),
+        ...pedidos.flatMap((order) => order.pullEvents()),
+      ]);
+    });
+  }
 }
 
 /**

@@ -21,6 +21,7 @@ import { Button } from '../primitives';
 import { clockTime, currency } from '../format';
 import { PinPickerDialog } from './pin-picker-dialog';
 import { CancelOrderDialog } from './cancel-order-dialog';
+import { ConcludeDeliveriesDialog } from './conclude-deliveries-dialog';
 import { OrderDetailDialog } from './order-detail-dialog';
 import { SourceTag } from './source-tag';
 import { StartRouteButton } from './start-route-button';
@@ -178,6 +179,24 @@ function RouteCard({ rota }: { rota: RouteView }) {
           "aguardando saída" para sempre e o rastreio do cliente nunca começava.
         */}
         {rota.status === 'PLANNED' ? <StartRouteButton routeId={rota.id} /> : null}
+
+        {/*
+          Fechar entrega pelo painel, sem depender do motoboy tocar na tela
+          dele — ele esquece, o celular descarrega, ou ele nao usa. So aparece
+          com a rota na rua e com parada pendente: antes de sair nao ha o que
+          concluir, e sem pendencia o botao abriria um dialogo vazio.
+        */}
+        {rota.status === 'IN_PROGRESS' && rota.stops.some((s) => s.status === 'PENDING') ? (
+          <ConcludeDeliveriesDialog
+            rota={rota}
+            trigger={
+              <Button size="sm" variant="primary">
+                <Check />
+                Concluir entregas
+              </Button>
+            }
+          />
+        ) : null}
 
         {/*
           Contornados, não fantasmas. Quem usa isto está com a mão ocupada e o
