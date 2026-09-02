@@ -127,10 +127,17 @@ function CourierRow({
       </p>
 
       <div className="mt-3 flex flex-wrap items-center gap-1">
+        {/*
+          Dois destinos diferentes, dois rótulos diferentes.
+
+          "Abrir" leva à ficha — acordo de pagamento, Telegram, histórico. O
+          lápis lá embaixo corrige nome e telefone sem sair da lista. Antes os
+          dois eram o mesmo ícone, e nada dizia qual fazia o quê.
+        */}
         <Button asChild variant="ghost" size="sm">
           <Link href={`/dashboard/entregadores/${entregador.id}`}>
-            <Pencil />
-            Editar
+            <CalendarDays />
+            Abrir
           </Link>
         </Button>
 
@@ -151,6 +158,7 @@ function CourierRow({
 
         <Button variant="ghost" size="sm" onClick={() => onEdit(entregador)}>
           <Pencil />
+          Nome e telefone
         </Button>
       </div>
     </li>
