@@ -14,6 +14,7 @@ import { aiqfomeAccessTokenFor } from '../src/infrastructure/integrations/aiqfom
 import { marketplaceCommandsFor } from '../src/infrastructure/integrations/marketplace-factory';
 import { WahaSender } from '../src/infrastructure/messaging/waha';
 import { TelegramSender } from '../src/infrastructure/messaging/telegram';
+import { pedidoDeLocalizacao } from '../src/core/services/route-message';
 import type { MarketplaceCommands, OrderSource } from '../src/core';
 
 /**
@@ -330,6 +331,40 @@ async function espelharWhatsApp(): Promise<void> {
   }
 }
 
+/**
+ * Já pedimos a localização a este motoboy hoje?
+ *
+ * A resposta sai da posição que ele mandou: se já chegou ping dele nas últimas
+ * horas, ele está compartilhando e não precisa ouvir de novo.
+ */
+async function devePedirLocalizacao(
+  prisma: ReturnType<typeof getPrismaClient>,
+  establishmentId: string,
+  chatId: string,
+): Promise<boolean> {
+  const loja = await prisma.establishment.findUnique({
+    where: { id: establishmentId },
+    select: { telegramLocation: true },
+  });
+  if (!loja?.telegramLocation) return false;
+
+  const courier = await prisma.courier.findFirst({
+    where: { establishmentId, telegramChatId: chatId },
+    select: { id: true },
+  });
+  if (!courier) return false;
+
+  const recente = await prisma.courierPing.findFirst({
+    where: {
+      route: { courierId: courier.id },
+      recordedAt: { gte: new Date(Date.now() - 6 * 60 * 60 * 1000) },
+    },
+    select: { id: true },
+  });
+
+  return recente === null;
+}
+
 /** Depois disto, para de tentar. Número errado não vira certo insistindo. */
 const MAX_TENTATIVAS_WHATSAPP = 4;
 
@@ -372,6 +407,17 @@ async function drenarWhatsApp(): Promise<void> {
           data: { sentAt: new Date(), attempts: { increment: 1 }, lastError: null },
         });
         logger.info({ routeId: aviso.routeId }, 'telegram.rota_enviada');
+
+        /*
+         * O pedido de localização vai uma vez por dia, não a cada rota.
+         *
+         * O compartilhamento dura o turno inteiro: repetir o passo a passo a
+         * cada rota vira ruído, e mensagem que o motoboy aprende a ignorar
+         * deixa de funcionar quando importa.
+         */
+        if (await devePedirLocalizacao(prisma, aviso.establishmentId, aviso.destination)) {
+          await bot.sendText(aviso.destination, pedidoDeLocalizacao()).catch(() => undefined);
+        }
       } catch (cause) {
         await prisma.courierNotification.update({
           where: { id: aviso.id },

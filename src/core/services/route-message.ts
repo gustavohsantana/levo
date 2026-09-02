@@ -63,3 +63,23 @@ export function telefoneParaWhatsApp(bruto: string): string | null {
 
   return digitos.length === 10 || digitos.length === 11 ? `55${digitos}` : null;
 }
+
+/**
+ * O pedido de localização ao vivo, mandado junto com a rota.
+ *
+ * O bot não consegue ligar isso sozinho — e não deveria. Compartilhar onde se
+ * está é decisão de quem está lá, e o caminho passa pelo menu do Telegram de
+ * propósito.
+ *
+ * Por isso o texto é um passo a passo curto: quem lê está de capacete, com a
+ * moto ligada, e não vai caçar num menu que nunca usou.
+ */
+export function pedidoDeLocalizacao(): string {
+  return [
+    'Para a loja acompanhar sua rota no mapa, compartilhe sua localização:',
+    '',
+    '📎 (clipe) → Localização → Compartilhar localização ao vivo → 8 horas',
+    '',
+    'Vale até o fim do turno, e funciona com o celular no bolso.',
+  ].join('\n');
+}

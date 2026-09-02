@@ -6,6 +6,8 @@ import { requireSession } from '@/presentation/http/session';
 import { IfoodConnect } from '@/presentation/ui/patterns/ifood-connect';
 import { AiqfomeConnect } from '@/presentation/ui/patterns/aiqfome-connect';
 import { WhatsappConnect } from '@/presentation/ui/patterns/whatsapp-connect';
+import { TelegramConnect } from '@/presentation/ui/patterns/telegram-connect';
+import { TelegramSender } from '@/infrastructure/messaging/telegram';
 import { estadoWhatsappAction } from '@/presentation/whatsapp-actions';
 import {
   MercadoPagoConnect,
@@ -55,6 +57,23 @@ export default async function IntegracoesPage({
   };
 
   const estadoWhats = await estadoWhatsappAction();
+
+  /*
+   * O nome do bot vem do Telegram, não de uma variável: assim a tela mostra o
+   * que está realmente configurado, e não o que alguém escreveu que estaria.
+   */
+  const tokenTelegram = env().TELEGRAM_BOT_TOKEN;
+  const [botTelegram, telegramConectados, totalEntregadores, loja] = await Promise.all([
+    tokenTelegram ? new TelegramSender(tokenTelegram).username().catch(() => null) : null,
+    prisma.courier.count({
+      where: { establishmentId: session.establishmentId, telegramChatId: { not: null } },
+    }),
+    prisma.courier.count({ where: { establishmentId: session.establishmentId, active: true } }),
+    prisma.establishment.findUnique({
+      where: { id: session.establishmentId },
+      select: { telegramLocation: true },
+    }),
+  ]);
 
   const [ifood, aiqfome, mercadoPago] = await Promise.all([
     store.read(session.establishmentId, 'IFOOD').catch(ilegivel('IFOOD')),
@@ -158,7 +177,13 @@ export default async function IntegracoesPage({
         <p className="mt-1 text-sm text-ink-muted">
           O WhatsApp que fala com o entregador quando a rota sai.
         </p>
-        <div className="mt-3 max-w-xl">
+        <div className="mt-3 flex max-w-xl flex-col gap-3">
+          <TelegramConnect
+            bot={botTelegram}
+            conectados={telegramConectados}
+            total={totalEntregadores}
+            localizacao={loja?.telegramLocation ?? false}
+          />
           <WhatsappConnect inicial={estadoWhats} />
         </div>
       </section>

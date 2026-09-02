@@ -86,6 +86,12 @@ model Establishment {
   /// Sem isto o cardapio sai em ordem alfabetica, e uma pizzaria abre com
   /// "Acai" porque comeca com A. Ordem de cardapio e decisao comercial.
   categoryOrder    String[] @default([])
+  /// Pede ao motoboy a localizacao ao vivo pelo Telegram, junto com a rota.
+  ///
+  /// Desligado por padrao: e o dono decidindo se quer acompanhar a moto no
+  /// mapa, e o motoboy ainda decide se compartilha — o bot pode pedir, nunca
+  /// ligar sozinho. Rastrear alguem sem que ele saiba nao e um recurso.
+  telegramLocation Boolean @default(false)
   /// Manda a rota para o motoboy no WhatsApp assim que ela e planejada.
   ///
   /// Desligado por padrao, e de proposito: mensagem automatica sai de um numero

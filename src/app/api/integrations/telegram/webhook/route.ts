@@ -27,12 +27,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'não autorizado' }, { status: 401 });
   }
 
-  const corpo = (await request.json().catch(() => ({}))) as {
-    message?: { text?: string; chat?: { id?: number | string } };
+  type Mensagem = {
+    text?: string;
+    chat?: { id?: number | string };
+    location?: { latitude: number; longitude: number };
   };
 
-  const texto = corpo.message?.text?.trim() ?? '';
-  const chatId = corpo.message?.chat?.id;
+  const corpo = (await request.json().catch(() => ({}))) as {
+    message?: Mensagem;
+    /* Localização ao vivo chega como edição da mensagem original, não como
+     * mensagem nova — é a mesma bolha se atualizando no chat. */
+    edited_message?: Mensagem;
+  };
+
+  const evento = corpo.message ?? corpo.edited_message;
+  const texto = evento?.text?.trim() ?? '';
+  const chatId = evento?.chat?.id;
+
+  /*
+   * Posição do motoboy, do próprio Telegram.
+   *
+   * Vale mais que o GPS da nossa tela porque não depende dela estar aberta: o
+   * celular manda com o app fechado e a tela apagada, que é onde o telefone
+   * passa o turno inteiro.
+   */
+  if (chatId && evento?.location) {
+    await registrarPosicao(String(chatId), evento.location);
+    return NextResponse.json({ ok: true });
+  }
 
   // Qualquer outra mensagem é ignorada em silêncio: este bot não conversa.
   if (!chatId || !texto.startsWith('/start')) return NextResponse.json({ ok: true });
@@ -110,4 +132,44 @@ export async function POST(request: Request) {
     .catch(() => undefined);
 
   return NextResponse.json({ ok: true });
+}
+
+
+/**
+ * Guarda a posição que veio do Telegram na rota que o motoboy está fazendo.
+ *
+ * Sem rota ativa não há o que gravar — ele pode ter deixado o compartilhamento
+ * ligado depois de terminar, e o trajeto de alguém fora de serviço não é nosso
+ * assunto.
+ */
+async function registrarPosicao(
+  chatId: string,
+  local: { latitude: number; longitude: number },
+): Promise<void> {
+  const prisma = getPrismaClient(env().DATABASE_URL);
+
+  const courier = await prisma.courier.findFirst({
+    where: { telegramChatId: chatId },
+    select: { id: true, establishmentId: true },
+  });
+  if (!courier) return;
+
+  const rota = await prisma.route.findFirst({
+    where: { courierId: courier.id, status: { in: ['PLANNED', 'IN_PROGRESS'] } },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true },
+  });
+  if (!rota) return;
+
+  const { containerFor } = await import('@/composition-root');
+  await containerFor(courier.establishmentId)
+    .useCases.recordPing.execute(rota.id, {
+      lat: local.latitude,
+      lng: local.longitude,
+    })
+    /*
+     * Falha aqui não pode virar erro para o Telegram: ele reenviaria a mesma
+     * posição, que a essa altura já está velha, e a próxima chega em segundos.
+     */
+    .catch(() => undefined);
 }

@@ -129,7 +129,19 @@ export function CourierApp({ token, route }: { token: string; route: DriverRoute
         });
       },
       undefined,
-      { enableHighAccuracy: true, maximumAge: 10_000, timeout: 20_000 },
+      /*
+       * Precisão alta desligada.
+       *
+       * Ela mantém o chip de GPS aceso sem parar enquanto a tela está aberta, e
+       * o `watchPosition` dispara a cada metro andado — o filtro de 15s acima
+       * joga fora quase tudo, mas a energia já foi gasta para produzir.
+       *
+       * Quem carrega o rastreio agora é a localização ao vivo do Telegram, que
+       * usa o serviço do sistema: adaptativo, coordenado entre os aplicativos, e
+       * funcionando com a tela apagada — que é onde o celular passa o turno.
+       * Aqui basta uma posição aproximada, para quando a tela estiver aberta.
+       */
+      { enableHighAccuracy: false, maximumAge: 30_000, timeout: 20_000 },
     );
 
     return () => navigator.geolocation.clearWatch(watch);

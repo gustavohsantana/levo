@@ -79,7 +79,12 @@ export class TelegramSender {
       body: JSON.stringify({
         url,
         secret_token: secret,
-        allowed_updates: ['message'],
+        /*
+         * `edited_message` não é opcional aqui: a localização ao vivo chega
+         * como edição da mensagem original, não como mensagem nova. Sem isto o
+         * Telegram nem tenta entregar, e o rastreio simplesmente não existe.
+         */
+        allowed_updates: ['message', 'edited_message'],
       }),
     });
     return r.ok;

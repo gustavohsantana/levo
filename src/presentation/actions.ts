@@ -335,6 +335,33 @@ export async function alternarRotaNoWhatsappAction(ligado: boolean): Promise<Act
 }
 
 /**
+ * Liga o pedido de localização ao vivo ao motoboy, pelo Telegram.
+ *
+ * O bot pede; quem decide compartilhar é ele. Rastrear alguém sem que ele saiba
+ * não é um recurso — e no Telegram isso nem é possível, o que é uma qualidade
+ * do canal, não uma limitação.
+ */
+export async function alternarLocalizacaoTelegramAction(
+  ligado: boolean,
+): Promise<ActionResult> {
+  try {
+    const session = await requireSession();
+    const { getPrismaClient } = await import('@/infrastructure/persistence/prisma/client');
+    const { env } = await import('@/env');
+
+    await getPrismaClient(env().DATABASE_URL).establishment.update({
+      where: { id: session.establishmentId },
+      data: { telegramLocation: ligado },
+    });
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+
+  revalidatePath('/dashboard/integracoes');
+  return { ok: true };
+}
+
+/**
  * Conclui as entregas escolhidas de uma rota.
  *
  * Existe porque nem toda entrega é confirmada pelo motoboy: ele esquece, o
