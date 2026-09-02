@@ -48,6 +48,14 @@ export default function PrivacidadePage() {
           do aparelho, registrada a cada 15 segundos enquanto a entrega está em andamento.
         </li>
         <li>
+          <strong>Localização pelo Telegram:</strong> quando o estabelecimento usa o aviso de rota
+          pelo Telegram, o entregador pode compartilhar a localização ao vivo pelo aplicativo. Isso
+          é <strong>escolha dele</strong>: o sistema pede, o Telegram exige que ele confirme, e ele
+          define por quanto tempo — no máximo 8 horas, com fim automático. Ele pode interromper a
+          qualquer momento pelo próprio Telegram, sem falar com ninguém. Posição recebida fora de
+          uma rota em andamento é descartada.
+        </li>
+        <li>
           <strong>Da conta do estabelecimento:</strong> nome, e-mail e senha, guardada apenas como
           hash — a senha original não fica registrada e não pode ser recuperada.
         </li>
@@ -108,8 +116,9 @@ export default function PrivacidadePage() {
       <ul>
         <li>
           <strong>Localização do entregador:</strong> apagada automaticamente{' '}
-          <strong>7 dias</strong> depois de a rota ser concluída. É o único dado com descarte
-          programado, porque é o mais sensível e o de menor utilidade depois da entrega.
+          <strong>7 dias</strong> depois de a rota ser concluída — venha do aplicativo ou do
+          Telegram. É o único dado com descarte programado, porque é o mais sensível e o de menor
+          utilidade depois da entrega.
         </li>
         <li>
           <strong>Pedidos e rotas:</strong> mantidos enquanto o estabelecimento usar o serviço, que
