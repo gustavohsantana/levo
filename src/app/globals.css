@@ -69,10 +69,11 @@
    *
    * Mesmo matiz do símbolo (128) — é a mesma cor, não outra. O que muda é a
    * luminosidade: sobre o tom claro da logo, texto branco fica em 1,9:1, que
-   * ninguém lê. Aqui o branco vai a 7,2:1 e o lima do símbolo a 5,1:1, então a
-   * lateral fica inequivocamente Levô sem custar a legibilidade do menu.
+   * ninguém lê. Aqui o branco vai a 6,3:1 — folga sobre os 4,5:1 exigidos, e o
+   * bastante para o menu inteiro, inclusive os itens em branco 75%, continuar
+   * confortável se a lateral clarear mais um passo algum dia.
    */
-  --accent-deep: oklch(45% 0.125 128);
+  --accent-deep: oklch(48% 0.135 128);
 
   --moving: oklch(56% 0.16 258);
   --moving-soft: oklch(95% 0.04 258);
