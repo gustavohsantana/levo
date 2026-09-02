@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Bike, Maximize2 } from 'lucide-react';
 import type { RotaNoMapa } from '@/presentation/queries';
 import type { MapMarker, MapRoute } from './route-map';
-import { timeAgo } from '../format';
+import { clockTime, timeAgo } from '../format';
 
 // Leaflet mexe em `window` na importação: só carrega no navegador.
 const RouteMap = dynamic(() => import('./route-map').then((m) => m.RouteMap), {
@@ -129,6 +129,19 @@ export function CouriersMap({
                 <span className="text-ink">{rota.courierName}</span>
                 <span className="text-ink-faint">
                   {feitas}/{rota.paradas.length}
+                  {/*
+                    O retorno vem antes da última posição de propósito: é a
+                    pergunta que o dono realmente faz — não "onde ele está", mas
+                    "quando posso mandar a próxima leva".
+                  */}
+                  {rota.retornoPrevisto ? (
+                    <>
+                      {' '}· volta{' '}
+                      <span className="text-ink" suppressHydrationWarning>
+                        {clockTime(rota.retornoPrevisto)}
+                      </span>
+                    </>
+                  ) : null}
                   {rota.posicao ? (
                     <> · <span suppressHydrationWarning>{timeAgo(rota.posicao.at)}</span></>
                   ) : (

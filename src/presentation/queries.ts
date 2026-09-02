@@ -229,6 +229,14 @@ export interface RotaNoMapa {
   /** Traçado da rota, como o roteirizador devolveu. */
   geometry: string | null;
   posicao: { lat: number; lng: number; at: string } | null;
+  /**
+   * Quando ele deve estar de volta na loja.
+   *
+   * É a pergunta que o dono faz o tempo todo no sábado — não "onde ele está",
+   * mas "quando posso mandar a próxima leva". Sai da duração do ciclo fechado,
+   * que já inclui a perna da última entrega de volta.
+   */
+  retornoPrevisto: string | null;
   paradas: Array<{
     numero: number;
     lat: number;
@@ -278,6 +286,14 @@ export async function getRotasNoMapa(): Promise<RotaNoMapa[]> {
         courierName: nomes.get(rota.courierId) ?? '—',
         geometry: rota.geometry,
         posicao: ping ? { ...ping.coordinates.toJSON(), at: ping.at.toISOString() } : null,
+        /*
+         * Só depois de sair. Antes disso a duração é uma previsão sem âncora no
+         * relógio, e um horário inventado é pior que horário nenhum: o dono
+         * planeja a próxima leva em cima dele.
+         */
+        retornoPrevisto: rota.startedAt
+          ? new Date(rota.startedAt.getTime() + rota.durationSeconds * 1000).toISOString()
+          : null,
         paradas: rota.stops
           .map((stop) => {
             const pedido = porPedido.get(stop.orderId);
