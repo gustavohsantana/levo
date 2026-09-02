@@ -408,15 +408,22 @@ function OrderCard({
       }`}
     >
       <div className="flex items-start gap-2">
-        {pedido.isGeocoded ? (
-          <input
-            type="checkbox"
-            checked={selecionado}
-            onChange={(evento) => onToggle(pedido.id, evento.nativeEvent instanceof MouseEvent && evento.nativeEvent.shiftKey)}
-            aria-label={`Selecionar pedido de ${pedido.customerName}`}
-            className="mt-0.5 shrink-0"
-          />
-        ) : null}
+        {/*
+          Selecionável mesmo sem pino.
+          
+          Esconder a caixa travava o pedido: ele ficava na tela sem forma de
+          avançar, e o dono também não sabe onde fica. No papel ele levava o
+          endereço junto e o motoboy achava — recusar o que o caderno aceitava
+          devolve a pessoa para o caderno. Sem pino, a parada vai ao fim da
+          rota, com o endereço escrito.
+        */}
+        <input
+          type="checkbox"
+          checked={selecionado}
+          onChange={(evento) => onToggle(pedido.id, evento.nativeEvent instanceof MouseEvent && evento.nativeEvent.shiftKey)}
+          aria-label={`Selecionar pedido de ${pedido.customerName}`}
+          className="mt-0.5 shrink-0"
+        />
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">

@@ -66,8 +66,16 @@ export function WorkQueue({
   const [avancando, startAdvance] = useTransition();
   const [planning, startPlanning] = useTransition();
 
-  const routable = useMemo(() => pending.filter((order) => order.isGeocoded), [pending]);
-  const unlocated = useMemo(() => pending.filter((order) => !order.isGeocoded), [pending]);
+  /*
+   * Todos entram na fila, com ou sem pino.
+   *
+   * Antes os sem pino eram filtrados daqui e simplesmente não apareciam — o
+   * pedido ficava preso, sem forma de avançar, e o dono também não sabe onde
+   * fica. Agora eles são selecionáveis e vão ao fim da rota, com o endereço
+   * escrito, que é como sempre funcionou no papel.
+   */
+  const routable = pending;
+  const semPino = useMemo(() => pending.filter((order) => !order.isGeocoded), [pending]);
   /*
    * Quem está na rua continua na lista.
    *
@@ -159,6 +167,26 @@ export function WorkQueue({
     <section className="flex flex-col gap-3">
       <header className="flex items-center gap-3">
         <h2 className="text-sm font-semibold text-ink">Pedidos de hoje</h2>
+        {/*
+          O aviso substitui o bloqueio.
+
+          Ele diz o que vai acontecer — vão ao fim, sem tempo estimado — e
+          deixa o dono decidir se resolve agora ou despacha assim mesmo. Era
+          isso que faltava: antes o sistema decidia por ele, escondendo.
+        */}
+        {semPino.length > 0 ? (
+          <p className="mb-2 rounded-md bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-950">
+            <strong>
+              {semPino.length === 1
+                ? '1 pedido sem pino no mapa'
+                : `${semPino.length} pedidos sem pino no mapa`}
+            </strong>
+            . Podem ir na rota assim mesmo — entram no fim, sem horário previsto, e o
+            entregador usa o endereço escrito. Se preferir, confirme o local em
+            &ldquo;Localizar&rdquo; ou ligue para o cliente e corrija o endereço.
+          </p>
+        ) : null}
+
         {pending.length > 0 ? (
           <span className="numeric rounded-xs bg-raised px-1.5 py-0.5 text-xs text-ink-muted">
             {pending.length}

@@ -2,7 +2,6 @@ import { AggregateRoot } from './entity';
 import { OrderEvents } from '../events/domain-event';
 import {
   OrderAlreadyRoutedError,
-  OrderNotGeocodedError,
   OrderNotPendingError,
 } from '../errors';
 import type { PaymentStatus } from './payment';
@@ -310,8 +309,19 @@ export class Order extends AggregateRoot {
       if (this.props.routeId) throw new OrderAlreadyRoutedError(this.id);
       throw new OrderNotPendingError(this.id, this.props.status);
     }
-    if (!this.isGeocoded) throw new OrderNotGeocodedError(this.id);
-
+    /*
+     * Pedido sem pino ENTRA em rota.
+     *
+     * A regra antiga travava aqui, e travar era a resposta errada: o dono
+     * também não sabe onde fica, e no papel ele simplesmente levava o endereço
+     * junto — o motoboy achava. Um sistema que recusa o que o caderno aceitava
+     * é um sistema que devolve a pessoa para o caderno.
+     *
+     * O que a falta de pino impede é o CÁLCULO da rota, não a entrega. Por isso
+     * o planejamento coloca esses pedidos no fim da sequência, fora da
+     * otimização, com o endereço escrito para o motoboy resolver como sempre
+     * resolveu.
+     */
     this.props.status = OrderStatus.InRoute;
     this.props.routeId = routeId;
     this.record(OrderEvents.Routed, this.props.establishmentId, { routeId }, now);

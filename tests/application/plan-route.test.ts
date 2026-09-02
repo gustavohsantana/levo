@@ -102,13 +102,35 @@ describe('PlanRoute', () => {
     expect(planned.establishmentId).toBe('est-1');
   });
 
-  it('recusa pedido sem coordenada', async () => {
-    const ids = seedOrders(NORTE);
+  it('leva o pedido sem coordenada, no fim da rota', async () => {
+    /*
+     * A regra mudou de propósito. Antes um pedido sem pino travava a leva
+     * inteira, e o dono ficava sem saída: ele também não sabe onde é.
+     *
+     * No papel ele simplesmente levava o endereço junto e o motoboy achava.
+     * Travar fazia o sistema ser pior que o caderno — então o sem pino entra,
+     * no fim, com o endereço escrito.
+     */
+    const ids = seedOrders(NORTE, SUL);
+    const semPino = makeOrder('order-sem-pino', null);
+    db.orders.set(semPino.id, semPino);
+
+    const rota = await planRoute.execute({
+      courierId: 'courier-1',
+      orderIds: [...ids, semPino.id],
+    });
+
+    expect(rota.stops).toHaveLength(3);
+    expect(rota.stops.at(-1)!.orderId).toBe(semPino.id);
+  });
+
+  it('recusa quando NENHUM pedido tem coordenada', async () => {
+    // Sem nenhum ponto não há rota para calcular — isso é aritmética.
     const semPino = makeOrder('order-sem-pino', null);
     db.orders.set(semPino.id, semPino);
 
     await expect(
-      planRoute.execute({ courierId: 'courier-1', orderIds: [...ids, semPino.id] }),
+      planRoute.execute({ courierId: 'courier-1', orderIds: [semPino.id] }),
     ).rejects.toThrow(OrderNotGeocodedError);
   });
 
@@ -153,14 +175,13 @@ describe('PlanRoute', () => {
 
   it('não deixa pedido marcado quando a rota falha', async () => {
     const ids = seedOrders(NORTE);
-    const semPino = makeOrder('order-sem-pino', null);
-    db.orders.set(semPino.id, semPino);
 
+    // Motoboy inexistente derruba o planejamento inteiro.
     await expect(
-      planRoute.execute({ courierId: 'courier-1', orderIds: [...ids, semPino.id] }),
+      planRoute.execute({ courierId: 'nao-existe', orderIds: ids }),
     ).rejects.toThrow();
 
-    // O pedido válido continua disponível para a próxima tentativa.
+    // O pedido continua disponível para a próxima tentativa.
     expect(db.orders.get(ids[0])!.status).toBe('NEW');
     expect(db.routes.size).toBe(0);
   });

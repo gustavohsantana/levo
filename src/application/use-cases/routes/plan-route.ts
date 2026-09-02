@@ -45,7 +45,7 @@ export class PlanRoute {
     }
 
     // ── 1. Ler e validar (transação curta) ────────────────────────────────
-    const { establishmentId, origin, orders } = await this.uow.run(async (repos) => {
+    const { establishmentId, origin, orders, semPino } = await this.uow.run(async (repos) => {
       const courier = await repos.couriers.findById(input.courierId);
       if (!courier) throw new NotFoundError('Motoboy', input.courierId);
       if (!courier.active) throw new CourierUnavailableError(input.courierId);
@@ -66,15 +66,44 @@ export class PlanRoute {
       const ordered = input.orderIds.map((id) => {
         const order = byId.get(id);
         if (!order) throw new NotFoundError('Pedido', id);
-        if (!order.isGeocoded) throw new OrderNotGeocodedError(id);
         if (order.status !== 'NEW') throw new OrderAlreadyRoutedError(id);
+        /*
+         * Retirada não entra em rota: quem busca é o cliente.
+         */
+        if (order.isPickup) {
+          throw new ValidationError(
+            `${order.customerName} é retirada no balcão — não entra em rota.`,
+          );
+        }
         return order;
       });
+
+      /*
+       * Pedido sem pino entra na rota, no fim.
+       *
+       * Sem coordenada o otimizador não tem o que calcular — isso é aritmética,
+       * não política. Mas bloquear era a resposta errada: no papel, o dono
+       * simplesmente levava o endereço junto, e o motoboy achava. Travar o
+       * pedido fazia o sistema ser pior que o caderno.
+       *
+       * Então os localizados são otimizados, e os sem pino vão ao fim da
+       * sequência, com o endereço escrito. O motoboy os vê por último, sabe que
+       * são os "sem mapa", e resolve como sempre resolveu.
+       *
+       * Ao fim, e não no meio, porque a ordem deles é a única coisa que não
+       * sabemos: colocá-los entre paradas calculadas estragaria o trajeto que
+       * conhecemos para acomodar o que não conhecemos.
+       */
+      const comPino = ordered.filter((order) => order.isGeocoded);
+      const semPino = ordered.filter((order) => !order.isGeocoded);
+
+      if (comPino.length === 0) throw new OrderNotGeocodedError(ordered[0]?.id ?? '');
 
       return {
         establishmentId: establishment.id,
         origin: establishment.coordinates,
-        orders: ordered,
+        orders: comPino,
+        semPino,
       };
     });
 
@@ -94,10 +123,21 @@ export class PlanRoute {
     const baseline = baselineDuration(matrix);
     const optimized = this.optimizer.optimize(matrix);
 
-    const sequence = optimized.order.map((index) => orders[index - 1]);
+    /*
+     * Os sem pino vão ao fim, na ordem em que o dono os escolheu.
+     *
+     * Não há como ordená-los: sem coordenada não existe distância entre eles. A
+     * ordem de seleção é o único critério que o dono reconhece, e ele escolheu
+     * por algum motivo.
+     */
+    const sequence = [...optimized.order.map((index) => orders[index - 1]), ...semPino];
+    /*
+     * O traçado cobre só quem tem pino. Os outros não têm por onde passar, e
+     * desenhar uma linha até um ponto inventado seria pior que não desenhar.
+     */
     const path = await this.routing.path([
       origin,
-      ...sequence.map((order) => order.coordinates!),
+      ...sequence.filter((order) => order.isGeocoded).map((order) => order.coordinates!),
       origin,
     ]);
 
