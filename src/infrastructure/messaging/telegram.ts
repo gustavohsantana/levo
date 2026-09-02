@@ -57,6 +57,36 @@ export class TelegramSender {
   }
 
   /**
+   * Deixa os botões fixos acima do teclado dele, para sempre.
+   *
+   * Sem isso o motoboy precisa rolar a conversa até a mensagem da rota para
+   * achar o botão — e no meio do turno essa mensagem já foi empurrada para
+   * cima por outras. Fixo, ele toca sem procurar.
+   *
+   * Os dois que importam: abrir a rota e mandar a posição de agora. O
+   * compartilhamento contínuo continua no clipe porque não existe API para
+   * ligá-lo, e isso é uma proteção, não um esquecimento do Telegram.
+   */
+  async fixarBotoes(chatId: string, texto: string, linkDaRota: string): Promise<void> {
+    await fetch(this.url('sendMessage'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: texto,
+        reply_markup: {
+          keyboard: [
+            [{ text: '🛵 Abrir minha rota', web_app: { url: linkDaRota } }],
+            [{ text: '📍 Enviar minha posição', request_location: true }],
+          ],
+          resize_keyboard: true,
+          is_persistent: true,
+        },
+      }),
+    }).catch(() => undefined);
+  }
+
+  /**
    * Pede a posição com um botão de um toque.
    *
    * `request_location` devolve UMA posição, não o compartilhamento contínuo —

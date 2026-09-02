@@ -99,3 +99,13 @@ export function localizacaoExpirando(): string {
     'Se ainda estiver rodando, renove: 📎 → Localização → ao vivo.',
   ].join('\n');
 }
+
+/**
+ * O texto que acompanha os botões fixos, mandado junto com a rota.
+ *
+ * Curto de propósito: ele é repetido a cada rota, e explicação longa que se
+ * repete vira ruído — o motoboy para de ler na terceira vez.
+ */
+export function botoesFixados(): string {
+  return 'Seus atalhos ficam aqui embaixo, sempre à mão.';
+}

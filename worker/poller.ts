@@ -15,6 +15,7 @@ import { marketplaceCommandsFor } from '../src/infrastructure/integrations/marke
 import { WahaSender } from '../src/infrastructure/messaging/waha';
 import { TelegramSender } from '../src/infrastructure/messaging/telegram';
 import {
+  botoesFixados,
   localizacaoExpirando,
   pedidoDeLocalizacao,
 } from '../src/core/services/route-message';
@@ -482,6 +483,16 @@ async function drenarWhatsApp(): Promise<void> {
          * cada rota vira ruído, e mensagem que o motoboy aprende a ignorar
          * deixa de funcionar quando importa.
          */
+        /*
+         * Os atalhos vão em toda rota, e isso é de propósito: o teclado fixo
+         * some quando o motoboy troca de aparelho, limpa a conversa ou usa o
+         * Telegram Web. Reenviar custa uma mensagem curta e evita o suporte de
+         * "sumiu o botão".
+         */
+        await bot
+          .fixarBotoes(aviso.destination, botoesFixados(), aviso.link ?? '')
+          .catch(() => undefined);
+
         if (await devePedirLocalizacao(prisma, aviso.establishmentId, aviso.destination)) {
           /*
            * Com o botão de um toque junto: o modo ao vivo exige o menu do

@@ -279,7 +279,7 @@ function buildRepositories(db: InMemoryDatabase): Repositories {
   };
 
   const pings: CourierPingRepository = {
-    async record(routeId, coordinates, at) {
+    async record(routeId, coordinates, at, _source) {
       const trail = db.pings.get(routeId) ?? [];
       trail.push({ coordinates, at });
       db.pings.set(routeId, trail);

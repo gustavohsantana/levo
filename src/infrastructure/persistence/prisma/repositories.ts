@@ -432,9 +432,14 @@ export class PrismaEstablishmentRepository extends TenantScoped implements Estab
 export class PrismaCourierPingRepository implements CourierPingRepository {
   constructor(private readonly tx: Tx) {}
 
-  async record(routeId: string, coordinates: Coordinates, at: Date): Promise<void> {
+  async record(
+    routeId: string,
+    coordinates: Coordinates,
+    at: Date,
+    source: 'APP' | 'TELEGRAM' = 'APP',
+  ): Promise<void> {
     await this.tx.courierPing.create({
-      data: { routeId, lat: coordinates.lat, lng: coordinates.lng, recordedAt: at },
+      data: { routeId, lat: coordinates.lat, lng: coordinates.lng, recordedAt: at, source },
     });
   }
 

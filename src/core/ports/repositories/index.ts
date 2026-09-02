@@ -96,7 +96,13 @@ export interface EstablishmentRepository {
 
 /** Posição do motoboy. Tabela mais escrita do sistema — ver retenção na Parte 3. */
 export interface CourierPingRepository {
-  record(routeId: string, coordinates: Coordinates, at: Date): Promise<void>;
+  /** `source` diz se veio da tela do motoboy ou do Telegram — consentimentos diferentes. */
+  record(
+    routeId: string,
+    coordinates: Coordinates,
+    at: Date,
+    source?: 'APP' | 'TELEGRAM',
+  ): Promise<void>;
   lastPing(routeId: string): Promise<{ coordinates: Coordinates; at: Date } | null>;
   trail(routeId: string, limit: number): Promise<Array<{ coordinates: Coordinates; at: Date }>>;
   purgeFinishedBefore(cutoff: Date): Promise<number>;

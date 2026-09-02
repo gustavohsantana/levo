@@ -13,7 +13,10 @@ export class RecordCourierPing {
     private readonly clock: Clock,
   ) {}
 
-  async execute(routeId: string, input: { lat: number; lng: number; at?: Date }): Promise<void> {
+  async execute(
+    routeId: string,
+    input: { lat: number; lng: number; at?: Date; source?: 'APP' | 'TELEGRAM' },
+  ): Promise<void> {
     const coordinates = Coordinates.create(input.lat, input.lng);
 
     await this.uow.run(async (repos) => {
@@ -23,7 +26,12 @@ export class RecordCourierPing {
       // que acabou e continuar mandando.
       if (route.isFinished) return;
 
-      await repos.pings.record(routeId, coordinates, input.at ?? this.clock.now());
+      await repos.pings.record(
+        routeId,
+        coordinates,
+        input.at ?? this.clock.now(),
+        input.source ?? 'APP',
+      );
     });
   }
 }

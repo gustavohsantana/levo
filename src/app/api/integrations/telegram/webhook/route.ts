@@ -166,6 +166,7 @@ async function registrarPosicao(
     .useCases.recordPing.execute(rota.id, {
       lat: local.latitude,
       lng: local.longitude,
+      source: 'TELEGRAM',
     })
     /*
      * Falha aqui não pode virar erro para o Telegram: ele reenviaria a mesma

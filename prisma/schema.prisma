@@ -296,6 +296,13 @@ model CourierPing {
   lat        Float
   lng        Float
   recordedAt DateTime
+  /// De onde veio: APP (a tela do motoboy) ou TELEGRAM (ele compartilhou).
+  ///
+  /// Para desenhar o mapa da na mesma. Para responder "por que voces tem minha
+  /// localizacao?" — pergunta que um entregador pode fazer e que a LGPD da a
+  /// ele o direito de fazer — nao da: sao consentimentos diferentes, dados em
+  /// momentos diferentes, e sem isto a resposta seria um encolher de ombros.
+  source     String   @default("APP")
 
   route Route @relation(fields: [routeId], references: [id], onDelete: Cascade)
 
