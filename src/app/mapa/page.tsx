@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/presentation/http/session';
 import { getLojaNoMapa, getRotasNoMapa } from '@/presentation/queries';
 import { CouriersMap } from '@/presentation/ui/patterns/couriers-map';
+import { AutoRefresh } from '@/presentation/ui/patterns/auto-refresh';
 
 export const metadata: Metadata = { title: 'Mapa dos entregadores · Levô' };
 export const dynamic = 'force-dynamic';
@@ -31,5 +32,10 @@ export default async function MapaPage() {
     );
   }
 
-  return <CouriersMap rotas={rotas} loja={loja} cheia />;
+  return (
+    <>
+      <AutoRefresh segundos={10} />
+      <CouriersMap rotas={rotas} loja={loja} cheia />
+    </>
+  );
 }

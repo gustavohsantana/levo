@@ -99,6 +99,7 @@ export async function createOrderAction(
   }
 
   revalidatePath('/dashboard');
+  revalidatePath('/cozinha');
   return { ok: true };
 }
 

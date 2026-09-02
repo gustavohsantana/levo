@@ -6,6 +6,7 @@ import {
   BarChart3,
   Bike,
   BookOpen,
+  ChefHat,
   ClipboardList,
   Plug,
   Settings as SettingsIcon,
@@ -29,6 +30,11 @@ const GRUPOS = [
       { href: '/dashboard', rotulo: 'Pedidos', icone: ClipboardList },
       { href: '/dashboard/entregadores', rotulo: 'Entregadores', icone: Bike },
       { href: '/dashboard/relatorios', rotulo: 'Relatórios', icone: BarChart3 },
+      /*
+       * Abre em aba nova: é a tela do tablet da cozinha, e quem clica daqui
+       * está só conferindo — não quer perder o painel de vista.
+       */
+      { href: '/cozinha', rotulo: 'Cozinha', icone: ChefHat, novaAba: true },
     ],
   },
   {

@@ -51,6 +51,8 @@ export interface Container {
   geocoder: Geocoder;
   whatsapp: WhatsAppLinkBuilder;
   read: <T>(work: (repos: Repositories) => Promise<T>) => Promise<T>;
+  /** Leitura de tela: sem transação, e por isso pode rodar em paralelo. */
+  readOnly: <T>(work: (repos: Repositories) => Promise<T>) => Promise<T>;
   useCases: {
     createOrder: CreateOrder;
     geocodeOrder: GeocodeOrder;
@@ -119,6 +121,7 @@ export function containerFor(establishmentId: string): Container {
     geocoder,
     whatsapp: new WhatsAppLinkBuilder(config.PUBLIC_BASE_URL),
     read: (work) => uow.run(work),
+    readOnly: (work) => uow.readOnly(work),
     useCases: {
       createOrder: new CreateOrder(uow, geocoder, ids, clock, establishmentId),
       geocodeOrder: new GeocodeOrder(uow, geocoder, clock),

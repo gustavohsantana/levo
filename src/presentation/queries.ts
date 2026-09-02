@@ -571,26 +571,70 @@ function diaLocal(date: Date): string {
   }).format(date);
 }
 
+/**
+ * O que a cozinha precisa ver: só o que ainda vai para o fogo ou para o balcão.
+ *
+ * Deliberadamente separado de `getDashboard`: aquela consulta carrega rotas,
+ * motoboys e faixas de taxa, e a tela da cozinha recarrega a cada cinco
+ * segundos. Reaproveitar seria pagar sete consultas por uma pergunta que precisa
+ * de uma.
+ */
+export async function getCozinha(): Promise<OrderView[]> {
+  const { container } = await currentContainer();
+
+  return container.read(async (repos) => {
+    const establishment = await repos.establishments.current();
+    const pendentes = await repos.orders.listPending();
+
+    return pendentes
+      .map((order) =>
+        toOrderView(
+          order,
+          container.whatsapp.dispatchLink(order, establishment.name),
+          container.whatsapp.trackingUrl(order),
+        ),
+      )
+      /*
+       * Fora de rota e não entregue. Pedido que já saiu não é mais assunto da
+       * cozinha, e mostrá-lo empurraria para baixo o que ainda está no fogo.
+       */
+      .filter((v) => v.stage === 'NOVO' || v.stage === 'MONTANDO' || v.stage === 'PRONTO');
+  });
+}
+
 export async function getDashboard() {
   const { session, container } = await currentContainer();
 
-  return container.read(async (repos) => {
+  return container.readOnly(async (repos) => {
     /**
-     * Sequencial, não `Promise.all`.
+     * Em paralelo, e não em fila.
      *
-     * Estas consultas rodam dentro de uma transação interativa do Prisma, e
-     * disparar várias em paralelo sobre o mesmo cliente de transação é um
-     * comportamento que a própria documentação desaconselha — o ganho aparente
-     * não existe (o banco serializa a transação de qualquer jeito) e o risco de
-     * erro sob carga, sim.
+     * Antes isto rodava dentro de uma transação, onde disparar consultas em
+     * paralelo é desaconselhado — então eram sete idas ao banco em série, cerca
+     * de 120 ms cada, com o dono esperando quase um segundo por uma tela que só
+     * lê.
+     *
+     * A transação não comprava nada aqui: se um pedido chega no meio da leitura,
+     * a única consequência é ele aparecer no próximo render, segundos depois.
+     * Fora dela, as sete saem juntas.
      */
-    const establishment = await repos.establishments.current();
-    const feeBands = await repos.establishments.deliveryFeeBands();
-    const pending = await repos.orders.listPending();
-    const todayOrders = await repos.orders.listOfDay(new Date());
-    const activeRoutes = await repos.routes.listActive();
-    const couriers = await repos.couriers.list();
-    const todayRoutes = await repos.routes.listOfDay(new Date());
+    const [
+      establishment,
+      feeBands,
+      pending,
+      todayOrders,
+      activeRoutes,
+      couriers,
+      todayRoutes,
+    ] = await Promise.all([
+      repos.establishments.current(),
+      repos.establishments.deliveryFeeBands(),
+      repos.orders.listPending(),
+      repos.orders.listOfDay(new Date()),
+      repos.routes.listActive(),
+      repos.couriers.list(),
+      repos.routes.listOfDay(new Date()),
+    ]);
 
     /**
      * Uma rota que virou a meia-noite ainda está na rua, mas seus pedidos são
