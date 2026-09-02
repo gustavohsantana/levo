@@ -52,7 +52,16 @@ export async function POST(request: Request) {
    * passa o turno inteiro.
    */
   if (chatId && evento?.location) {
-    await registrarPosicao(String(chatId), evento.location);
+    /*
+     * Falha aqui devolve OK assim mesmo.
+     *
+     * 500 faz o Telegram reenviar a mesma posição indefinidamente — e uma
+     * posição de dez minutos atrás não vale a fila que ela cria. A próxima
+     * chega em segundos.
+     */
+    await registrarPosicao(String(chatId), evento.location).catch((cause) => {
+      console.error('[telegram/webhook] posição não registrada', String(cause));
+    });
     return NextResponse.json({ ok: true });
   }
 
@@ -148,14 +157,29 @@ async function registrarPosicao(
 ): Promise<void> {
   const prisma = getPrismaClient(env().DATABASE_URL);
 
-  const courier = await prisma.courier.findFirst({
+  /*
+   * `findUnique`, e não `findFirst`.
+   *
+   * O tenant-guard recusa leitura de modelo escopado sem `establishmentId` — e
+   * aqui não há sessão, então não temos um. O caminho é o mesmo que a tela do
+   * motoboy usa: achar por uma chave única primeiro, e a partir dela escopar
+   * todo o resto.
+   *
+   * Sem isso o webhook devolvia 500 e o Telegram guardava a posição para
+   * reenviar, sem nunca conseguir entregar.
+   */
+  const courier = await prisma.courier.findUnique({
     where: { telegramChatId: chatId },
     select: { id: true, establishmentId: true },
   });
   if (!courier) return;
 
   const rota = await prisma.route.findFirst({
-    where: { courierId: courier.id, status: { in: ['PLANNED', 'IN_PROGRESS'] } },
+    where: {
+      establishmentId: courier.establishmentId,
+      courierId: courier.id,
+      status: { in: ['PLANNED', 'IN_PROGRESS'] },
+    },
     orderBy: { createdAt: 'desc' },
     select: { id: true },
   });

@@ -164,7 +164,12 @@ model Courier {
   /// conversa, e essa e justamente a regra que torna o canal seguro — ninguem
   /// recebe mensagem de quem nao autorizou, e por isso ninguem e banido por
   /// mandar.
-  telegramChatId      String?
+  /// Unico: uma conversa do Telegram pertence a um entregador so.
+  ///
+  /// A unicidade nao e decoracao — ela permite `findUnique`, que e como o
+  /// webhook descobre de quem e a posicao sem ja saber o estabelecimento. O
+  /// tenant-guard recusa `findFirst` sem escopo, e com razao.
+  telegramChatId      String?         @unique
   /// Segredo do convite. Vive no link `t.me/bot?start=<isto>` e some no uso.
   telegramInviteCode  String?         @unique
   createdAt       DateTime @default(now())
