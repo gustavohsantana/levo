@@ -579,6 +579,41 @@ function diaLocal(date: Date): string {
  * segundos. Reaproveitar seria pagar sete consultas por uma pergunta que precisa
  * de uma.
  */
+/** O que o sino da barra lateral precisa saber. */
+export interface PedidoNovoView {
+  id: string;
+  cliente: string;
+  valorCentavos: number;
+  criadoEm: string;
+  origem: OrderView['source'];
+}
+
+/**
+ * Só a fila de espera, e só o que cabe num balão.
+ *
+ * Consultado de dez em dez segundos por toda tela do painel, então carrega o
+ * mínimo: nada de itens, links de WhatsApp ou rota. Quem quer o pedido inteiro
+ * clica e vai para Pedidos.
+ */
+export async function getPedidosNovos(establishmentId: string): Promise<PedidoNovoView[]> {
+  const container = containerFor(establishmentId);
+
+  return container.read(async (repos) => {
+    const pendentes = await repos.orders.listPending();
+
+    return pendentes
+      // `stage` é a regra do domínio; repeti-la aqui é como as duas se separam.
+      .filter((order) => order.stage === 'NOVO')
+      .map((order) => ({
+        id: order.id,
+        cliente: order.customerName,
+        valorCentavos: order.amount.cents,
+        criadoEm: order.createdAt.toISOString(),
+        origem: order.source,
+      }));
+  });
+}
+
 export async function getCozinha(): Promise<OrderView[]> {
   const { container } = await currentContainer();
 

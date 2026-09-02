@@ -1,11 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import Link from 'next/link';
 import { Bell, BellOff } from 'lucide-react';
+import { currency, timeAgo } from '../format';
 
 export interface PedidoNaFila {
   id: string;
   cliente: string;
+  /** Só o balão da barra lateral usa. A cozinha manda sem. */
+  valorCentavos?: number;
+  criadoEm?: string;
 }
 
 /**
@@ -71,9 +76,22 @@ function gravarPreferencia(ligado: boolean) {
  * estiver com "não perturbe", e o título da aba é o único que sobrevive à aba
  * escondida — mas só se a pessoa olhar.
  */
-export function SinoDePedidos({ novos }: { novos: PedidoNaFila[] }) {
+export function SinoDePedidos({
+  novos,
+  /**
+   * Contador e balão. Ligado na barra lateral, desligado na cozinha.
+   *
+   * Na cozinha os pedidos já estão todos na tela, em colunas grandes: um balão
+   * repetindo a mesma lista seria ruído em cima do que a pessoa já está vendo.
+   */
+  comLista = false,
+}: {
+  novos: PedidoNaFila[];
+  comLista?: boolean;
+}) {
   const ligado = useSyncExternalStore(assinar, lerPreferencia, () => false);
   const [semSom, setSemSom] = useState(false);
+  const [aberto, setAberto] = useState(false);
 
   /*
    * O que este navegador já viu.
@@ -234,24 +252,127 @@ export function SinoDePedidos({ novos }: { novos: PedidoNaFila[] }) {
 
   const Icone = ligado ? Bell : BellOff;
 
+  if (!comLista) {
+    return (
+      <button
+        type="button"
+        onClick={alternar}
+        aria-pressed={ligado}
+        title={
+          ligado
+            ? 'Avisar quando chegar pedido — clique para desligar'
+            : 'Ligar o aviso sonoro de pedido novo'
+        }
+        className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition hairline ${
+          ligado
+            ? 'bg-accent-soft text-accent-ink'
+            : 'text-ink-faint hover:bg-raised hover:text-ink-muted'
+        }`}
+      >
+        <Icone className="size-3.5 shrink-0" aria-hidden />
+        {ligado ? (semSom ? 'avisos sem som' : 'avisos ligados') : 'avisar de pedido novo'}
+      </button>
+    );
+  }
+
   return (
-    <button
-      type="button"
-      onClick={alternar}
-      aria-pressed={ligado}
-      title={
-        ligado
-          ? 'Avisar quando chegar pedido — clique para desligar'
-          : 'Ligar o aviso sonoro de pedido novo'
-      }
-      className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition hairline ${
-        ligado
-          ? 'bg-accent-soft text-accent-ink'
-          : 'text-ink-faint hover:bg-raised hover:text-ink-muted'
-      }`}
-    >
-      <Icone className="size-3.5 shrink-0" aria-hidden />
-      {ligado ? (semSom ? 'avisos sem som' : 'avisos ligados') : 'avisar de pedido novo'}
-    </button>
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setAberto((v) => !v)}
+        aria-expanded={aberto}
+        aria-haspopup="dialog"
+        title={
+          novos.length === 0
+            ? 'Nenhum pedido esperando'
+            : `${novos.length} ${novos.length === 1 ? 'pedido esperando' : 'pedidos esperando'}`
+        }
+        className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm text-white/75 transition hover:bg-white/10 hover:text-white"
+      >
+        <Icone className="size-4 shrink-0" aria-hidden />
+        Avisos
+        {novos.length > 0 ? (
+          /*
+           * O número conta quem está esperando, não quem chegou agora.
+           *
+           * "Chegaram 2" some sozinho e vira nada; "3 parados na fila" é o que
+           * ainda cobra uma decisão, e é o que faz o dono clicar.
+           */
+          <span className="numeric ml-auto rounded-full bg-white px-1.5 py-0.5 text-[11px] font-semibold leading-none text-accent-deep">
+            {novos.length}
+          </span>
+        ) : null}
+      </button>
+
+      {aberto ? (
+        <>
+          {/*
+            Camada invisível atrás do balão: clicar em qualquer lugar fecha.
+            Sem ela o balão fica preso na tela até acertarem o botão de novo.
+          */}
+          <button
+            type="button"
+            aria-label="Fechar avisos"
+            onClick={() => setAberto(false)}
+            className="fixed inset-0 z-40 cursor-default"
+          />
+
+          <div
+            role="dialog"
+            aria-label="Pedidos esperando"
+            className="absolute left-0 top-full z-50 mt-1 w-72 overflow-hidden rounded-lg bg-surface shadow-lg hairline"
+          >
+            <div className="max-h-80 overflow-y-auto">
+              {novos.length === 0 ? (
+                <p className="px-3 py-4 text-sm text-ink-faint">Nenhum pedido esperando.</p>
+              ) : (
+                novos.map((pedido) => (
+                  <Link
+                    key={pedido.id}
+                    href="/dashboard"
+                    onClick={() => setAberto(false)}
+                    className="flex items-baseline gap-2 px-3 py-2 transition hover:bg-raised"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm text-ink">{pedido.cliente}</span>
+                      {pedido.criadoEm ? (
+                        <span className="text-xs text-ink-faint">{timeAgo(pedido.criadoEm)}</span>
+                      ) : null}
+                    </span>
+                    {pedido.valorCentavos != null ? (
+                      <span className="numeric shrink-0 text-sm text-ink-muted">
+                        {currency(pedido.valorCentavos)}
+                      </span>
+                    ) : null}
+                  </Link>
+                ))
+              )}
+            </div>
+
+            {/*
+              O som mora aqui dentro, e não num botão à parte: é ajuste de uma
+              vez por turno, e não merece um lugar fixo ao lado do que muda o
+              tempo todo.
+            */}
+            <button
+              type="button"
+              onClick={alternar}
+              aria-pressed={ligado}
+              className="flex w-full items-center gap-2 border-t border-line px-3 py-2 text-xs text-ink-muted transition hover:bg-raised"
+            >
+              <Icone className="size-3.5 shrink-0" aria-hidden />
+              {ligado ? (semSom ? 'Tocar som — bloqueado' : 'Tocar som ao chegar') : 'Tocar som ao chegar'}
+              <span
+                className={`ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                  ligado ? 'bg-accent-soft text-accent-ink' : 'bg-line text-ink-faint'
+                }`}
+              >
+                {ligado ? 'ligado' : 'desligado'}
+              </span>
+            </button>
+          </div>
+        </>
+      ) : null}
+    </div>
   );
 }

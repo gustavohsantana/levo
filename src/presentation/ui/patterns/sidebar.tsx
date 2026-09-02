@@ -11,6 +11,7 @@ import {
   Plug,
   Settings as SettingsIcon,
 } from 'lucide-react';
+import { SinoDaBarra } from './sidebar-bell';
 
 /**
  * A navegação do painel, fixa à esquerda.
@@ -94,6 +95,13 @@ export function Sidebar() {
               </Link>
             );
           })}
+
+          {/*
+            O sino fecha a Operação porque é isso que ele é: trabalho chegando.
+            Fora do painel de Pedidos ele é a única coisa que avisa que existe
+            fila — em Catálogo ou Relatórios não há mais nada olhando por isso.
+          */}
+          {grupo.titulo === 'Operação' ? <SinoDaBarra /> : null}
         </div>
       ))}
     </nav>
