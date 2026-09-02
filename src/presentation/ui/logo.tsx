@@ -59,7 +59,21 @@ export function Logo({
 }) {
   return (
     <span className={`inline-flex items-center gap-2 ${className ?? ''}`}>
-      <LogoMark className="size-5 text-accent" />
+      {sobreEscuro ? (
+        /*
+         * Sobre o verde, o símbolo vira recorte numa pastilha branca.
+         *
+         * Solto no fundo escuro ele precisava de uma cor própria e competia com
+         * os itens do menu. Dentro da pastilha o traço é o mesmo verde da
+         * lateral, então a marca não ganha cor nova nenhuma — parece um vazado,
+         * e o único ponto branco puro do painel é justamente onde está a marca.
+         */
+        <span className="inline-flex size-7 items-center justify-center rounded-lg bg-white">
+          <LogoMark className="size-4.5 text-accent-deep" />
+        </span>
+      ) : (
+        <LogoMark className="size-5 text-accent" />
+      )}
       <span
         className={`text-sm font-semibold tracking-tight ${sobreEscuro ? 'text-white' : 'text-ink'}`}
       >
