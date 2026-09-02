@@ -7,7 +7,7 @@ import {
   alternarEntregadorAction,
   salvarEntregadorAction,
 } from '@/presentation/courier-actions';
-import type { CourierView } from '@/presentation/queries';
+import type { CourierView, RotaNoMapa } from '@/presentation/queries';
 import { CouriersMap } from './couriers-map';
 import { Button, EmptyState, Field, Input } from '../primitives';
 
@@ -21,10 +21,12 @@ import { Button, EmptyState, Field, Input } from '../primitives';
 export function Couriers({
   entregadores,
   loja,
+  rotas,
 }: {
   entregadores: CourierView[];
   /** Centro do mapa: é da loja que todo mundo sai. */
   loja: { lat: number; lng: number; nome: string } | null;
+  rotas: RotaNoMapa[];
 }) {
   const [editando, setEditando] = useState<CourierView | null>(null);
   const [criando, setCriando] = useState(false);
@@ -51,7 +53,7 @@ export function Couriers({
         </Button>
       </div>
 
-      {loja ? <CouriersMap entregadores={entregadores} loja={loja} /> : null}
+      {loja ? <CouriersMap rotas={rotas} loja={loja} /> : null}
 
       {criando || editando ? (
         <CourierForm

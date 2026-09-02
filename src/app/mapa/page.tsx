@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/presentation/http/session';
-import { getCouriers, getLojaNoMapa } from '@/presentation/queries';
+import { getLojaNoMapa, getRotasNoMapa } from '@/presentation/queries';
 import { CouriersMap } from '@/presentation/ui/patterns/couriers-map';
 
 export const metadata: Metadata = { title: 'Mapa dos entregadores · Levô' };
@@ -19,7 +19,7 @@ export default async function MapaPage() {
   const session = await getSession();
   if (!session) redirect('/login');
 
-  const [entregadores, loja] = await Promise.all([getCouriers(), getLojaNoMapa()]);
+  const [rotas, loja] = await Promise.all([getRotasNoMapa(), getLojaNoMapa()]);
 
   if (!loja) {
     return (
@@ -31,5 +31,5 @@ export default async function MapaPage() {
     );
   }
 
-  return <CouriersMap entregadores={entregadores} loja={loja} cheia />;
+  return <CouriersMap rotas={rotas} loja={loja} cheia />;
 }

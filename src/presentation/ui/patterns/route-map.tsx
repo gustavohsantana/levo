@@ -11,6 +11,16 @@ export interface MapMarker {
   lng: number;
   label: string;
   kind: 'origin' | 'stop' | 'done' | 'courier' | 'destination';
+  /** O número da parada. Sem ele, o mapa mostra onde, mas não em que ordem. */
+  numero?: number;
+  /** Cor própria — usada para separar um motoboy do outro no mesmo mapa. */
+  cor?: string;
+}
+
+/** Uma rota desenhada no mapa. Várias quando há mais de um motoboy na rua. */
+export interface MapRoute {
+  geometry: string | null;
+  cor: string;
 }
 
 /**
@@ -23,6 +33,7 @@ export interface MapMarker {
 export function RouteMap({
   markers,
   geometry,
+  routes,
   trail,
   className,
   onPick,
@@ -30,6 +41,8 @@ export function RouteMap({
 }: {
   markers: MapMarker[];
   geometry?: string | null;
+  /** Mais de uma rota ao mesmo tempo, cada uma com sua cor. */
+  routes?: MapRoute[];
   trail?: Array<{ lat: number; lng: number }>;
   className?: string;
   /** Quando informado, clicar no mapa escolhe uma coordenada. */
@@ -57,6 +70,14 @@ export function RouteMap({
   }, [onPick]);
 
   const path = useMemo(() => (geometry ? decodePolyline(geometry) : null), [geometry]);
+
+  const caminhos = useMemo(
+    () =>
+      (routes ?? [])
+        .filter((r) => r.geometry)
+        .map((r) => ({ pontos: decodePolyline(r.geometry!), cor: r.cor })),
+    [routes],
+  );
 
   useEffect(() => {
     if (!container.current || map.current) return;
@@ -102,6 +123,32 @@ export function RouteMap({
 
     layer.current.clearLayers();
     const bounds: L.LatLngExpression[] = [];
+
+    /*
+     * Cada motoboy com sua cor, mesmo contorno branco.
+     *
+     * Sem o contorno, duas rotas que se cruzam viram um nó ilegível — e num
+     * sábado elas se cruzam o tempo todo, porque saem todas do mesmo lugar.
+     */
+    for (const caminho of caminhos) {
+      L.polyline(caminho.pontos, {
+        color: MAP_COLORS.routeCasing,
+        weight: 8,
+        opacity: 0.9,
+        lineJoin: 'round',
+        lineCap: 'round',
+      }).addTo(layer.current);
+
+      L.polyline(caminho.pontos, {
+        color: caminho.cor,
+        weight: 4,
+        opacity: 1,
+        lineJoin: 'round',
+        lineCap: 'round',
+      }).addTo(layer.current);
+
+      bounds.push(...caminho.pontos);
+    }
 
     if (path) {
       /**
@@ -178,7 +225,7 @@ export function RouteMap({
     } else if (center) {
       map.current.setView([center.lat, center.lng], 14);
     }
-  }, [markers, path, trail, center]);
+  }, [markers, path, caminhos, trail, center]);
 
   return (
     <div className="relative h-full w-full">
@@ -215,6 +262,9 @@ const STYLES: Record<
  * O nome do lugar vive no `title` e no popup, que é onde ele é legível.
  */
 function glyphFor(marker: MapMarker): string {
+  // O número manda: saber a ordem vale mais que saber o tipo da parada.
+  if (marker.numero !== undefined) return String(marker.numero);
+
   switch (marker.kind) {
     case 'courier':
       return '🛵';
@@ -231,7 +281,14 @@ function glyphFor(marker: MapMarker): string {
 }
 
 function iconFor(marker: MapMarker): L.DivIcon {
-  const style = STYLES[marker.kind];
+  const base = STYLES[marker.kind];
+  /*
+   * A cor do motoboy vence a do tipo — menos na parada já entregue, que fica
+   * apagada de propósito: ela não é mais trabalho a fazer, e destacá-la com a
+   * cor viva competiria com as que ainda importam.
+   */
+  const style =
+    marker.cor && marker.kind !== 'done' ? { ...base, bg: marker.cor, fg: MAP_COLORS.onDark } : base;
   const font = marker.kind === 'courier' ? 16 : 12;
 
   return L.divIcon({

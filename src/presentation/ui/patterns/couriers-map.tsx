@@ -2,9 +2,9 @@
 
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { Maximize2, Bike } from 'lucide-react';
-import type { CourierView } from '@/presentation/queries';
-import type { MapMarker } from './route-map';
+import { Bike, Maximize2 } from 'lucide-react';
+import type { RotaNoMapa } from '@/presentation/queries';
+import type { MapMarker, MapRoute } from './route-map';
 import { timeAgo } from '../format';
 
 // Leaflet mexe em `window` na importação: só carrega no navegador.
@@ -14,33 +14,70 @@ const RouteMap = dynamic(() => import('./route-map').then((m) => m.RouteMap), {
 });
 
 /**
+ * Cores dos motoboys no mapa.
+ *
+ * Escolhidas para se distinguirem também para quem não separa vermelho de
+ * verde — a forma mais comum de daltonismo. Por isso variam em luminosidade,
+ * não só em matiz: numa impressão em preto e branco, ainda dá para diferenciar.
+ */
+const CORES = [
+  'oklch(56% 0.16 258)',
+  'oklch(65% 0.19 35)',
+  'oklch(48% 0.14 300)',
+  'oklch(70% 0.15 195)',
+  'oklch(58% 0.17 145)',
+  'oklch(62% 0.16 85)',
+] as const;
+
+/**
  * Onde estão os motoboys, agora.
  *
  * A tela que o dono deixa aberta no sábado à noite. Centrada na loja porque é
- * dali que todo mundo sai — centrar na média das posições faria o mapa pular a
- * cada ping, e um mapa que se move sozinho é ilegível.
+ * dali que todos saem — centrar na média das posições faria o mapa pular a cada
+ * ping, e mapa que se move sozinho é ilegível.
  */
 export function CouriersMap({
-  entregadores,
+  rotas,
   loja,
   cheia = false,
 }: {
-  entregadores: CourierView[];
+  rotas: RotaNoMapa[];
   loja: { lat: number; lng: number; nome: string };
   /** Em tela cheia some o cabeçalho e o botão de expandir. */
   cheia?: boolean;
 }) {
-  const emRota = entregadores.filter((e) => e.posicao);
+  const comCor = rotas.map((rota, i) => ({ ...rota, cor: CORES[i % CORES.length] }));
 
   const markers: MapMarker[] = [
     { lat: loja.lat, lng: loja.lng, label: loja.nome, kind: 'origin' },
-    ...emRota.map((e) => ({
-      lat: e.posicao!.lat,
-      lng: e.posicao!.lng,
-      label: e.name,
-      kind: 'courier' as const,
-    })),
   ];
+
+  for (const rota of comCor) {
+    for (const parada of rota.paradas) {
+      markers.push({
+        lat: parada.lat,
+        lng: parada.lng,
+        /* O rótulo carrega o motoboy: com três rotas no mapa, "3. Ana" sozinho
+         * não diz de quem é a terceira parada. */
+        label: `${parada.numero}. ${parada.cliente} — ${rota.courierName}`,
+        kind: parada.entregue ? 'done' : 'stop',
+        numero: parada.numero,
+        cor: rota.cor,
+      });
+    }
+
+    if (rota.posicao) {
+      markers.push({
+        lat: rota.posicao.lat,
+        lng: rota.posicao.lng,
+        label: rota.courierName,
+        kind: 'courier',
+        cor: rota.cor,
+      });
+    }
+  }
+
+  const routes: MapRoute[] = comCor.map((r) => ({ geometry: r.geometry, cor: r.cor }));
 
   return (
     <section className={cheia ? 'flex h-dvh flex-col' : 'rounded-lg bg-surface hairline'}>
@@ -49,9 +86,7 @@ export function CouriersMap({
           <div className="flex items-center gap-2">
             <Bike className="size-4 text-ink-faint" aria-hidden />
             <h2 className="text-sm font-medium text-ink">
-              {emRota.length === 0
-                ? 'Ninguém em rota agora'
-                : `${emRota.length} em rota`}
+              {rotas.length === 0 ? 'Ninguém em rota agora' : `${rotas.length} em rota`}
             </h2>
           </div>
 
@@ -67,22 +102,42 @@ export function CouriersMap({
         </div>
       )}
 
-      <div className={cheia ? 'flex-1' : 'h-72 overflow-hidden rounded-b-lg'}>
-        <RouteMap markers={markers} className="h-full w-full" />
+      <div className={cheia ? 'flex-1' : 'h-80 overflow-hidden'}>
+        <RouteMap
+          markers={markers}
+          routes={routes}
+          center={{ lat: loja.lat, lng: loja.lng }}
+          className="h-full w-full"
+        />
       </div>
 
       {/*
-        A lista embaixo do mapa não é redundante: pino sem nome legível obriga o
-        dono a passar o mouse um por um, e no celular nem isso existe.
+        A legenda não é enredo: o pino mostra o número, não de quem ele é. Sem
+        ela, saber que a rota azul é do Jefferson exige clicar num pino.
       */}
-      {emRota.length > 0 ? (
-        <ul className="flex flex-wrap gap-x-4 gap-y-1 px-4 py-2.5 text-xs text-ink-muted">
-          {emRota.map((e) => (
-            <li key={e.id}>
-              <span className="text-ink">{e.name}</span>{' '}
-              <span suppressHydrationWarning>{timeAgo(e.posicao!.at)}</span>
-            </li>
-          ))}
+      {comCor.length > 0 ? (
+        <ul className="flex flex-wrap gap-x-5 gap-y-1.5 px-4 py-3 text-xs">
+          {comCor.map((rota) => {
+            const feitas = rota.paradas.filter((p) => p.entregue).length;
+            return (
+              <li key={rota.routeId} className="flex items-center gap-1.5">
+                <span
+                  aria-hidden
+                  className="size-2.5 shrink-0 rounded-full"
+                  style={{ background: rota.cor }}
+                />
+                <span className="text-ink">{rota.courierName}</span>
+                <span className="text-ink-faint">
+                  {feitas}/{rota.paradas.length}
+                  {rota.posicao ? (
+                    <> · <span suppressHydrationWarning>{timeAgo(rota.posicao.at)}</span></>
+                  ) : (
+                    <> · sem posição</>
+                  )}
+                </span>
+              </li>
+            );
+          })}
         </ul>
       ) : null}
     </section>

@@ -222,6 +222,82 @@ export async function getOptionGroups(): Promise<OptionGroupView[]> {
   });
 }
 
+export interface RotaNoMapa {
+  routeId: string;
+  courierId: string;
+  courierName: string;
+  /** Traçado da rota, como o roteirizador devolveu. */
+  geometry: string | null;
+  posicao: { lat: number; lng: number; at: string } | null;
+  paradas: Array<{
+    numero: number;
+    lat: number;
+    lng: number;
+    cliente: string;
+    entregue: boolean;
+  }>;
+}
+
+/**
+ * Todas as rotas em andamento, para o mapa do dono.
+ *
+ * Aqui vai o traçado inteiro e a ordem das paradas — o oposto do que o cliente
+ * recebe. A diferença não é de tela, é de quem está olhando: o dono conhece
+ * todos os endereços porque são pedidos dele; o cliente conhece só o próprio.
+ */
+export async function getRotasNoMapa(): Promise<RotaNoMapa[]> {
+  const { container } = await currentContainer();
+
+  return container.read(async (repos) => {
+    const ativas = await repos.routes.listActive();
+    if (ativas.length === 0) return [];
+
+    const couriers = await repos.couriers.list();
+    const nomes = new Map(couriers.map((c) => [c.id, c.name]));
+
+    /*
+     * Pedidos e posições em lote. Uma consulta por rota transformaria o mapa de
+     * um sábado com três motoboys em três idas ao banco a cada atualização.
+     */
+    const orders = await repos.orders.findManyByIds(
+      ativas.flatMap((r) => r.stops.map((s) => s.orderId)),
+    );
+    const porPedido = new Map(orders.map((o) => [o.id, o]));
+
+    const posicoes = await Promise.all(
+      ativas.map(async (r) => [r.id, await repos.pings.lastPing(r.id)] as const),
+    );
+    const ultima = new Map(posicoes);
+
+    return ativas.map((rota) => {
+      const ping = ultima.get(rota.id);
+
+      return {
+        routeId: rota.id,
+        courierId: rota.courierId,
+        courierName: nomes.get(rota.courierId) ?? '—',
+        geometry: rota.geometry,
+        posicao: ping ? { ...ping.coordinates.toJSON(), at: ping.at.toISOString() } : null,
+        paradas: rota.stops
+          .map((stop) => {
+            const pedido = porPedido.get(stop.orderId);
+            const c = pedido?.coordinates?.toJSON();
+            if (!c) return null;
+            return {
+              numero: stop.position,
+              lat: c.lat,
+              lng: c.lng,
+              cliente: pedido!.customerName,
+              entregue: stop.status !== 'PENDING',
+            };
+          })
+          .filter((x): x is NonNullable<typeof x> => x !== null)
+          .sort((a, b) => a.numero - b.numero),
+      };
+    });
+  });
+}
+
 /** Onde a loja fica. É o centro do mapa dos entregadores. */
 export async function getLojaNoMapa(): Promise<{ lat: number; lng: number; nome: string } | null> {
   const { container } = await currentContainer();
