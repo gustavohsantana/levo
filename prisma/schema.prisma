@@ -152,6 +152,15 @@ model Courier {
   payPerDeliveryCents Int             @default(0)
   /// A diaria garantida, contada uma vez por dia em que ele rodou.
   payDailyCents       Int             @default(0)
+  /// A conversa dele com o bot do Telegram.
+  ///
+  /// Nula ate o motoboy tocar no convite: bot do Telegram nao pode iniciar
+  /// conversa, e essa e justamente a regra que torna o canal seguro — ninguem
+  /// recebe mensagem de quem nao autorizou, e por isso ninguem e banido por
+  /// mandar.
+  telegramChatId      String?
+  /// Segredo do convite. Vive no link `t.me/bot?start=<isto>` e some no uso.
+  telegramInviteCode  String?         @unique
   createdAt       DateTime @default(now())
 
   establishment Establishment    @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
@@ -431,6 +440,10 @@ model CourierNotification {
   id              String    @id @default(uuid())
   establishmentId String
   routeId         String
+  /// Por onde vai. Um canal por rota; trocar de canal e trocar de adaptador.
+  channel         String    @default("WHATSAPP")
+  /// Endereco no canal: telefone no WhatsApp, chat id no Telegram.
+  destination     String    @default("")
   /// So digitos, com DDI. E o que a WAHA espera antes do @c.us.
   phone           String
   text            String

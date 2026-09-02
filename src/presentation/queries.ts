@@ -344,7 +344,13 @@ export async function getCourierMonth(courierId: string, month: Date) {
 
     return {
       courier: courier
-        ? { id: courier.id, name: courier.name, phone: courier.phone.formatted, active: courier.active }
+        ? {
+            id: courier.id,
+            name: courier.name,
+            phone: courier.phone.formatted,
+            active: courier.active,
+            telegramChatId: courier.telegramChatId,
+          }
         : null,
       days: [...porDia.values()].sort((a, b) => a.date.localeCompare(b.date)),
       routes: detalhes,

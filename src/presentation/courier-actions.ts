@@ -1,5 +1,6 @@
 'use server';
 
+import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { containerFor } from '@/composition-root';
 import { saveCourierSchema } from '@/application/dto/schemas';
@@ -76,6 +77,56 @@ export async function salvarAcordoAction(
     revalidatePath(`/dashboard/entregadores/${courierId}`);
     revalidatePath('/dashboard/relatorios');
     return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+/**
+ * Gera o convite do Telegram para um motoboy.
+ *
+ * O bot não pode iniciar conversa — e é essa regra que torna o canal seguro.
+ * Então o caminho é o inverso: o dono manda este link, o motoboy toca, e a
+ * partir daí o aviso é automático para sempre.
+ *
+ * O código é de uso único e morre quando ele toca. Ele viaja por WhatsApp, é
+ * encaminhado, fica no histórico de grupo — se continuasse valendo, qualquer um
+ * que o encontrasse passaria a receber as rotas daquele motoboy, com endereço
+ * de cliente dentro.
+ */
+export async function gerarConviteTelegramAction(
+  courierId: string,
+): Promise<{ ok: true; link: string } | { ok: false; error: string }> {
+  try {
+    const session = await requireSession();
+    const { env } = await import('@/env');
+    const { getPrismaClient } = await import('@/infrastructure/persistence/prisma/client');
+    const { TelegramSender } = await import('@/infrastructure/messaging/telegram');
+
+    const token = env().TELEGRAM_BOT_TOKEN;
+    if (!token) {
+      return { ok: false, error: 'O bot do Telegram ainda não foi configurado.' };
+    }
+
+    const prisma = getPrismaClient(env().DATABASE_URL);
+    const courier = await prisma.courier.findFirst({
+      where: { id: courierId, establishmentId: session.establishmentId },
+      select: { id: true },
+    });
+    if (!courier) return { ok: false, error: 'Entregador não encontrado.' };
+
+    const usuario = await new TelegramSender(token).username();
+    if (!usuario) return { ok: false, error: 'Não consegui falar com o Telegram agora.' };
+
+    // 128 bits: o código é a única coisa entre um estranho e as rotas dele.
+    const codigo = randomUUID().replace(/-/g, '');
+    await prisma.courier.update({
+      where: { id: courier.id },
+      data: { telegramInviteCode: codigo, telegramChatId: null },
+    });
+
+    revalidatePath(`/dashboard/entregadores/${courierId}`);
+    return { ok: true, link: `https://t.me/${usuario}?start=${codigo}` };
   } catch (cause) {
     return { ok: false, error: toFormError(cause) };
   }

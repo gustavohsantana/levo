@@ -66,6 +66,16 @@ const schema = z.object({
    * presa no localhost da VM — e é assim que deve ser: quem tem a chave manda
    * mensagem pelo WhatsApp da loja.
    */
+  /*
+   * Telegram: o canal automático que o motoboy autoriza uma vez.
+   *
+   * Diferente da WAHA, isto roda na Vercel — a API é pública e não precisa de
+   * ponte nenhuma.
+   */
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
+  /** Confere que o webhook veio do Telegram, e não de quem achou o endereço. */
+  TELEGRAM_WEBHOOK_SECRET: z.string().optional(),
+
   WAHA_URL: z.string().optional(),
   WAHA_API_KEY: z.string().optional(),
   WAHA_SESSION: z.string().default('default'),

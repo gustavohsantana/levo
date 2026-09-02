@@ -13,6 +13,7 @@ export const CourierMapper = {
       row.name,
       PhoneNumber.create(row.phone),
       row.active,
+      row.telegramChatId,
     );
   },
 

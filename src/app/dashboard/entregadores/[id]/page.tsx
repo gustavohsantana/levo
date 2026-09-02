@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { getCourierMonth } from '@/presentation/queries';
 import { CourierMonth } from '@/presentation/ui/patterns/courier-month';
 import { CourierPayForm } from '@/presentation/ui/patterns/courier-pay-form';
+import { CourierTelegram } from '@/presentation/ui/patterns/courier-telegram';
 
 export const metadata: Metadata = { title: 'Entregador · Levô' };
 export const dynamic = 'force-dynamic';
@@ -41,6 +42,11 @@ export default async function EntregadorPage({
         quanto o motoboy rodou é quem vai acertar com ele.
       */}
       <CourierPayForm courierId={dados.courier.id} inicial={dados.acordo} />
+
+      <CourierTelegram
+        courierId={dados.courier.id}
+        conectado={Boolean(dados.courier.telegramChatId)}
+      />
     </div>
   );
 }

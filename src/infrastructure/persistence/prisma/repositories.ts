@@ -530,13 +530,21 @@ export class PrismaCourierNotificationOutbox extends TenantScoped {
    * `routeId` e unico: replanejar a mesma rota nao manda dois WhatsApp, e a
    * idempotencia sai do banco em vez de virar logica aqui.
    */
-  async enqueue(input: { routeId: string; phone: string; text: string }): Promise<void> {
+  async enqueue(input: {
+    routeId: string;
+    channel: 'TELEGRAM' | 'WHATSAPP';
+    destination: string;
+    text: string;
+  }): Promise<void> {
     await this.tx.courierNotification.upsert({
       where: { routeId: input.routeId },
       create: {
         establishmentId: this.establishmentId,
         routeId: input.routeId,
-        phone: input.phone,
+        channel: input.channel,
+        destination: input.destination,
+        // `phone` continua preenchido para o WhatsApp; no Telegram nao ha um.
+        phone: input.channel === 'WHATSAPP' ? input.destination : '',
         text: input.text,
       },
       update: {},

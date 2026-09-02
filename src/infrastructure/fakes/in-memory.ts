@@ -55,7 +55,10 @@ export class InMemoryDatabase {
   autoConfirmOrders = false;
   whatsappRoutes = false;
   categoryOrder: string[] = [];
-  notificacoes = new Map<string, { routeId: string; phone: string; text: string }>();
+  notificacoes = new Map<
+    string,
+    { routeId: string; channel: 'TELEGRAM' | 'WHATSAPP'; destination: string; text: string }
+  >();
   acordos = new Map<string, CourierPayAgreement>();
   products = new Map<string, Product>();
   deliveryFeeBands: DeliveryFeeBand[] = [];
@@ -365,7 +368,12 @@ function buildRepositories(db: InMemoryDatabase): Repositories {
   };
 
   const courierNotifications = {
-    async enqueue(input: { routeId: string; phone: string; text: string }) {
+    async enqueue(input: {
+      routeId: string;
+      channel: 'TELEGRAM' | 'WHATSAPP';
+      destination: string;
+      text: string;
+    }) {
       db.notificacoes.set(input.routeId, input);
     },
   };

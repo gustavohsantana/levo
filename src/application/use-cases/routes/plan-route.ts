@@ -174,23 +174,41 @@ export class PlanRoute {
        * despacho junto.
        */
       if (this.baseUrl) {
+        const courier = await repos.couriers.findById(input.courierId);
         const loja = await repos.establishments.current();
-        if (loja.whatsappRoutes) {
-          const courier = await repos.couriers.findById(input.courierId);
-          const telefone = courier ? telefoneParaWhatsApp(courier.phone.value) : null;
 
-          if (courier && telefone) {
-            await repos.courierNotifications.enqueue({
-              routeId: route.id,
-              phone: telefone,
-              text: mensagemDaRota({
-                courierName: courier.name,
-                storeName: loja.name,
-                stops: stops.length,
-                link: `${this.baseUrl.replace(/\/$/, '')}/m/${route.accessToken}`,
-              }),
-            });
-          }
+        /*
+         * O Telegram não passa pelo interruptor da loja.
+         *
+         * O motoboy tocou no convite: o consentimento dele É a autorização, e
+         * é o que torna o canal seguro. Exigir um segundo "sim" do dono para
+         * uma mensagem que o destinatário já pediu seria burocracia sem ganho.
+         *
+         * O WhatsApp continua atrás do interruptor porque lá é o contrário:
+         * ninguém autorizou nada, e quem paga a conta de um envio mal visto é
+         * o número da loja.
+         */
+        const canal =
+          courier?.telegramChatId
+            ? { channel: 'TELEGRAM' as const, destination: courier.telegramChatId }
+            : loja.whatsappRoutes && courier
+              ? (() => {
+                  const tel = telefoneParaWhatsApp(courier.phone.value);
+                  return tel ? { channel: 'WHATSAPP' as const, destination: tel } : null;
+                })()
+              : null;
+
+        if (courier && canal) {
+          await repos.courierNotifications.enqueue({
+            routeId: route.id,
+            ...canal,
+            text: mensagemDaRota({
+              courierName: courier.name,
+              storeName: loja.name,
+              stops: stops.length,
+              link: `${this.baseUrl.replace(/\/$/, '')}/m/${route.accessToken}`,
+            }),
+          });
         }
       }
 

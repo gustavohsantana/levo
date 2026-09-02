@@ -13,6 +13,7 @@ import { AiqfomeOrderSource } from '../src/infrastructure/integrations/aiqfome/a
 import { aiqfomeAccessTokenFor } from '../src/infrastructure/integrations/aiqfome/factory';
 import { marketplaceCommandsFor } from '../src/infrastructure/integrations/marketplace-factory';
 import { WahaSender } from '../src/infrastructure/messaging/waha';
+import { TelegramSender } from '../src/infrastructure/messaging/telegram';
 import type { MarketplaceCommands, OrderSource } from '../src/core';
 
 /**
@@ -344,8 +345,6 @@ const MAX_TENTATIVAS_WHATSAPP = 4;
  * consulta ao banco a cada 30 segundos por ele.
  */
 async function drenarWhatsApp(): Promise<void> {
-  if (!config.WAHA_URL || !config.WAHA_API_KEY) return;
-
   const prisma = getPrismaClient(config.DATABASE_URL);
 
   const pendentes = await prisma.courierNotification.findMany({
@@ -355,6 +354,40 @@ async function drenarWhatsApp(): Promise<void> {
   });
 
   if (pendentes.length === 0) return;
+
+  /*
+   * O Telegram vai primeiro e sozinho: ele não depende de VM, de sessão nem de
+   * QR — é uma chamada HTTPS que ou entrega ou falha. Misturar os dois na mesma
+   * verificação faria uma sessão de WhatsApp caída segurar mensagem de Telegram
+   * que sairia sem problema.
+   */
+  const doTelegram = pendentes.filter((a) => a.channel === 'TELEGRAM');
+  if (doTelegram.length > 0 && config.TELEGRAM_BOT_TOKEN) {
+    const bot = new TelegramSender(config.TELEGRAM_BOT_TOKEN);
+    for (const aviso of doTelegram) {
+      try {
+        await bot.sendText(aviso.destination, aviso.text);
+        await prisma.courierNotification.update({
+          where: { id: aviso.id },
+          data: { sentAt: new Date(), attempts: { increment: 1 }, lastError: null },
+        });
+        logger.info({ routeId: aviso.routeId }, 'telegram.rota_enviada');
+      } catch (cause) {
+        await prisma.courierNotification.update({
+          where: { id: aviso.id },
+          data: { attempts: { increment: 1 }, lastError: String(cause).slice(0, 500) },
+        });
+        logger.error(
+          { routeId: aviso.routeId, cause: String(cause) },
+          'telegram.envio_falhou',
+        );
+      }
+    }
+  }
+
+  const doWhatsapp = pendentes.filter((a) => a.channel === 'WHATSAPP');
+  if (doWhatsapp.length === 0) return;
+  if (!config.WAHA_URL || !config.WAHA_API_KEY) return;
 
   const waha = new WahaSender({
     baseUrl: config.WAHA_URL,
@@ -371,13 +404,13 @@ async function drenarWhatsApp(): Promise<void> {
    */
   const status = await waha.sessionStatus().catch(() => 'INDISPONIVEL');
   if (status !== 'WORKING') {
-    logger.warn({ status, pendentes: pendentes.length }, 'whatsapp.sessao_fora');
+    logger.warn({ status, pendentes: doWhatsapp.length }, 'whatsapp.sessao_fora');
     return;
   }
 
-  for (const aviso of pendentes) {
+  for (const aviso of doWhatsapp) {
     try {
-      await waha.sendText(aviso.phone, aviso.text);
+      await waha.sendText(aviso.destination, aviso.text);
       await prisma.courierNotification.update({
         where: { id: aviso.id },
         data: { sentAt: new Date(), attempts: { increment: 1 }, lastError: null },

@@ -75,7 +75,8 @@ describe('enfileirar a rota', () => {
     expect(aviso.text).toContain('2 entregas');
     expect(aviso.text).toContain(`/m/${rota.accessToken}`);
     // Só dígitos com DDI: é o que a WAHA espera antes do @c.us.
-    expect(aviso.phone).toMatch(/^55\d{10,11}$/);
+    expect(aviso.destination).toMatch(/^55\d{10,11}$/);
+    expect(aviso.channel).toBe('WHATSAPP');
   });
 
   it('sem endereço público não enfileira link quebrado', async () => {

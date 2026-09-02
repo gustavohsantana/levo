@@ -213,7 +213,12 @@ export interface PaymentRepository {
  * jeito, e a mensagem tenta de novo no ciclo seguinte.
  */
 export interface CourierNotificationOutbox {
-  enqueue(input: { routeId: string; phone: string; text: string }): Promise<void>;
+  enqueue(input: {
+    routeId: string;
+    channel: 'TELEGRAM' | 'WHATSAPP';
+    destination: string;
+    text: string;
+  }): Promise<void>;
 }
 
 export interface Repositories {
