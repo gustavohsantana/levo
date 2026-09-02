@@ -89,6 +89,9 @@ export function CourierApp({
    */
   const [focoManual, setFocoManual] = useState<string | null>(null);
   const [replanejando, setReplanejando] = useState(false);
+  /** O aparelho recusou a localização nesta sessão. */
+  const [recusou, setRecusou] = useState(false);
+  const [avisoLocal, setAvisoLocal] = useState<string | null>(null);
   const current = pending.find((stop) => stop.id === focoManual) ?? pending[0] ?? null;
   const done = stops.length - pending.length;
   // Só o que falta entregar, na ordem que o OSRM definiu. Recalcular a cada
@@ -248,6 +251,46 @@ export function CourierApp({
     });
   }
 
+  /**
+   * Voltar a permitir a localização depois de ter recusado.
+   *
+   * O navegador não pergunta de novo: uma vez negada, a permissão fica gravada
+   * no site e só o próprio usuário reverte, nas configurações. Um botão que
+   * "tenta de novo" e falha calado seria pior que botão nenhum — então ele
+   * tenta, e quando o navegador recusa na hora, a tela explica o caminho.
+   */
+  function pedirLocalizacaoDeNovo() {
+    setAvisoLocal(null);
+
+    if (!navigator.geolocation) {
+      setAvisoLocal('Este aparelho não informa a localização.');
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      () => {
+        setAvisoLocal('Pronto, localização liberada.');
+        setRecusou(false);
+      },
+      (erro) => {
+        if (erro.code === erro.PERMISSION_DENIED) {
+          /*
+           * O navegador guardou o "não". A instrução precisa ser específica:
+           * "libere nas configurações" não diz onde, e quem está de capacete
+           * não vai procurar.
+           */
+          setAvisoLocal(
+            'O navegador guardou a recusa. Toque no cadeado ao lado do endereço, '
+              + 'em Permissões, e libere a Localização. Depois volte e toque aqui de novo.',
+          );
+        } else {
+          setAvisoLocal('Não consegui a posição agora. Tente num lugar mais aberto.');
+        }
+      },
+      { enableHighAccuracy: false, timeout: 8_000 },
+    );
+  }
+
   async function resolveStop(stop: DriverStopView, outcome: 'DELIVERED' | 'FAILED') {
     const reason = outcome === 'FAILED' ? window.prompt('O que aconteceu?') : null;
     if (outcome === 'FAILED' && reason === null) return;
@@ -367,6 +410,28 @@ export function CourierApp({
           </span>
         ) : null}
       </header>
+
+      {/*
+        A recusa vira um convite, não um beco.
+
+        Ele pode ter negado sem querer, ou mudado de ideia. Sem um caminho de
+        volta na tela, a única saída seria alguém explicar por telefone como
+        mexer nas permissões do navegador.
+      */}
+      {recusou || avisoLocal ? (
+        <div className="border-b bg-amber-50 px-4 py-2.5 text-xs text-amber-950">
+          <p className="leading-relaxed">
+            {avisoLocal ?? 'A loja não está recebendo sua localização.'}
+          </p>
+          <button
+            type="button"
+            onClick={pedirLocalizacaoDeNovo}
+            className="mt-1.5 font-medium underline underline-offset-2"
+          >
+            Ativar localização
+          </button>
+        </div>
+      ) : null}
 
       {/* O motivo do bloqueio fica visível, não só no title do ícone. */}
       {blocked && pendingSync > 0 ? (

@@ -21,6 +21,7 @@ import {
 } from '@/presentation/menu-session';
 import { Button, Field, Input, Select, Textarea } from '../primitives';
 import { currency } from '../format';
+import { mesmaRua } from '@/core/services/endereco';
 
 /**
  * Segunda etapa: dados, endereço e forma de pagamento.
@@ -57,6 +58,8 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
    * formulário que faz desistir.
    */
   const [retirada, setRetirada] = useState(false);
+  /** A rua que o CEP aponta, quando difere da que a pessoa escreveu. */
+  const [sugestaoRua, setSugestaoRua] = useState<string | null>(null);
   const [cep, setCep] = useState('');
   const [buscandoCep, setBuscandoCep] = useState(false);
   const [avisoCep, setAvisoCep] = useState<string | null>(null);
@@ -134,9 +137,28 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
       }
       cidadeEditada.current = true;
       setCidade(r.endereco.cidade);
-      if (r.endereco.bairro) setBairro(r.endereco.bairro);
-      if (r.endereco.rua) setRua(r.endereco.rua);
-      if (!r.endereco.rua) {
+
+      /*
+       * Preenche o que está vazio; NUNCA troca o que a pessoa escreveu.
+       *
+       * Custou um pedido: o cliente digitou a rua certa, depois preencheu o CEP
+       * com um dígito errado, e nós substituímos calado. Em loteamento novo os
+       * CEPs consecutivos são ruas paralelas — 37558-721 e 37558-722 são a rua
+       * de trás e a da frente —, então o erro produz um endereço plausível, que
+       * ninguém confere, e o motoboy descobre no portão.
+       *
+       * Divergência vira pergunta, não substituição. Quem digitou está na
+       * própria casa; o CEP é palpite de um dígito.
+       */
+      if (r.endereco.bairro && !bairro.trim()) setBairro(r.endereco.bairro);
+
+      const ruaAtual = rua.trim();
+      if (r.endereco.rua && !ruaAtual) {
+        setRua(r.endereco.rua);
+        setAvisoCep(null);
+      } else if (r.endereco.rua && !mesmaRua(ruaAtual, r.endereco.rua)) {
+        setSugestaoRua(r.endereco.rua);
+      } else if (!r.endereco.rua) {
         setAvisoCep('Este CEP cobre a cidade toda — informe a rua.');
       }
     } finally {
@@ -418,8 +440,46 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
               required
               autoComplete="address-line1"
               value={rua}
-              onChange={(evento) => setRua(evento.target.value)}
+              onChange={(evento) => {
+                setRua(evento.target.value);
+                // Ele mesmo está corrigindo: a sugestão perdeu o sentido.
+                setSugestaoRua(null);
+              }}
             />
+
+            {/*
+              O CEP discorda do que a pessoa escreveu.
+
+              Quem digitou está na própria casa; o CEP é palpite de um dígito.
+              Então a divergência vira pergunta, e a escolha é dela.
+            */}
+            {sugestaoRua ? (
+              <div className="mt-1.5 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                <p className="leading-relaxed">
+                  Este CEP aponta para <strong>{sugestaoRua}</strong>. Confira se você digitou
+                  o CEP certo — ruas vizinhas costumam ter CEPs quase iguais.
+                </p>
+                <div className="mt-1.5 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRua(sugestaoRua);
+                      setSugestaoRua(null);
+                    }}
+                    className="font-medium underline underline-offset-2"
+                  >
+                    Usar a do CEP
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSugestaoRua(null)}
+                    className="text-amber-900/70 underline underline-offset-2"
+                  >
+                    Manter a minha
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </Field>
           <Field label="Número">
             <Input
