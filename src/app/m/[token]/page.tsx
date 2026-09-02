@@ -19,5 +19,5 @@ export default async function CourierPage({ params }: { params: Promise<{ token:
 
   if (!route) notFound();
 
-  return <CourierApp token={token} route={route} />;
+  return <CourierApp token={token} route={route} exigeCodigo={route.exigeCodigo} />;
 }

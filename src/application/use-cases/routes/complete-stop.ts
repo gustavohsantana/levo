@@ -5,6 +5,7 @@ import {
   type Order,
   type UnitOfWork,
 } from '@/core';
+import { conferirCodigoDeEntrega } from '@/core/services/delivery-code';
 import type { CompleteStopInput } from '@/application/dto/schemas';
 
 export class CompleteStop {
@@ -32,7 +33,22 @@ export class CompleteStop {
       const order = await repos.orders.findById(stop.orderId);
       if (!order) throw new NotFoundError('Pedido', stop.orderId);
 
-      if (input.outcome === 'DELIVERED') order.markDelivered(at);
+      if (input.outcome === 'DELIVERED') {
+        /*
+         * Só confere quando a loja exige. Ligar isso muda o trabalho do motoboy
+         * no meio do turno, e a decisão é do dono — não um padrão que ele
+         * descobre quando o entregador liga sem saber o que digitar.
+         *
+         * A entrega que FALHOU nunca pede código: ninguém atendeu, e exigir a
+         * palavra de quem não estava lá para registrar que ele não estava é
+         * absurdo.
+         */
+        const loja = await repos.establishments.current();
+        if (loja.requireDeliveryCode) {
+          conferirCodigoDeEntrega(order.deliveryCode, input.deliveryCode ?? null);
+        }
+        order.markDelivered(at);
+      }
       else order.markFailed(input.reason ?? null, at);
 
       /*

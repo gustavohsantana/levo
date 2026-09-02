@@ -37,6 +37,12 @@ export class Establishment extends Entity {
      * ele descobre quando o motoboy reclama.
      */
     readonly whatsappRoutes: boolean = false,
+    /**
+     * Exige o código do cliente para o entregador fechar a entrega.
+     *
+     * Desligado por padrão: ligar muda o trabalho do motoboy no meio do turno.
+     */
+    readonly requireDeliveryCode: boolean = false,
   ) {
     super(id);
   }

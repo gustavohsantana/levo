@@ -37,6 +37,8 @@ export interface DriverStopView {
 export interface DriverRouteView {
   routeId: string;
   establishmentName: string;
+  /** A loja exige o código do cliente para fechar a entrega. */
+  exigeCodigo: boolean;
   courierName: string;
   status: 'PLANNED' | 'IN_PROGRESS' | 'FINISHED';
   startedAt: string | null;
@@ -66,6 +68,7 @@ export async function getDriverRoute(accessToken: string): Promise<DriverRouteVi
     return {
       routeId: row.id,
       establishmentName: establishment.name,
+      exigeCodigo: establishment.requireDeliveryCode,
       courierName: row.courier.name,
       status: row.status,
       startedAt: row.startedAt?.toISOString() ?? null,

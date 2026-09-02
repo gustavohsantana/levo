@@ -22,6 +22,7 @@ export default async function ConfiguracoesPage() {
       deliveryFeeReais: atual.deliveryFee.reais,
       slug: atual.slug,
       autoConfirmOrders: atual.autoConfirmOrders,
+      requireDeliveryCode: atual.requireDeliveryCode,
       baseUrl: env().PUBLIC_BASE_URL,
       },
     };

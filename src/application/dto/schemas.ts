@@ -93,6 +93,8 @@ export const completeStopSchema = z.object({
   reason: z.string().trim().max(300).nullish(),
   /** Quando veio da fila offline, é o horário real do toque, não o da sincronia. */
   occurredAt: z.coerce.date().optional(),
+  /** O que o cliente ditou. Só exigido quando a loja liga a confirmação. */
+  deliveryCode: z.string().trim().max(12).nullish(),
 });
 export type CompleteStopInput = z.infer<typeof completeStopSchema>;
 

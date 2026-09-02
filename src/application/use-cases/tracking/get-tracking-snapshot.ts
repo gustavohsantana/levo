@@ -16,6 +16,14 @@ export interface TrackingSnapshot {
   courierPosition: { lat: number; lng: number; at: string } | null;
   destination: { lat: number; lng: number } | null;
   routeGeometry: string | null;
+  /**
+   * O código que o cliente dita ao entregador.
+   *
+   * Só aparece quando a loja exige e quando o pedido está a caminho: antes
+   * disso ele não serve para nada, e depois de entregue ele vira um número
+   * solto na tela de alguém que já recebeu.
+   */
+  deliveryCode: string | null;
 }
 
 /**
@@ -60,15 +68,15 @@ export class GetTrackingSnapshot {
       };
 
       if (order.status === 'DELIVERED') {
-        return { ...base, status: 'DELIVERED' as const, stopsAhead: 0, estimatedArrival: null, courierPosition: null, routeGeometry: null };
+        return { ...base, status: 'DELIVERED' as const, stopsAhead: 0, estimatedArrival: null, courierPosition: null, routeGeometry: null, deliveryCode: null };
       }
       if (order.status === 'FAILED') {
-        return { ...base, status: 'FAILED' as const, stopsAhead: 0, estimatedArrival: null, courierPosition: null, routeGeometry: null };
+        return { ...base, status: 'FAILED' as const, stopsAhead: 0, estimatedArrival: null, courierPosition: null, routeGeometry: null, deliveryCode: null };
       }
 
       const route = order.routeId ? await repos.routes.findById(order.routeId) : null;
       if (!route || route.status !== RouteStatus.InProgress) {
-        return { ...base, status: 'PREPARING' as const, stopsAhead: 0, estimatedArrival: null, courierPosition: null, routeGeometry: null };
+        return { ...base, status: 'PREPARING' as const, stopsAhead: 0, estimatedArrival: null, courierPosition: null, routeGeometry: null, deliveryCode: null };
       }
 
       const mine = route.stops.find((stop) => stop.orderId === order.id);
@@ -100,6 +108,7 @@ export class GetTrackingSnapshot {
          * ruído caro.
          */
         routeGeometry: null,
+        deliveryCode: establishment.requireDeliveryCode ? order.deliveryCode : null,
       };
     });
   }

@@ -41,6 +41,7 @@ export const EstablishmentMapper = {
       row.slug,
       row.autoConfirmOrders,
       row.whatsappRoutes,
+      row.requireDeliveryCode,
     );
   },
 };

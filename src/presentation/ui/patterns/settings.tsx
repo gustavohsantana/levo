@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { Link2, LoaderCircle, MapPin } from 'lucide-react';
 import {
   alternarAceiteAutomaticoAction,
+  alternarCodigoDeEntregaAction,
   alternarRotaNoWhatsappAction,
   salvarRegiaoAction,
 } from '@/presentation/actions';
@@ -31,6 +32,7 @@ export function Settings({
     deliveryFeeReais: number;
     slug: string | null;
     autoConfirmOrders: boolean;
+    requireDeliveryCode: boolean;
     baseUrl: string;
   };
 }) {
@@ -159,6 +161,8 @@ export function Settings({
 
       <AceiteAutomatico inicial={establishment.autoConfirmOrders} />
 
+      <CodigoDeEntrega inicial={establishment.requireDeliveryCode} />
+
       <DeliveryFeeBands inicial={faixas} />
       </div>
     </div>
@@ -218,3 +222,60 @@ function AceiteAutomatico({ inicial }: { inicial: boolean }) {
   );
 }
 
+/**
+ * O interruptor do código de confirmação.
+ *
+ * Desligado por padrão porque ligar muda o trabalho do motoboy no meio do
+ * turno — e ele descobriria isso parado no portão de um cliente, sem saber o
+ * que digitar. Quem liga precisa avisar a equipe antes.
+ */
+function CodigoDeEntrega({ inicial }: { inicial: boolean }) {
+  const [ligado, setLigado] = useState(inicial);
+  const [erro, setErro] = useState<string | null>(null);
+  const [pendente, startTransition] = useTransition();
+
+  return (
+    <section className="rounded-lg bg-surface p-5 hairline">
+      <h2 className="text-sm font-semibold text-ink">Código de confirmação da entrega</h2>
+
+      <p className="mt-1 text-sm leading-relaxed text-ink-muted">
+        O cliente recebe quatro dígitos na tela de acompanhamento e informa ao entregador na
+        porta. Sem o código, o entregador não consegue marcar como entregue.
+      </p>
+
+      <p className="mt-2 text-xs leading-relaxed text-ink-faint">
+        Serve para os dois lados: prova que a entrega aconteceu, e evita a discussão de
+        &ldquo;consta entregue mas não recebi&rdquo;. Você continua podendo concluir pelo
+        painel sem código — telefone descarregado e portão sem ninguém existem.
+      </p>
+
+      <p className="mt-2 text-xs leading-relaxed text-ink-faint">
+        Avise seus entregadores antes de ligar: eles vão passar a precisar do código.
+      </p>
+
+      <label className="mt-4 flex cursor-pointer items-center gap-2.5 text-sm text-ink">
+        <input
+          type="checkbox"
+          checked={ligado}
+          disabled={pendente}
+          onChange={(evento) => {
+            const novo = evento.target.checked;
+            setLigado(novo);
+            setErro(null);
+            startTransition(async () => {
+              const r = await alternarCodigoDeEntregaAction(novo);
+              if (!r.ok) {
+                setLigado(!novo);
+                setErro(r.error ?? 'Não foi possível salvar.');
+              }
+            });
+          }}
+        />
+        {ligado ? 'Ligado' : 'Desligado'}
+        {pendente ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
+      </label>
+
+      {erro ? <p className="mt-2 text-sm text-danger">{erro}</p> : null}
+    </section>
+  );
+}

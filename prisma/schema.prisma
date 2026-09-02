@@ -91,6 +91,13 @@ model Establishment {
   /// Desligado por padrao: e o dono decidindo se quer acompanhar a moto no
   /// mapa, e o motoboy ainda decide se compartilha — o bot pode pedir, nunca
   /// ligar sozinho. Rastrear alguem sem que ele saiba nao e um recurso.
+  /// Exige o codigo do cliente para o entregador fechar a entrega.
+  ///
+  /// Desligado por padrao: ligar muda o trabalho do motoboy no meio do turno, e
+  /// essa decisao e do dono. O painel continua podendo concluir sem codigo —
+  /// telefone descarregado e endereco sem ninguem existem, e travar a operacao
+  /// por causa deles seria pior que o problema.
+  requireDeliveryCode Boolean @default(false)
   telegramLocation Boolean @default(false)
   /// Manda a rota para o motoboy no WhatsApp assim que ela e planejada.
   ///
@@ -221,6 +228,12 @@ model Order {
   paymentStatus    PaymentStatus?
   notes            String?
   status           OrderStatus     @default(NEW)
+  /// Codigo que o cliente informa ao entregador para fechar a entrega.
+  ///
+  /// Quatro digitos porque e ditado na porta, muitas vezes com a moto ligada.
+  /// Nao e seguranca — e prova de presenca: sem ele, "entregue" e a palavra de
+  /// uma pessoa so, e o dono descobre a divergencia pelo cliente reclamando.
+  deliveryCode     String?
   trackingToken    String          @unique
   routeId          String?
   /// Aceito pelo lojista. Antes disso o pedido esta na coluna "novos", que e

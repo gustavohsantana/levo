@@ -86,6 +86,26 @@ export function TrackingView({
         <p className="mt-1.5 text-sm text-ink-muted">{detail(snapshot)}</p>
       </header>
 
+      {/*
+        O código fica antes do mapa, e grande.
+        
+        O cliente abre esta tela com o entregador na porta e a moto ligada. Ele
+        precisa achar o número em um relance — não rolar a tela procurando.
+      */}
+      {snapshot.deliveryCode && snapshot.status === 'ON_THE_WAY' ? (
+        <div className="mx-5 mb-4 rounded-lg bg-accent-soft px-4 py-3 text-center">
+          <p className="text-xs font-medium uppercase tracking-wide text-accent-ink">
+            Código de confirmação
+          </p>
+          <p className="numeric mt-1 text-3xl font-semibold tracking-[0.2em] text-accent-ink">
+            {snapshot.deliveryCode}
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-accent-ink/80">
+            Informe ao entregador na hora de receber.
+          </p>
+        </div>
+      ) : null}
+
       {snapshot.status === 'ON_THE_WAY' && markers.length > 0 ? (
         <div className="mx-5 mb-4 h-72 overflow-hidden rounded-lg hairline">
           <RouteMap markers={markers} geometry={snapshot.routeGeometry} className="h-full w-full" />

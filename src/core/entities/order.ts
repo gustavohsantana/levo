@@ -7,6 +7,7 @@ import {
 } from '../errors';
 import type { PaymentStatus } from './payment';
 import { Address, Coordinates, Money, PhoneNumber, Token } from '../value-objects';
+import { gerarCodigoDeEntrega } from '../services/delivery-code';
 
 export type OrderSourceKind = 'MANUAL' | 'SITE' | 'WEBHOOK' | 'IFOOD' | 'AIQFOME';
 
@@ -66,6 +67,8 @@ interface OrderProps {
   notes: string | null;
   status: OrderStatus;
   trackingToken: Token;
+  /** Ditado pelo cliente ao entregador para fechar a entrega. */
+  deliveryCode: string | null;
   routeId: string | null;
   confirmedAt: Date | null;
   readyAt: Date | null;
@@ -126,6 +129,12 @@ export class Order extends AggregateRoot {
       notes: input.notes?.trim() || null,
       status: OrderStatus.New,
       trackingToken: Token.generate(),
+      /*
+       * Nasce com o pedido, não com a rota: o cliente precisa vê-lo na tela de
+       * acompanhamento desde o começo, e gerar só no despacho deixaria um
+       * intervalo em que ele abre a tela e não encontra o código.
+       */
+      deliveryCode: gerarCodigoDeEntrega(),
       routeId: null,
       confirmedAt: null,
       readyAt: null,
@@ -266,6 +275,7 @@ export class Order extends AggregateRoot {
   get notes() { return this.props.notes; }
   get status() { return this.props.status; }
   get trackingToken() { return this.props.trackingToken; }
+  get deliveryCode() { return this.props.deliveryCode; }
   get routeId() { return this.props.routeId; }
   get createdAt() { return this.props.createdAt; }
   get deliveredAt() { return this.props.deliveredAt; }

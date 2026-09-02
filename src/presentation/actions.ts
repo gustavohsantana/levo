@@ -335,6 +335,31 @@ export async function alternarRotaNoWhatsappAction(ligado: boolean): Promise<Act
 }
 
 /**
+ * Exige o código do cliente para o entregador fechar a entrega.
+ *
+ * O painel continua podendo concluir sem código, de propósito: telefone
+ * descarregado e portão sem ninguém existem, e travar a operação por causa
+ * deles seria pior que o problema que o código resolve.
+ */
+export async function alternarCodigoDeEntregaAction(ligado: boolean): Promise<ActionResult> {
+  try {
+    const session = await requireSession();
+    const { getPrismaClient } = await import('@/infrastructure/persistence/prisma/client');
+    const { env } = await import('@/env');
+
+    await getPrismaClient(env().DATABASE_URL).establishment.update({
+      where: { id: session.establishmentId },
+      data: { requireDeliveryCode: ligado },
+    });
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+
+  revalidatePath('/dashboard/configuracoes');
+  return { ok: true };
+}
+
+/**
  * Liga o pedido de localização ao vivo ao motoboy, pelo Telegram.
  *
  * O bot pede; quem decide compartilhar é ele. Rastrear alguém sem que ele saiba

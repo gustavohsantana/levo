@@ -34,7 +34,16 @@ const PING_INTERVAL_MS = 15_000;
  *    mesmo sem sinal;
  *  • sem senha — o link é a credencial.
  */
-export function CourierApp({ token, route }: { token: string; route: DriverRouteView }) {
+export function CourierApp({
+  token,
+  route,
+  exigeCodigo = false,
+}: {
+  token: string;
+  route: DriverRouteView;
+  /** A loja pede o código do cliente para fechar a entrega. */
+  exigeCodigo?: boolean;
+}) {
   const router = useRouter();
   const [pendingSync, setPendingSync] = useState(0);
   /** Motivo pelo qual a fila não anda — mostrado ao motoboy, não engolido. */
@@ -152,6 +161,20 @@ export function CourierApp({ token, route }: { token: string; route: DriverRoute
     const reason = outcome === 'FAILED' ? window.prompt('O que aconteceu?') : null;
     if (outcome === 'FAILED' && reason === null) return;
 
+    /*
+     * O código só é pedido na entrega concluída.
+     *
+     * Entrega que falhou não pede código: ninguém atendeu, e exigir a palavra
+     * de quem não estava lá para registrar que ele não estava seria travar o
+     * motoboy no portão sem saída.
+     */
+    let deliveryCode: string | null = null;
+    if (outcome === 'DELIVERED' && exigeCodigo) {
+      deliveryCode = window.prompt('Código de confirmação do cliente (4 dígitos):');
+      // Cancelou: não marca nada. Ele volta a falar com o cliente.
+      if (deliveryCode === null) return;
+    }
+
     // Confirma na tela ANTES de falar com o servidor. Sem isso, o motoboy
     // espera o levo de carregamento parado no portão do cliente.
     setResolvedLocally((current) => ({ ...current, [stop.id]: outcome }));
@@ -161,6 +184,7 @@ export function CourierApp({ token, route }: { token: string; route: DriverRoute
       stopId: stop.id,
       outcome,
       reason,
+      deliveryCode,
       occurredAt: new Date().toISOString(),
     };
 
