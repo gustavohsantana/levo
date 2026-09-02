@@ -54,7 +54,7 @@ export function Sidebar() {
     <nav className="flex gap-1 overflow-x-auto p-2 lg:flex-col lg:gap-4 lg:overflow-visible lg:p-4">
       {GRUPOS.map((grupo) => (
         <div key={grupo.titulo} className="flex gap-1 lg:flex-col lg:gap-0.5">
-          <p className="hidden px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-ink-faint lg:block">
+          <p className="hidden px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-white/50 lg:block">
             {grupo.titulo}
           </p>
 
@@ -85,8 +85,8 @@ export function Sidebar() {
                 aria-current={ativo ? 'page' : undefined}
                 className={`flex shrink-0 items-center gap-2 rounded-md px-2.5 py-2 text-sm transition ${
                   ativo
-                    ? 'bg-surface font-medium text-ink shadow-xs'
-                    : 'text-ink-muted hover:bg-surface/60 hover:text-ink'
+                    ? 'bg-white/15 font-medium text-white'
+                    : 'text-white/75 hover:bg-white/10 hover:text-white'
                 }`}
               >
                 <item.icone className="size-4 shrink-0" aria-hidden />

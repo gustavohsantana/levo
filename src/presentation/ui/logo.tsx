@@ -44,11 +44,27 @@ export function LogoMark({ className }: { className?: string }) {
  * O nome vai em texto de verdade, não em curvas: ele herda a Instrument Sans
  * do resto da interface e continua selecionável e legível para leitor de tela.
  */
-export function Logo({ className }: { className?: string }) {
+export function Logo({
+  className,
+  /**
+   * Sobre a lateral verde do painel.
+   *
+   * Só a palavra troca de cor: o símbolo continua no lima da marca, que sobre o
+   * verde fundo é onde ele mais aparece em toda a interface.
+   */
+  sobreEscuro = false,
+}: {
+  className?: string;
+  sobreEscuro?: boolean;
+}) {
   return (
     <span className={`inline-flex items-center gap-2 ${className ?? ''}`}>
       <LogoMark className="size-5 text-accent" />
-      <span className="text-sm font-semibold tracking-tight text-ink">Levô</span>
+      <span
+        className={`text-sm font-semibold tracking-tight ${sobreEscuro ? 'text-white' : 'text-ink'}`}
+      >
+        Levô
+      </span>
     </span>
   );
 }

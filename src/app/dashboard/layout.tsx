@@ -22,19 +22,29 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="min-h-dvh lg:flex">
-      <aside className="border-b bg-accent-soft/35 lg:sticky lg:top-0 lg:h-dvh lg:w-56 lg:shrink-0 lg:border-b-0 lg:border-r">
+      <aside className="border-b border-black/10 bg-accent-deep lg:sticky lg:top-0 lg:h-dvh lg:w-56 lg:shrink-0 lg:border-b-0 lg:border-r">
         <div className="flex items-center gap-2 px-4 pt-4 max-lg:hidden">
           <Link href="/dashboard">
-            <Logo />
+            <Logo sobreEscuro />
           </Link>
         </div>
 
         <Sidebar />
 
         <div className="px-4 pb-4 max-lg:hidden">
-          <p className="truncate text-xs text-ink-faint">{session.name}</p>
+          <p className="truncate text-xs text-white/55">{session.name}</p>
           <form action={logoutAction}>
-            <Button type="submit" variant="ghost" size="sm" className="-ml-2.5 mt-1">
+            <Button
+              type="submit"
+              variant="ghost"
+              size="sm"
+              /*
+               * O "Sair" do painel fica sobre o verde, e o cinza do botão
+               * fantasma some ali. Continua discreto — só que discreto em
+               * relação ao verde, e não ao branco para o qual foi desenhado.
+               */
+              className="-ml-2.5 mt-1 text-white/70 hover:bg-white/10 hover:text-white"
+            >
               Sair
             </Button>
           </form>
