@@ -47,6 +47,7 @@ export default async function RelatoriosPage({
     plataforma: plataforma && PLATAFORMAS.has(plataforma) ? (plataforma as never) : null,
     entregadorId: texto(q.entregador),
     status: status && SITUACOES.has(status) ? (status as never) : null,
+    pagina: Math.max(1, Number(texto(q.pagina)) || 1),
   };
 
   const dados = await getRelatorio(filtro);

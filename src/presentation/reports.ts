@@ -25,13 +25,13 @@ export * from './reports-core';
  */
 
 /**
- * Teto da tabela detalhada.
+ * Quantas linhas por página da tabela.
  *
- * Os totais somam o período inteiro; a lista mostra as mais recentes. Uma
- * tabela de cinco mil linhas não é controle, é uma página que não abre no
- * celular — e quem precisa de tudo exporta.
+ * Os totais continuam somando o período inteiro — é o que os torna corretos. O
+ * que pagina é a lista: trezentas linhas de uma vez não são controle, são uma
+ * página que não abre no celular, e ninguém lê a de número 217 sem procurar.
  */
-const LIMITE_DE_LINHAS = 300;
+const POR_PAGINA = 50;
 
 export async function getRelatorio(filtro: FiltroRelatorio): Promise<Relatorio> {
   const session = await requireSession();
@@ -97,6 +97,9 @@ export async function getRelatorio(filtro: FiltroRelatorio): Promise<Relatorio> 
   // O filtro por entregador é aplicado aqui porque ele mora na rota, não no
   // pedido — levá-lo para o `where` exigiria um join que o Prisma só faz por
   // relação, e a relação existe do outro lado.
+  const pagina = Math.max(1, filtro.pagina ?? 1);
+  const inicio = (pagina - 1) * POR_PAGINA;
+
   const doFiltro = filtro.entregadorId
     ? pedidos.filter((p) => (p.routeId ? porRota.get(p.routeId)?.id : null) === filtro.entregadorId)
     : pedidos;
@@ -154,8 +157,10 @@ export async function getRelatorio(filtro: FiltroRelatorio): Promise<Relatorio> 
   return {
     filtro,
     ...consolidado,
-    linhas: linhas.slice(0, LIMITE_DE_LINHAS),
-    linhasOcultas: Math.max(0, linhas.length - LIMITE_DE_LINHAS),
+    linhas: linhas.slice(inicio, inicio + POR_PAGINA),
+    pagina,
+    paginas: Math.max(1, Math.ceil(linhas.length / POR_PAGINA)),
+    totalDeLinhas: linhas.length,
     entregadores: entregadores.map((e) => ({ id: e.id, nome: e.name })),
   };
 }

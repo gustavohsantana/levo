@@ -338,12 +338,49 @@ function Detalhe({ dados }: { dados: Relatorio }) {
         </table>
       </div>
 
-      {dados.linhasOcultas > 0 ? (
-        <p className="border-t px-4 py-2 text-xs text-ink-faint">
-          Mostrando as {dados.linhas.length} mais recentes. Outras {dados.linhasOcultas} entram nos
-          totais acima — reduza o período para vê-las.
-        </p>
+      {/*
+        A navegação repete os filtros na URL.
+
+        Sem isso, mudar de página perderia o período e a plataforma que o dono
+        escolheu — e ele voltaria para a primeira tela sem entender por quê.
+      */}
+      {dados.paginas > 1 ? (
+        <div className="flex items-center justify-between gap-3 border-t px-4 py-3 text-sm">
+          <span className="text-ink-faint">
+            <span className="numeric">{dados.totalDeLinhas}</span> pedidos · página{' '}
+            <span className="numeric">{dados.pagina}</span> de{' '}
+            <span className="numeric">{dados.paginas}</span>
+          </span>
+
+          <div className="flex gap-2">
+            {dados.pagina > 1 ? (
+              <Link href={paginaUrl(dados, dados.pagina - 1)} className={BOTAO_PAGINA}>
+                Anterior
+              </Link>
+            ) : null}
+            {dados.pagina < dados.paginas ? (
+              <Link href={paginaUrl(dados, dados.pagina + 1)} className={BOTAO_PAGINA}>
+                Próxima
+              </Link>
+            ) : null}
+          </div>
+        </div>
       ) : null}
     </section>
   );
+}
+
+const BOTAO_PAGINA =
+  'rounded-md bg-raised px-3 py-1.5 text-sm text-ink transition hover:opacity-80';
+
+/** O endereço da página pedida, carregando os filtros atuais. */
+function paginaUrl(dados: Relatorio, pagina: number): string {
+  const p = new URLSearchParams();
+  p.set('de', dados.filtro.de);
+  p.set('ate', dados.filtro.ate);
+  if (dados.filtro.plataforma) p.set('plataforma', dados.filtro.plataforma);
+  if (dados.filtro.entregadorId) p.set('entregador', dados.filtro.entregadorId);
+  if (dados.filtro.status) p.set('status', dados.filtro.status);
+  if (pagina > 1) p.set('pagina', String(pagina));
+  return `/dashboard/relatorios?${p.toString()}`;
 }

@@ -73,6 +73,15 @@ export function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
+                /*
+                 * A cozinha abre em aba separada.
+                 *
+                 * Ela vive num tablet na parede, ou numa aba de lado, aberta o
+                 * turno inteiro. Trocar o painel por ela faria o dono perder a
+                 * fila de despacho toda vez que fosse só conferir o preparo.
+                 */
+                target={emAbaNova(item) ? '_blank' : undefined}
+                rel={emAbaNova(item) ? 'noreferrer' : undefined}
                 aria-current={ativo ? 'page' : undefined}
                 className={`flex shrink-0 items-center gap-2 rounded-md px-2.5 py-2 text-sm transition ${
                   ativo
@@ -89,4 +98,9 @@ export function Sidebar() {
       ))}
     </nav>
   );
+}
+
+/** Itens que não substituem o painel: eles convivem com ele. */
+function emAbaNova(item: { href: string }): boolean {
+  return 'novaAba' in item && item.novaAba === true;
 }

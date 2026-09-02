@@ -55,6 +55,8 @@ export interface FiltroRelatorio {
   entregadorId: string | null;
   /** `null` traz tudo; senão, só pedidos neste estado. */
   status: 'DELIVERED' | 'CANCELLED' | 'FAILED' | 'EM_ABERTO' | null;
+  /** Página da tabela. Os totais ignoram isto: eles somam o período inteiro. */
+  pagina?: number;
 }
 
 export interface LinhaRelatorio {
@@ -106,8 +108,10 @@ export interface Relatorio {
   }>;
   porDia: Array<{ dia: string; pedidos: number; valorCents: number }>;
   linhas: LinhaRelatorio[];
-  /** Quantas linhas ficaram de fora da tabela. Os totais incluem todas. */
-  linhasOcultas: number;
+  pagina: number;
+  paginas: number;
+  /** O total do período, e não o desta página. */
+  totalDeLinhas: number;
   entregadores: Array<{ id: string; nome: string }>;
 }
 
