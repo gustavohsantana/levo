@@ -76,10 +76,26 @@ export function telefoneParaWhatsApp(bruto: string): string | null {
  */
 export function pedidoDeLocalizacao(): string {
   return [
-    'Para a loja acompanhar sua rota no mapa, compartilhe sua localização:',
+    'Para a loja acompanhar a moto no mapa durante o turno:',
     '',
     '📎 (clipe) → Localização → Compartilhar localização ao vivo → 8 horas',
     '',
-    'Vale até o fim do turno, e funciona com o celular no bolso.',
+    'Funciona com o celular no bolso e a tela apagada, e para sozinho no fim.',
+    'Se preferir mandar só a posição de agora, use o botão abaixo.',
+  ].join('\n');
+}
+
+/**
+ * O aviso de que o compartilhamento está para acabar.
+ *
+ * O prazo é escolhido por ele e ninguém pode estender — nem o bot. Sem este
+ * aviso, o rastreio morre no meio do turno e o dono só descobre olhando um mapa
+ * onde a moto parou de andar, sem saber se é trânsito ou fim de prazo.
+ */
+export function localizacaoExpirando(): string {
+  return [
+    'Seu compartilhamento de localização está acabando.',
+    '',
+    'Se ainda estiver rodando, renove: 📎 → Localização → ao vivo.',
   ].join('\n');
 }

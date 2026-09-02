@@ -14,7 +14,10 @@ import { aiqfomeAccessTokenFor } from '../src/infrastructure/integrations/aiqfom
 import { marketplaceCommandsFor } from '../src/infrastructure/integrations/marketplace-factory';
 import { WahaSender } from '../src/infrastructure/messaging/waha';
 import { TelegramSender } from '../src/infrastructure/messaging/telegram';
-import { pedidoDeLocalizacao } from '../src/core/services/route-message';
+import {
+  localizacaoExpirando,
+  pedidoDeLocalizacao,
+} from '../src/core/services/route-message';
 import type { MarketplaceCommands, OrderSource } from '../src/core';
 
 /**
@@ -332,6 +335,56 @@ async function espelharWhatsApp(): Promise<void> {
 }
 
 /**
+ * Avisa quem está prestes a perder o compartilhamento no meio do turno.
+ *
+ * O prazo é escolhido por ele e ninguém consegue estender — nem o bot. Sem
+ * aviso, o rastreio morre e o dono só percebe olhando um mapa onde a moto
+ * parou de andar, sem saber se é trânsito ou fim de prazo.
+ *
+ * O sinal é o silêncio: quem estava mandando posição e parou há mais de dez
+ * minutos, com rota ainda correndo, ou desligou ou venceu. Nos dois casos, uma
+ * mensagem é a resposta certa.
+ */
+async function avisarLocalizacaoParada(): Promise<void> {
+  if (!config.TELEGRAM_BOT_TOKEN) return;
+  const prisma = getPrismaClient(config.DATABASE_URL);
+
+  const rotas = await prisma.route.findMany({
+    where: {
+      status: 'IN_PROGRESS',
+      courier: { telegramChatId: { not: null } },
+      establishment: { telegramLocation: true },
+    },
+    select: {
+      id: true,
+      courier: { select: { id: true, telegramChatId: true } },
+      pings: { orderBy: { recordedAt: 'desc' }, take: 1, select: { recordedAt: true } },
+    },
+  });
+
+  const bot = new TelegramSender(config.TELEGRAM_BOT_TOKEN);
+
+  for (const rota of rotas) {
+    const ultimo = rota.pings[0]?.recordedAt;
+    // Nunca mandou nada: quem cuida disso é o pedido junto da rota.
+    if (!ultimo) continue;
+
+    const paradoMs = Date.now() - ultimo.getTime();
+    if (paradoMs < 10 * 60_000 || paradoMs > 25 * 60_000) continue;
+
+    /*
+     * A janela de 10 a 25 minutos avisa uma vez só, sem guardar estado: passou
+     * de 25, o ciclo seguinte não entra mais. Uma tabela de "já avisei" para um
+     * lembrete seria mais peça para manter do que o problema merece.
+     */
+    await bot
+      .sendText(rota.courier.telegramChatId!, localizacaoExpirando())
+      .catch(() => undefined);
+    logger.info({ routeId: rota.id }, 'telegram.localizacao_parada');
+  }
+}
+
+/**
  * Já pedimos a localização a este motoboy hoje?
  *
  * A resposta sai da posição que ele mandou: se já chegou ping dele nas últimas
@@ -416,7 +469,13 @@ async function drenarWhatsApp(): Promise<void> {
          * deixa de funcionar quando importa.
          */
         if (await devePedirLocalizacao(prisma, aviso.establishmentId, aviso.destination)) {
-          await bot.sendText(aviso.destination, pedidoDeLocalizacao()).catch(() => undefined);
+          /*
+           * Com o botão de um toque junto: o modo ao vivo exige o menu do
+           * clipe, mas quem só quer resolver agora não deveria precisar dele.
+           */
+          await bot
+            .pedirPosicao(aviso.destination, pedidoDeLocalizacao())
+            .catch(() => undefined);
         }
       } catch (cause) {
         await prisma.courierNotification.update({
@@ -566,6 +625,10 @@ async function tick(): Promise<void> {
    * Solto: o pareamento pode levar minutos, e o iFood não espera. `void` aqui é
    * intencional — falha dentro dele já é registrada e não deve derrubar o ciclo.
    */
+  await avisarLocalizacaoParada().catch((cause) =>
+    logger.error({ cause: String(cause) }, 'telegram.aviso_localizacao_falhou'),
+  );
+
   void espelharWhatsApp().catch((cause) =>
     logger.error({ cause: String(cause) }, 'whatsapp.espelho_falhou'),
   );

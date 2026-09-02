@@ -56,6 +56,40 @@ export class TelegramSender {
     }
   }
 
+  /**
+   * Pede a posição com um botão de um toque.
+   *
+   * `request_location` devolve UMA posição, não o compartilhamento contínuo —
+   * esse o bot não consegue ligar, e é bom que não consiga: uma API capaz de
+   * ativar rastreamento remoto de alguém seria uma API de perseguição.
+   *
+   * Serve para o caso comum de "cadê ele agora": um toque, sem menu. O modo ao
+   * vivo continua sendo escolha dele, pelo clipe.
+   */
+  async pedirPosicao(chatId: string, texto: string): Promise<void> {
+    const resposta = await fetch(this.url('sendMessage'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: texto,
+        reply_markup: {
+          keyboard: [[{ text: '📍 Enviar minha posição agora', request_location: true }]],
+          resize_keyboard: true,
+          // Some depois do toque: teclado fixo rouba metade da tela na moto.
+          one_time_keyboard: true,
+        },
+      }),
+    });
+
+    if (!resposta.ok) {
+      const corpo = (await resposta.json().catch(() => ({}))) as { description?: string };
+      throw new ExternalServiceError('Telegram', corpo.description ?? `HTTP ${resposta.status}`, {
+        status: resposta.status,
+      });
+    }
+  }
+
   /** O nome do bot, para montar o link de convite sem alguém digitar errado. */
   async username(): Promise<string | null> {
     const r = await fetch(this.url('getMe'));
