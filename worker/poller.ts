@@ -349,11 +349,25 @@ async function avisarLocalizacaoParada(): Promise<void> {
   if (!config.TELEGRAM_BOT_TOKEN) return;
   const prisma = getPrismaClient(config.DATABASE_URL);
 
+  /*
+   * Uma consulta por estabelecimento, e não uma global.
+   *
+   * O tenant-guard recusa `Route.findMany` sem escopo — e recusou esta, na
+   * primeira execução. Ele estava certo: filtrar pelo relacionamento parecia
+   * suficiente, mas o dia em que houver duas lojas aqui, uma varredura global
+   * mandaria mensagem para o motoboy da outra.
+   */
+  const lojas = await prisma.establishment.findMany({
+    where: { telegramLocation: true },
+    select: { id: true },
+  });
+  if (lojas.length === 0) return;
+
   const rotas = await prisma.route.findMany({
     where: {
+      establishmentId: { in: lojas.map((l) => l.id) },
       status: 'IN_PROGRESS',
       courier: { telegramChatId: { not: null } },
-      establishment: { telegramLocation: true },
     },
     select: {
       id: true,
