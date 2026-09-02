@@ -58,6 +58,8 @@ interface OrderProps {
   customerName: string;
   customerPhone: PhoneNumber | null;
   address: Address;
+  /** Entrega pelo motoboy, ou retirada no balcão pelo próprio cliente. */
+  fulfillment: 'DELIVERY' | 'PICKUP';
   coordinates: Coordinates | null;
   amount: Money;
   deliveryFee: Money;
@@ -93,6 +95,7 @@ export class Order extends AggregateRoot {
     customerName: string;
     customerPhone?: PhoneNumber | null;
     address: Address;
+    fulfillment?: 'DELIVERY' | 'PICKUP';
     coordinates?: Coordinates | null;
     amount?: Money;
     deliveryFee?: Money;
@@ -115,6 +118,7 @@ export class Order extends AggregateRoot {
       customerName: input.customerName.trim(),
       customerPhone: input.customerPhone ?? null,
       address: input.address,
+      fulfillment: input.fulfillment ?? 'DELIVERY',
       coordinates: input.coordinates ?? null,
       /*
        * Com itens, o total sai deles — digitar o total à mão ao lado de uma
@@ -274,6 +278,9 @@ export class Order extends AggregateRoot {
   get subtotal() { return Money.fromCents(this.props.amount.cents - this.props.deliveryFee.cents); }
   get notes() { return this.props.notes; }
   get status() { return this.props.status; }
+  get fulfillment() { return this.props.fulfillment; }
+  /** Retirada não entra em rota: quem busca é o cliente. */
+  get isPickup() { return this.props.fulfillment === 'PICKUP'; }
   get trackingToken() { return this.props.trackingToken; }
   get deliveryCode() { return this.props.deliveryCode; }
   get routeId() { return this.props.routeId; }

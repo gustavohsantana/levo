@@ -23,6 +23,7 @@ export default async function ConfiguracoesPage() {
       slug: atual.slug,
       autoConfirmOrders: atual.autoConfirmOrders,
       requireDeliveryCode: atual.requireDeliveryCode,
+      pickupEnabled: atual.pickupEnabled,
       baseUrl: env().PUBLIC_BASE_URL,
       },
     };

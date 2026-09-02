@@ -49,6 +49,14 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
    */
   const [bairro, setBairro] = useState('');
   const [rua, setRua] = useState('');
+  /*
+   * Entrega ou retirada.
+   *
+   * A escolha vem antes do endereço de propósito: quem vai buscar não deveria
+   * digitar rua nenhuma, e descobrir isso depois de preencher tudo é o tipo de
+   * formulário que faz desistir.
+   */
+  const [retirada, setRetirada] = useState(false);
   const [cep, setCep] = useState('');
   const [buscandoCep, setBuscandoCep] = useState(false);
   const [avisoCep, setAvisoCep] = useState<string | null>(null);
@@ -81,7 +89,7 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
     0,
   );
 
-  const taxa = Math.round(menu.establishment.deliveryFeeReais * 100);
+  const taxa = retirada ? 0 : Math.round(menu.establishment.deliveryFeeReais * 100);
   const total = subtotal + (subtotal > 0 ? taxa : 0);
 
   useEffect(() => {
@@ -286,6 +294,51 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
           </div>
         </div>
 
+        {/*
+          A escolha vem antes de tudo.
+
+          Quem vai buscar não deveria digitar rua nenhuma, e descobrir isso
+          depois de preencher o endereço inteiro é o formulário que faz
+          desistir.
+        */}
+        {menu.establishment.pickupEnabled ? (
+          <div className="flex gap-2">
+            {(
+              [
+                [false, '🛵 Entrega'],
+                [true, '🏪 Retirar no balcão'],
+              ] as const
+            ).map(([valor, rotulo]) => (
+              <button
+                key={rotulo}
+                type="button"
+                onClick={() => setRetirada(valor)}
+                className={`flex-1 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+                  retirada === valor
+                    ? 'bg-accent text-accent-contrast'
+                    : 'bg-surface text-ink-muted hairline hover:text-ink'
+                }`}
+              >
+                {rotulo}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {retirada ? (
+          <div className="rounded-lg bg-accent-soft px-4 py-3 text-sm">
+            <p className="font-medium text-accent-ink">Retirada no balcão</p>
+            <p className="mt-1 leading-relaxed text-accent-ink/80">
+              {menu.establishment.address ?? 'Retire na loja'}
+            </p>
+            <p className="mt-1.5 text-xs text-accent-ink/80">
+              Sem taxa de entrega. Avisamos aqui quando estiver pronto.
+            </p>
+          </div>
+        ) : null}
+
+        <input type="hidden" name="fulfillment" value={retirada ? 'PICKUP' : 'DELIVERY'} />
+
         <Field label="Seu nome">
           <Input name="customerName" required autoFocus defaultValue={rascunho?.customerName} />
         </Field>
@@ -300,6 +353,16 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
           />
         </Field>
 
+        {/*
+          Todo o endereço some na retirada.
+
+          Escondido, e não desabilitado: campo cinza ainda ocupa a tela e faz
+          quem vai buscar se perguntar se precisa preencher. O `required` dos
+          campos sai junto — senão o navegador bloqueia o envio reclamando de
+          um campo que ninguém vê.
+        */}
+        {retirada ? null : (
+          <>
         {/*
           O CEP vem primeiro porque é o atalho: oito dígitos preenchem cidade,
           bairro e rua. Quem não sabe o CEP pula e digita — por isso não é
@@ -373,6 +436,8 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
         <Field label="Complemento" hint="apartamento, portão, referência">
           <Input name="reference" autoComplete="address-line2" defaultValue={rascunho?.reference} />
         </Field>
+          </>
+        )}
 
         <fieldset className="flex flex-col gap-2">
           <legend className="text-sm font-medium text-ink">Pagamento</legend>

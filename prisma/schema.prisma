@@ -26,6 +26,15 @@ enum OrderSourceKind {
   AIQFOME
 }
 
+/// Como o pedido chega ao cliente.
+enum OrderFulfillment {
+  /// O motoboy leva. E o caso que o sistema inteiro assume por padrao.
+  DELIVERY
+  /// O cliente busca no balcao. Nao entra em rota, nao paga taxa, e o
+  /// "entregue" acontece quando ele aparece na loja.
+  PICKUP
+}
+
 enum OrderStatus {
   NEW
   IN_ROUTE
@@ -97,6 +106,12 @@ model Establishment {
   /// essa decisao e do dono. O painel continua podendo concluir sem codigo —
   /// telefone descarregado e endereco sem ninguem existem, e travar a operacao
   /// por causa deles seria pior que o problema.
+  /// Oferece retirada no balcao no cardapio publico.
+  ///
+  /// Desligado por padrao: nem toda cozinha tem balcao, e oferecer retirada
+  /// onde ninguem pode buscar gera pedido que o dono vai ter que ligar para
+  /// desfazer.
+  pickupEnabled    Boolean @default(false)
   requireDeliveryCode Boolean @default(false)
   telegramLocation Boolean @default(false)
   /// Manda a rota para o motoboy no WhatsApp assim que ela e planejada.
@@ -233,6 +248,13 @@ model Order {
   /// Quatro digitos porque e ditado na porta, muitas vezes com a moto ligada.
   /// Nao e seguranca — e prova de presenca: sem ele, "entregue" e a palavra de
   /// uma pessoa so, e o dono descobre a divergencia pelo cliente reclamando.
+  /// Entrega ou retirada no balcao.
+  ///
+  /// Um pedido de retirada nao e um pedido de entrega com endereco da loja: ele
+  /// nao entra em rota, nao paga taxa, nao rende ping de motoboy e nao conta no
+  /// tempo medio de entrega. Marcar com um campo proprio evita que cada uma
+  /// dessas telas precise adivinhar pelo endereco.
+  fulfillment      OrderFulfillment @default(DELIVERY)
   deliveryCode     String?
   trackingToken    String          @unique
   routeId          String?

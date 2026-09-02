@@ -5,6 +5,7 @@ import { Link2, LoaderCircle, MapPin } from 'lucide-react';
 import {
   alternarAceiteAutomaticoAction,
   alternarCodigoDeEntregaAction,
+  alternarRetiradaAction,
   alternarRotaNoWhatsappAction,
   salvarRegiaoAction,
 } from '@/presentation/actions';
@@ -33,6 +34,7 @@ export function Settings({
     slug: string | null;
     autoConfirmOrders: boolean;
     requireDeliveryCode: boolean;
+    pickupEnabled: boolean;
     baseUrl: string;
   };
 }) {
@@ -163,6 +165,8 @@ export function Settings({
 
       <CodigoDeEntrega inicial={establishment.requireDeliveryCode} />
 
+      <RetiradaNoBalcao inicial={establishment.pickupEnabled} />
+
       <DeliveryFeeBands inicial={faixas} />
       </div>
     </div>
@@ -264,6 +268,59 @@ function CodigoDeEntrega({ inicial }: { inicial: boolean }) {
             setErro(null);
             startTransition(async () => {
               const r = await alternarCodigoDeEntregaAction(novo);
+              if (!r.ok) {
+                setLigado(!novo);
+                setErro(r.error ?? 'Não foi possível salvar.');
+              }
+            });
+          }}
+        />
+        {ligado ? 'Ligado' : 'Desligado'}
+        {pendente ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
+      </label>
+
+      {erro ? <p className="mt-2 text-sm text-danger">{erro}</p> : null}
+    </section>
+  );
+}
+
+/**
+ * O interruptor da retirada no balcão.
+ *
+ * Desligado por padrão porque nem toda cozinha tem balcão — e oferecer retirada
+ * onde ninguém pode buscar gera pedido que o dono vai ter que ligar para
+ * desfazer, que é pior do que não oferecer.
+ */
+function RetiradaNoBalcao({ inicial }: { inicial: boolean }) {
+  const [ligado, setLigado] = useState(inicial);
+  const [erro, setErro] = useState<string | null>(null);
+  const [pendente, startTransition] = useTransition();
+
+  return (
+    <section className="rounded-lg bg-surface p-5 hairline">
+      <h2 className="text-sm font-semibold text-ink">Retirada no balcão</h2>
+
+      <p className="mt-1 text-sm leading-relaxed text-ink-muted">
+        O cliente escolhe entre entrega e buscar na loja. Quem retira não paga taxa e não
+        preenche endereço.
+      </p>
+
+      <p className="mt-2 text-xs leading-relaxed text-ink-faint">
+        Pedido de retirada não entra em rota nem aparece para o motoboy — você fecha no
+        painel quando o cliente chega.
+      </p>
+
+      <label className="mt-4 flex cursor-pointer items-center gap-2.5 text-sm text-ink">
+        <input
+          type="checkbox"
+          checked={ligado}
+          disabled={pendente}
+          onChange={(evento) => {
+            const novo = evento.target.checked;
+            setLigado(novo);
+            setErro(null);
+            startTransition(async () => {
+              const r = await alternarRetiradaAction(novo);
               if (!r.ok) {
                 setLigado(!novo);
                 setErro(r.error ?? 'Não foi possível salvar.');

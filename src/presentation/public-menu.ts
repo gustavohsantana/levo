@@ -28,6 +28,9 @@ export interface MenuPublico {
     deliveryFeeReais: number;
     city: string;
     state: string | null;
+    /** Onde o cliente busca, quando a loja oferece retirada. */
+    address: string;
+    pickupEnabled: boolean;
   };
   /** Conta Mercado Pago conectada — habilita Pix e cartão online. */
   pixOnlineDisponivel: boolean;
@@ -67,6 +70,8 @@ export async function getMenuPublico(slug: string): Promise<MenuPublico | null> 
       id: true,
       name: true,
       slug: true,
+      address: true,
+      pickupEnabled: true,
       deliveryFeeCents: true,
       city: true,
       state: true,
@@ -165,6 +170,8 @@ export async function getMenuPublico(slug: string): Promise<MenuPublico | null> 
       name: establishment.name,
       slug: establishment.slug,
       deliveryFeeReais: establishment.deliveryFeeCents / 100,
+      address: establishment.address,
+      pickupEnabled: establishment.pickupEnabled,
       city: establishment.city ?? '',
       state: establishment.state,
     },
@@ -258,7 +265,7 @@ export async function criarPedidoPublicoAction(
   const prisma = getPrismaClient(env().DATABASE_URL);
   const establishment = await prisma.establishment.findUnique({
     where: { slug },
-    select: { id: true },
+    select: { id: true, address: true, pickupEnabled: true },
   });
 
   if (!establishment) return { ok: false, error: 'Cardápio não encontrado.' };
@@ -266,20 +273,34 @@ export async function criarPedidoPublicoAction(
   const modoPagamento = modoDoForm(formData.get('modoPagamento'));
   const online = modoPagamento !== 'entrega';
 
+  /*
+   * Retirada não pede endereço.
+   *
+   * O endereço guardado é o da própria loja, porque é onde o pedido é entregue
+   * — e porque o resto do sistema (mapa, geocodificação, histórico) espera um
+   * endereço válido. O que distingue os dois casos é o `fulfillment`, não o
+   * texto do endereço.
+   */
+  const retirada = formData.get('fulfillment') === 'PICKUP' && establishment.pickupEnabled;
+
   const rua = String(formData.get('street') ?? '').trim();
   const numero = String(formData.get('number') ?? '').trim();
   const bairro = String(formData.get('neighborhood') ?? '').trim();
   const cidade = String(formData.get('city') ?? '').trim();
 
-  if (rua.length < 3) return { ok: false, error: 'Informe a rua.' };
-  if (!numero) return { ok: false, error: 'Informe o número. Se não tiver, escreva s/n.' };
-  if (bairro.length < 2) return { ok: false, error: 'Informe o bairro.' };
-  if (cidade.length < 2) return { ok: false, error: 'Informe a cidade.' };
+  if (!retirada) {
+    if (rua.length < 3) return { ok: false, error: 'Informe a rua.' };
+    if (!numero) return { ok: false, error: 'Informe o número. Se não tiver, escreva s/n.' };
+    if (bairro.length < 2) return { ok: false, error: 'Informe o bairro.' };
+    if (cidade.length < 2) return { ok: false, error: 'Informe a cidade.' };
+  }
 
   const parsed = createOrderSchema.safeParse({
     customerName: formData.get('customerName'),
     customerPhone: formData.get('customerPhone'),
-    address: montarEndereco({ rua, numero, bairro, cidade }),
+    address: retirada
+      ? establishment.address
+      : montarEndereco({ rua, numero, bairro, cidade }),
     reference: formData.get('reference'),
     amountReais: 0,
     notes: formData.get('notes'),
@@ -324,6 +345,7 @@ export async function criarPedidoPublicoAction(
     const order = await container.useCases.createOrder.execute({
       ...parsed.data,
       source: 'SITE',
+      fulfillment: retirada ? ('PICKUP' as const) : ('DELIVERY' as const),
       paymentStatus: online ? 'PENDING' : null,
       city: cidade,
       items: parsed.data.items.map((item) => ({

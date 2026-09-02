@@ -43,6 +43,8 @@ export class Establishment extends Entity {
      * Desligado por padrão: ligar muda o trabalho do motoboy no meio do turno.
      */
     readonly requireDeliveryCode: boolean = false,
+    /** Oferece retirada no balcão no cardápio público. */
+    readonly pickupEnabled: boolean = false,
   ) {
     super(id);
   }

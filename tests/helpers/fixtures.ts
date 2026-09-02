@@ -60,12 +60,14 @@ export function makeOrder(
     amount: number;
     source: 'MANUAL' | 'WEBHOOK' | 'IFOOD' | 'AIQFOME';
     externalId: string | null;
+    fulfillment: 'DELIVERY' | 'PICKUP';
   }> = {},
 ): Order {
   return Order.create({
     id,
     establishmentId: 'est-1',
     source: overrides.source ?? 'MANUAL',
+    fulfillment: overrides.fulfillment ?? 'DELIVERY',
     externalId: overrides.externalId ?? null,
     customerName: overrides.name ?? `Cliente ${id}`,
     customerPhone: overrides.phone === null ? null : PhoneNumber.create(overrides.phone ?? '41988887777'),

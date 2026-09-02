@@ -335,6 +335,30 @@ export async function alternarRotaNoWhatsappAction(ligado: boolean): Promise<Act
 }
 
 /**
+ * Oferece retirada no balcão no cardápio público.
+ *
+ * Desligado por padrão: nem toda cozinha tem balcão, e oferecer retirada onde
+ * ninguém pode buscar gera pedido que o dono vai ter que ligar para desfazer.
+ */
+export async function alternarRetiradaAction(ligado: boolean): Promise<ActionResult> {
+  try {
+    const session = await requireSession();
+    const { getPrismaClient } = await import('@/infrastructure/persistence/prisma/client');
+    const { env } = await import('@/env');
+
+    await getPrismaClient(env().DATABASE_URL).establishment.update({
+      where: { id: session.establishmentId },
+      data: { pickupEnabled: ligado },
+    });
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+
+  revalidatePath('/dashboard/configuracoes');
+  return { ok: true };
+}
+
+/**
  * Exige o código do cliente para o entregador fechar a entrega.
  *
  * O painel continua podendo concluir sem código, de propósito: telefone

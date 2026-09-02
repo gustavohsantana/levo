@@ -7,6 +7,7 @@ import {
   NotFoundError,
   OrderAlreadyRoutedError,
   OrderNotGeocodedError,
+  ValidationError,
   Route,
   RouteStop,
   type RouteOptimizer,
@@ -118,6 +119,19 @@ export class PlanRoute {
         const order = freshById.get(stale.id);
         if (!order) throw new NotFoundError('Pedido', stale.id);
         if (order.status !== 'NEW') throw new OrderAlreadyRoutedError(order.id);
+        /*
+         * Retirada não entra em rota.
+         *
+         * Recusar aqui, e não só esconder da tela, porque a tela não é a única
+         * porta: importação de marketplace e pedido montado por outra aba
+         * chegam por caminhos diferentes. Um pedido de balcão no baú do motoboy
+         * é uma entrega que ninguém pediu, num endereço que é a própria loja.
+         */
+        if (order.isPickup) {
+          throw new ValidationError(
+            `${order.customerName} é retirada no balcão — não entra em rota.`,
+          );
+        }
         return order;
       });
 

@@ -50,6 +50,8 @@ interface Input {
   }>;
   /** Ausente usa a taxa configurada no estabelecimento. */
   deliveryFeeReais?: number | null;
+  /** Retirada no balcão não entra em rota nem paga taxa. */
+  fulfillment?: 'DELIVERY' | 'PICKUP';
   paymentMethod?: PaymentMethod | null;
   paymentStatus?: PaymentStatus | null;
   /** Cidade do endereço, quando o cliente a informou no cardápio. */
@@ -93,7 +95,18 @@ export class CreateOrder {
 
     return this.uow.run(async (repos) => {
       const itens = await this.resolverItens(repos, input.items ?? []);
-      const taxa = await this.taxaDeEntrega(repos, estabelecimento, coordinates, input);
+      /*
+       * Retirada não paga taxa de entrega.
+       *
+       * Aqui, e não na tela: cobrar por uma entrega que não vai acontecer é o
+       * tipo de erro que o cliente descobre no balcão, com o pedido pronto — e
+       * aí a conversa é sobre devolver dinheiro, não sobre um campo do
+       * formulário.
+       */
+      const taxa =
+        input.fulfillment === 'PICKUP'
+          ? Money.zero()
+          : await this.taxaDeEntrega(repos, estabelecimento, coordinates, input);
 
       const order = Order.create({
         id: this.ids.next(),
@@ -106,6 +119,7 @@ export class CreateOrder {
           : null,
         address,
         coordinates,
+          fulfillment: input.fulfillment ?? 'DELIVERY',
         amount: Money.fromReais(input.amountReais ?? 0),
         deliveryFee: taxa,
         paymentMethod: input.paymentMethod,
