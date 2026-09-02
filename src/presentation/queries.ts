@@ -186,6 +186,10 @@ export interface CourierView {
   phone: string;
   active: boolean;
   busy: boolean;
+  /** O acordo em uma linha. `null` quando ainda não foi combinado. */
+  pagamento: string | null;
+  /** Onde ele estava por último, se está em rota agora. */
+  posicao: { lat: number; lng: number; at: string } | null;
 }
 
 /**
@@ -218,6 +222,16 @@ export async function getOptionGroups(): Promise<OptionGroupView[]> {
   });
 }
 
+/** Onde a loja fica. É o centro do mapa dos entregadores. */
+export async function getLojaNoMapa(): Promise<{ lat: number; lng: number; nome: string } | null> {
+  const { container } = await currentContainer();
+  return container.read(async (repos) => {
+    const e = await repos.establishments.current();
+    const c = e.coordinates.toJSON();
+    return { lat: c.lat, lng: c.lng, nome: e.name };
+  });
+}
+
 export async function getCouriers(): Promise<CourierView[]> {
   const { container } = await currentContainer();
 
@@ -225,14 +239,66 @@ export async function getCouriers(): Promise<CourierView[]> {
     const couriers = await repos.couriers.list();
     const ativas = await repos.routes.listActive();
 
-    return couriers.map((courier) => ({
-      id: courier.id,
-      name: courier.name,
-      phone: courier.phone.formatted,
-      active: courier.active,
-      busy: ativas.some((route) => route.courierId === courier.id),
-    }));
+    /*
+     * O acordo e a última posição vêm junto com a lista.
+     *
+     * O dono quer duas respostas ao abrir esta tela — quanto pago a cada um, e
+     * onde eles estão. Escondê-las atrás de um clique por motoboy transforma
+     * uma olhada em uma expedição.
+     */
+    const acordos = await Promise.all(
+      couriers.map(async (c) => [c.id, await repos.couriers.payAgreement(c.id)] as const),
+    );
+    const porId = new Map(acordos);
+
+    const emRota = new Map(ativas.map((r) => [r.courierId, r.id]));
+    const posicoes = await Promise.all(
+      [...emRota.entries()].map(
+        async ([courierId, routeId]) => [courierId, await repos.pings.lastPing(routeId)] as const,
+      ),
+    );
+    const ultimaPosicao = new Map(posicoes);
+
+    return couriers.map((courier) => {
+      const acordo = porId.get(courier.id);
+      const ping = ultimaPosicao.get(courier.id);
+
+      return {
+        id: courier.id,
+        name: courier.name,
+        phone: courier.phone.formatted,
+        active: courier.active,
+        busy: emRota.has(courier.id),
+        pagamento: acordo ? resumoDoAcordo(acordo) : null,
+        posicao: ping ? { ...ping.coordinates.toJSON(), at: ping.at.toISOString() } : null,
+      };
+    });
   });
+}
+
+/**
+ * O acordo em uma linha, para caber na lista.
+ *
+ * `null` quando ainda não foi combinado — e a tela precisa dizer isso, não
+ * mostrar "R$ 0,00": zero parece uma conta fechada, e o dono só descobriria o
+ * buraco no dia do acerto.
+ */
+function resumoDoAcordo(acordo: {
+  model: string;
+  perDelivery: { cents: number };
+  daily: { cents: number };
+  bands: unknown[];
+}): string | null {
+  const reais = (c: number) => `R$ ${(c / 100).toFixed(2).replace('.', ',')}`;
+
+  if (acordo.model === 'POR_FAIXA') {
+    return acordo.bands.length > 0 ? `${acordo.bands.length} faixas por distância` : null;
+  }
+  if (acordo.model === 'DIARIA_E_ENTREGA') {
+    if (acordo.daily.cents === 0 && acordo.perDelivery.cents === 0) return null;
+    return `${reais(acordo.daily.cents)}/dia + ${reais(acordo.perDelivery.cents)}/entrega`;
+  }
+  return acordo.perDelivery.cents > 0 ? `${reais(acordo.perDelivery.cents)} por entrega` : null;
 }
 
 export interface CourierDay {

@@ -8,6 +8,7 @@ import {
   salvarEntregadorAction,
 } from '@/presentation/courier-actions';
 import type { CourierView } from '@/presentation/queries';
+import { CouriersMap } from './couriers-map';
 import { Button, EmptyState, Field, Input } from '../primitives';
 
 /**
@@ -17,7 +18,14 @@ import { Button, EmptyState, Field, Input } from '../primitives';
  * escolher na hora de despachar, e o telefone, que é por onde a rota chega.
  * Sem telefone o entregador existe e não recebe trabalho.
  */
-export function Couriers({ entregadores }: { entregadores: CourierView[] }) {
+export function Couriers({
+  entregadores,
+  loja,
+}: {
+  entregadores: CourierView[];
+  /** Centro do mapa: é da loja que todo mundo sai. */
+  loja: { lat: number; lng: number; nome: string } | null;
+}) {
   const [editando, setEditando] = useState<CourierView | null>(null);
   const [criando, setCriando] = useState(false);
 
@@ -27,7 +35,7 @@ export function Couriers({ entregadores }: { entregadores: CourierView[] }) {
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-ink">Entregadores</h1>
           <p className="mt-1 text-sm text-ink-muted">
-            Quem leva os pedidos. Clique num nome para ver o histórico e fechar o acerto.
+            Quem leva os pedidos, quanto cada um recebe, e onde estão agora.
           </p>
         </div>
 
@@ -42,6 +50,8 @@ export function Couriers({ entregadores }: { entregadores: CourierView[] }) {
           Novo entregador
         </Button>
       </div>
+
+      {loja ? <CouriersMap entregadores={entregadores} loja={loja} /> : null}
 
       {criando || editando ? (
         <CourierForm
@@ -101,11 +111,24 @@ function CourierRow({
         </span>
       ) : null}
 
+      {/*
+        O acordo aparece na própria linha.
+
+        Antes ele vivia atrás de um botão chamado "Histórico" — que não mentia
+        só no rótulo: quem procurava quanto paga a alguém não tinha motivo
+        nenhum para clicar ali.
+      */}
+      <p className="mt-2 text-xs text-ink-faint">
+        {entregador.pagamento ?? (
+          <span className="text-amber-700">Acordo de pagamento não definido</span>
+        )}
+      </p>
+
       <div className="mt-3 flex flex-wrap items-center gap-1">
         <Button asChild variant="ghost" size="sm">
           <Link href={`/dashboard/entregadores/${entregador.id}`}>
-            <CalendarDays />
-            Histórico
+            <Pencil />
+            Editar
           </Link>
         </Button>
 
