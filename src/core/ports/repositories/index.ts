@@ -113,7 +113,12 @@ export interface CourierPingRepository {
     at: Date,
     source?: 'APP' | 'TELEGRAM' | 'CHECKIN',
   ): Promise<void>;
-  lastPing(routeId: string): Promise<{ coordinates: Coordinates; at: Date } | null>;
+  lastPing(routeId: string): Promise<{
+    coordinates: Coordinates;
+    at: Date;
+    /** De onde veio: rastreio contínuo ou o check de uma entrega. */
+    source: 'APP' | 'TELEGRAM' | 'CHECKIN';
+  } | null>;
   trail(routeId: string, limit: number): Promise<Array<{ coordinates: Coordinates; at: Date }>>;
   purgeFinishedBefore(cutoff: Date): Promise<number>;
 }

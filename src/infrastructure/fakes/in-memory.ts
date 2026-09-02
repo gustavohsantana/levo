@@ -295,8 +295,9 @@ function buildRepositories(db: InMemoryDatabase): Repositories {
       db.pings.set(routeId, trail);
     },
     async lastPing(routeId) {
-      const trail = db.pings.get(routeId) ?? [];
-      return trail.at(-1) ?? null;
+      const todos = db.pings.get(routeId) ?? [];
+      const ultimo = todos.at(-1);
+      return ultimo ? { ...ultimo, source: 'APP' as const } : null;
     },
     async trail(routeId, limit) {
       return (db.pings.get(routeId) ?? []).slice(-limit);

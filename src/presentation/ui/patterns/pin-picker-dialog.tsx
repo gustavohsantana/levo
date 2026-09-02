@@ -144,9 +144,20 @@ export function PinPickerDialog({
               className="h-full w-full"
               center={origin}
               onPick={setPicked}
+              /*
+               * Para de reenquadrar depois do primeiro clique.
+               *
+               * Antes, cada toque dava zoom no ponto marcado e movia o mapa
+               * embaixo do dedo — ajustar o pino virava perseguição, e era por
+               * isso que não dava para escolher direito.
+               */
+              autoFit={!picked}
               markers={
                 picked
-                  ? [{ ...picked, label: order.customerName, kind: 'destination' }]
+                  ? [
+                      { ...origin, label: 'Estabelecimento', kind: 'origin' },
+                      { ...picked, label: order.customerName, kind: 'destination' },
+                    ]
                   : [{ ...origin, label: 'Estabelecimento', kind: 'origin' }]
               }
             />

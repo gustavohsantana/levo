@@ -190,7 +190,7 @@ export interface CourierView {
   /** O acordo em uma linha. `null` quando ainda não foi combinado. */
   pagamento: string | null;
   /** Onde ele estava por último, se está em rota agora. */
-  posicao: { lat: number; lng: number; at: string } | null;
+  posicao: { lat: number; lng: number; at: string; origem: string } | null;
 }
 
 /**
@@ -229,7 +229,7 @@ export interface RotaNoMapa {
   courierName: string;
   /** Traçado da rota, como o roteirizador devolveu. */
   geometry: string | null;
-  posicao: { lat: number; lng: number; at: string } | null;
+  posicao: { lat: number; lng: number; at: string; origem: string } | null;
   /**
    * Quando ele deve estar de volta na loja.
    *
@@ -290,7 +290,18 @@ export async function getRotasNoMapa(): Promise<RotaNoMapa[]> {
         courierId: rota.courierId,
         courierName: nomes.get(rota.courierId) ?? '—',
         geometry: rota.geometry,
-        posicao: ping ? { ...ping.coordinates.toJSON(), at: ping.at.toISOString() } : null,
+        posicao: ping
+          ? {
+              ...ping.coordinates.toJSON(),
+              at: ping.at.toISOString(),
+              /*
+               * A origem muda o que o pino significa. GPS é onde ele está;
+               * "entrega" é onde ele esteve, no portão do último cliente — e
+               * pode já ter andado muito desde então.
+               */
+              origem: ping.source === 'CHECKIN' ? 'entrega' : 'GPS',
+            }
+          : null,
         /*
          * Só depois de sair. Antes disso a duração é uma previsão sem âncora no
          * relógio, e um horário inventado é pior que horário nenhum: o dono
@@ -375,7 +386,13 @@ export async function getCouriers(): Promise<CourierView[]> {
         active: courier.active,
         busy: emRota.has(courier.id),
         pagamento: acordo ? resumoDoAcordo(acordo) : null,
-        posicao: ping ? { ...ping.coordinates.toJSON(), at: ping.at.toISOString() } : null,
+        posicao: ping
+          ? {
+              ...ping.coordinates.toJSON(),
+              at: ping.at.toISOString(),
+              origem: ping.source === 'CHECKIN' ? 'entrega' : 'GPS',
+            }
+          : null,
       };
     });
   });

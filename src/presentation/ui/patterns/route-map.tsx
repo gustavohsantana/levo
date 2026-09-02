@@ -38,6 +38,7 @@ export function RouteMap({
   className,
   onPick,
   center,
+  autoFit = true,
 }: {
   markers: MapMarker[];
   geometry?: string | null;
@@ -49,6 +50,14 @@ export function RouteMap({
   onPick?: (coordinates: { lat: number; lng: number }) => void;
   /** Enquadramento inicial quando ainda não há marcador nenhum. */
   center?: { lat: number; lng: number };
+  /**
+   * Reenquadrar quando os marcadores mudam.
+   *
+   * Ligado é o certo para acompanhar rota. Desligado é o certo para ESCOLHER um
+   * ponto: reenquadrar a cada clique dá zoom no que você acabou de marcar e
+   * move o mapa embaixo do seu dedo — ajustar o pino vira perseguição.
+   */
+  autoFit?: boolean;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
@@ -220,12 +229,14 @@ export function RouteMap({
       bounds.push([lat, lng]);
     }
 
+    if (!autoFit) return;
+
     if (bounds.length > 0) {
       map.current.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 16 });
     } else if (center) {
       map.current.setView([center.lat, center.lng], 14);
     }
-  }, [markers, path, caminhos, trail, center]);
+  }, [markers, path, caminhos, trail, center, autoFit]);
 
   return (
     <div className="relative h-full w-full">

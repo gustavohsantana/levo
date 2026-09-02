@@ -149,7 +149,15 @@ export function CouriersMap({
                   */}
                   {' · '}
                   {rota.rastreio === 'no mapa' && rota.posicao ? (
-                    <span suppressHydrationWarning>{timeAgo(rota.posicao.at)}</span>
+                    <>
+                      <span suppressHydrationWarning>{timeAgo(rota.posicao.at)}</span>
+                      {/*
+                        A origem muda o significado do pino. GPS é onde ele
+                        está; "entrega" é onde ele esteve, no portão do último
+                        cliente — e pode já ter andado muito desde então.
+                      */}
+                      <span className="text-ink-faint"> · {rota.posicao.origem}</span>
+                    </>
                   ) : (
                     <span className={rota.rastreio === 'recusou o rastreio' ? 'text-amber-700' : ''}>
                       {rota.rastreio}

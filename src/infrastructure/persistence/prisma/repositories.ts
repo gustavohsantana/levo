@@ -462,7 +462,13 @@ export class PrismaCourierPingRepository implements CourierPingRepository {
       where: { routeId },
       orderBy: { recordedAt: 'desc' },
     });
-    return row ? { coordinates: Coordinates.create(row.lat, row.lng), at: row.recordedAt } : null;
+    return row
+      ? {
+          coordinates: Coordinates.create(row.lat, row.lng),
+          at: row.recordedAt,
+          source: row.source as 'APP' | 'TELEGRAM' | 'CHECKIN',
+        }
+      : null;
   }
 
   async trail(routeId: string, limit: number) {
