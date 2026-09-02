@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Check, ChefHat, Clock, LoaderCircle } from 'lucide-react';
 import { advanceOrderStageAction } from '@/presentation/actions';
 import type { OrderView } from '@/presentation/queries';
+import { SinoDePedidos } from './order-bell';
 
 /**
  * A tela da cozinha.
@@ -45,6 +46,14 @@ export function KitchenBoard({ pedidos }: { pedidos: OrderView[] }) {
         <p className="text-sm text-ink-muted">
           {pedidos.length === 0 ? 'Nada na fila' : `${pedidos.length} na fila`}
         </p>
+
+        {/*
+          Aqui o sino vale ainda mais que no painel: a cozinha não fica de olho
+          no tablet, ela olha quando ouve.
+        */}
+        <div className="ml-auto">
+          <SinoDePedidos novos={novos.map((p) => ({ id: p.id, cliente: p.customerName }))} />
+        </div>
       </div>
 
       <div className="grid gap-3 lg:grid-cols-3">

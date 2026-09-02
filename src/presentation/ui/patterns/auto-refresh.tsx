@@ -12,14 +12,28 @@ import { useRouter } from 'next/navigation';
  * aberto ou o mapa arrastado, e nada disso se perde quando um pedido novo
  * aparece. É por isso que não é um `location.reload()`.
  *
- * Pausa com a aba escondida. Um painel esquecido aberto a noite inteira faria
- * uma consulta a cada poucos segundos sem ninguém olhando — e quem paga essa
- * conta é o banco do cliente.
+ * Com a aba escondida ele desacelera, mas não para.
  *
- * Volta a atualizar assim que a aba reaparece, e imediatamente: quem volta para
- * a aba quer o estado de agora, não o de daqui a dez segundos.
+ * Parar seria mais barato, e foi assim no começo. Só que a aba escondida é
+ * exatamente o caso do sino: o dono está no iFood, no WhatsApp, no caixa, e o
+ * pedido que chega nesse minuto é o que ele mais precisa ouvir. Um painel que
+ * dorme junto com a aba não tem como avisar de nada.
+ *
+ * O meio-termo é a cadência: de dez em dez segundos com alguém olhando, de
+ * trinta em trinta quando ninguém está. Um painel esquecido aberto a noite
+ * inteira ainda consulta, mas um terço das vezes — e quem paga essa conta é o
+ * banco do cliente.
+ *
+ * Volta ao ritmo cheio assim que a aba reaparece, e atualiza na hora: quem
+ * volta para a aba quer o estado de agora, não o de daqui a dez segundos.
  */
-export function AutoRefresh({ segundos = 10 }: { segundos?: number }) {
+export function AutoRefresh({
+  segundos = 10,
+  segundosEscondido = 30,
+}: {
+  segundos?: number;
+  segundosEscondido?: number;
+}) {
   const router = useRouter();
 
   useEffect(() => {
@@ -32,26 +46,23 @@ export function AutoRefresh({ segundos = 10 }: { segundos?: number }) {
 
     const comecar = () => {
       parar();
-      timer = setInterval(() => router.refresh(), segundos * 1000);
+      const passo = document.hidden ? segundosEscondido : segundos;
+      timer = setInterval(() => router.refresh(), passo * 1000);
     };
 
     const aoTrocarVisibilidade = () => {
-      if (document.hidden) {
-        parar();
-      } else {
-        router.refresh();
-        comecar();
-      }
+      if (!document.hidden) router.refresh();
+      comecar();
     };
 
-    if (!document.hidden) comecar();
+    comecar();
     document.addEventListener('visibilitychange', aoTrocarVisibilidade);
 
     return () => {
       parar();
       document.removeEventListener('visibilitychange', aoTrocarVisibilidade);
     };
-  }, [router, segundos]);
+  }, [router, segundos, segundosEscondido]);
 
   return null;
 }

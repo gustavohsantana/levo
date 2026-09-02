@@ -1,4 +1,5 @@
 import { minutes } from '../format';
+import { SinoDePedidos } from './order-bell';
 
 /**
  * O dia em uma linha.
@@ -10,9 +11,12 @@ import { minutes } from '../format';
 export function DayLedger({
   establishmentName,
   today,
+  novos,
 }: {
   establishmentName: string;
   today: { orders: number; delivered: number; routes: number; savedMinutes: number };
+  /** Fila de agora, para o sino saber quem acabou de chegar. */
+  novos: Array<{ id: string; cliente: string }>;
 }) {
   return (
     <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
@@ -23,6 +27,12 @@ export function DayLedger({
         <Stat value={today.delivered} label="entregues" />
         <Stat value={today.routes} label={today.routes === 1 ? 'rota' : 'rotas'} />
       </div>
+
+      {/*
+        Junto do nome da loja, e não perdido num menu de configuração: é uma
+        chave que o dono liga no começo do turno e desliga quando fecha.
+      */}
+      <SinoDePedidos novos={novos} />
 
       {today.savedMinutes > 0 ? (
         <p className="ml-auto flex items-baseline gap-1.5 rounded-md bg-accent-soft px-2.5 py-1">

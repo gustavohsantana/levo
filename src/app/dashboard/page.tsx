@@ -21,7 +21,13 @@ export default async function DashboardPage() {
           Cartão de estatística ocupa a dobra com número que ninguém age em cima;
           o espaço nobre é da fila de trabalho, logo abaixo.
         */}
-        <DayLedger establishmentName={data.establishment.name} today={data.today} />
+        <DayLedger
+        establishmentName={data.establishment.name}
+        today={data.today}
+        novos={data.pending
+          .filter((o) => o.stage === 'NOVO')
+          .map((o) => ({ id: o.id, cliente: o.customerName }))}
+      />
 
         <WorkQueue
           pending={data.pending}
