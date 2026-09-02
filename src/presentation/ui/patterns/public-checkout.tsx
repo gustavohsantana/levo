@@ -21,6 +21,7 @@ import {
 } from '@/presentation/menu-session';
 import { Button, Field, Input, Select, Textarea } from '../primitives';
 import { currency } from '../format';
+import { ConfirmarNoMapa } from './confirmar-no-mapa';
 import { mesmaRua } from '@/core/services/endereco';
 
 /**
@@ -60,6 +61,8 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
   const [retirada, setRetirada] = useState(false);
   /** A rua que o CEP aponta, quando difere da que a pessoa escreveu. */
   const [sugestaoRua, setSugestaoRua] = useState<string | null>(null);
+  /** O ponto que o cliente marcou, quando o endereço não foi encontrado. */
+  const [, setPin] = useState<{ lat: number; lng: number } | null>(null);
   const [cep, setCep] = useState('');
   const [buscandoCep, setBuscandoCep] = useState(false);
   const [avisoCep, setAvisoCep] = useState<string | null>(null);
@@ -492,6 +495,28 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
             />
           </Field>
         </div>
+
+        {/*
+          A conferência fica DEPOIS do endereço e ANTES do pagamento.
+
+          É o último momento em que o cliente ainda está pensando em onde mora.
+          Passado dali ele está pensando em dinheiro, e qualquer coisa sobre
+          endereço vira obstáculo entre ele e o pedido.
+        */}
+        {menu.establishment.lat != null && menu.establishment.lng != null ? (
+          <ConfirmarNoMapa
+            slug={slug}
+            /*
+             * Sem o número: o geocodificador brasileiro raramente tem
+             * numeração residencial, e incluí-lo faz a busca falhar em rua que
+             * existe. Quem precisa do número é o motoboy, e ele o tem no
+             * endereço escrito.
+             */
+            endereco={[rua, bairro, cidade].filter(Boolean).join(', ')}
+            origem={{ lat: menu.establishment.lat, lng: menu.establishment.lng }}
+            onPin={setPin}
+          />
+        ) : null}
 
         <Field label="Complemento" hint="apartamento, portão, referência">
           <Input name="reference" autoComplete="address-line2" defaultValue={rascunho?.reference} />

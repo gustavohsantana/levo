@@ -2,6 +2,7 @@
 
 import { Money, precoMinimo } from '@/core';
 import { containerFor } from '@/composition-root';
+import { Address } from '@/core';
 import { env } from '@/env';
 import { getPrismaClient } from '@/infrastructure/persistence/prisma/client';
 import { createOrderSchema } from '@/application/dto/schemas';
@@ -31,6 +32,9 @@ export interface MenuPublico {
     /** Onde o cliente busca, quando a loja oferece retirada. */
     address: string;
     pickupEnabled: boolean;
+    /** Enquadramento inicial do mapa de conferência: a entrega é perto da loja. */
+    lat: number | null;
+    lng: number | null;
   };
   /** Conta Mercado Pago conectada — habilita Pix e cartão online. */
   pixOnlineDisponivel: boolean;
@@ -72,6 +76,8 @@ export async function getMenuPublico(slug: string): Promise<MenuPublico | null> 
       slug: true,
       address: true,
       pickupEnabled: true,
+      lat: true,
+      lng: true,
       deliveryFeeCents: true,
       city: true,
       state: true,
@@ -172,6 +178,8 @@ export async function getMenuPublico(slug: string): Promise<MenuPublico | null> 
       deliveryFeeReais: establishment.deliveryFeeCents / 100,
       address: establishment.address,
       pickupEnabled: establishment.pickupEnabled,
+      lat: establishment.lat,
+      lng: establishment.lng,
       city: establishment.city ?? '',
       state: establishment.state,
     },
@@ -283,6 +291,13 @@ export async function criarPedidoPublicoAction(
    */
   const retirada = formData.get('fulfillment') === 'PICKUP' && establishment.pickupEnabled;
 
+  const pinLat = Number(formData.get('pinLat'));
+  const pinLng = Number(formData.get('pinLng'));
+  const pinDoCliente =
+    Number.isFinite(pinLat) && Number.isFinite(pinLng) && pinLat !== 0 && pinLng !== 0
+      ? { lat: pinLat, lng: pinLng }
+      : null;
+
   const rua = String(formData.get('street') ?? '').trim();
   const numero = String(formData.get('number') ?? '').trim();
   const bairro = String(formData.get('neighborhood') ?? '').trim();
@@ -346,6 +361,11 @@ export async function criarPedidoPublicoAction(
       ...parsed.data,
       source: 'SITE',
       fulfillment: retirada ? ('PICKUP' as const) : ('DELIVERY' as const),
+      /*
+       * O pino que o cliente marcou vence a busca automática — ele só marcou
+       * porque ela falhou, e quem mora ali sabe onde fica.
+       */
+      pin: pinDoCliente,
       paymentStatus: online ? 'PENDING' : null,
       city: cidade,
       items: parsed.data.items.map((item) => ({
@@ -766,6 +786,46 @@ export async function renovarPixAction(
     };
   } catch (cause) {
     return { ok: false, error: toFormError(cause) };
+  }
+}
+
+/**
+ * Onde fica este endereço, para o cliente conferir antes de enviar.
+ *
+ * O geocodificador falha por coisas fora do alcance de quem pede: rua nova, ou
+ * uma letra de diferença — "Resende" e "Rezende" são a mesma rua para gente e
+ * duas para o mapa. Quando ele falha, quem sabe onde mora é o cliente, e ele
+ * está com o telefone na mão AGORA. Descobrir isso depois, no painel, é o dono
+ * ligando para perguntar onde é.
+ */
+export async function localizarEnderecoAction(
+  slug: string,
+  endereco: string,
+): Promise<{ ok: true; lat: number; lng: number } | { ok: false }> {
+  const limite = checkRateLimit(`geo:publico:${slug}`, { max: 30, windowMs: 60_000 });
+  if (!limite.allowed) return { ok: false };
+
+  const prisma = getPrismaClient(env().DATABASE_URL);
+  const establishment = await prisma.establishment.findUnique({
+    where: { slug },
+    select: { id: true },
+  });
+  if (!establishment) return { ok: false };
+
+  try {
+    const container = containerFor(establishment.id);
+    const loja = await container.read((repos) => repos.establishments.current());
+
+    const achado = await container.geocoder
+      .geocode(Address.create(endereco), { city: loja.city, state: loja.state })
+      .catch(() => null);
+
+    if (!achado) return { ok: false };
+
+    const { lat, lng } = achado.toJSON();
+    return { ok: true, lat, lng };
+  } catch {
+    return { ok: false };
   }
 }
 

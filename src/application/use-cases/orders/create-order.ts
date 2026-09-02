@@ -1,6 +1,6 @@
 import {
   Address,
-  type Coordinates,
+  Coordinates,
   type DeliveryFeeBand,
   type Establishment,
   taxaPorDistancia,
@@ -52,6 +52,13 @@ interface Input {
   deliveryFeeReais?: number | null;
   /** Retirada no balcão não entra em rota nem paga taxa. */
   fulfillment?: 'DELIVERY' | 'PICKUP';
+  /**
+   * O pino que o próprio cliente marcou no mapa.
+   *
+   * Vence o geocodificador quando existe — e é o certo: quem mora ali sabe onde
+   * fica, e só marca porque a busca automática falhou.
+   */
+  pin?: { lat: number; lng: number } | null;
   paymentMethod?: PaymentMethod | null;
   paymentStatus?: PaymentStatus | null;
   /** Cidade do endereço, quando o cliente a informou no cardápio. */
@@ -86,7 +93,15 @@ export class CreateOrder {
      */
     const estabelecimento = await this.uow.run((repos) => repos.establishments.current());
 
-    const coordinates = await this.geocoder
+    /*
+     * O pino do cliente dispensa a busca.
+     *
+     * Ele só marca quando o endereço não foi encontrado, então insistir no
+     * geocodificador aqui gastaria uma chamada para reencontrar o mesmo nada.
+     */
+    const coordinates = input.pin
+      ? Coordinates.create(input.pin.lat, input.pin.lng)
+      : await this.geocoder
       .geocode(address, {
         city: input.city?.trim() || estabelecimento.city,
         state: estabelecimento.state,
