@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import { useRouter } from 'next/navigation';
 import {
   Check,
+  ChevronRight,
   CloudOff,
   MapPin,
   Navigation,
@@ -72,7 +73,21 @@ export function CourierApp({
   );
 
   const pending = stops.filter((stop) => stop.status === 'PENDING');
-  const current = pending[0] ?? null;
+
+  /*
+   * A parada em foco não é obrigatoriamente a primeira.
+   *
+   * A rota é uma sugestão, não uma ordem: o prédio do 2 não atende, o cliente
+   * do 3 ligou pedindo para chegar antes, a rua está interditada. Travar o
+   * motoboy na sequência não impede nada disso — só faz ele resolver como já
+   * resolvia antes do sistema existir: marcando tudo no fim, de memória, com o
+   * horário errado.
+   *
+   * O foco volta sozinho para a primeira quando a escolhida sai da lista, e é
+   * por isso que ele guarda o id e não o índice.
+   */
+  const [focoManual, setFocoManual] = useState<string | null>(null);
+  const current = pending.find((stop) => stop.id === focoManual) ?? pending[0] ?? null;
   const done = stops.length - pending.length;
   // Só o que falta entregar, na ordem que o OSRM definiu. Recalcular a cada
   // render é de graça no tamanho de uma rota, e memoizar aqui só criaria a
@@ -304,19 +319,38 @@ export function CourierApp({
               </a>
             ) : null}
           </div>
-          <ol className="space-y-1.5">
-            {pending.slice(1).map((stop) => (
-              <li key={stop.id} className="flex items-start gap-2.5 text-sm">
-                <span className="numeric mt-0.5 grid size-5 shrink-0 place-items-center rounded-xs bg-raised text-xs text-ink-muted">
-                  {stop.position}
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate font-medium text-ink">{stop.customerName}</span>
-                  <span className="block truncate text-xs text-ink-muted">{stop.address}</span>
-                </span>
-              </li>
-            ))}
+          <ol className="space-y-1">
+            {pending
+              .filter((stop) => stop.id !== current?.id)
+              .map((stop) => (
+                <li key={stop.id}>
+                  {/*
+                    Cada uma é um botão: tocar traz para a frente. Área de toque
+                    generosa porque quem usa está de luva, parado no farol.
+                  */}
+                  <button
+                    type="button"
+                    onClick={() => setFocoManual(stop.id)}
+                    className="-mx-2 flex w-[calc(100%+1rem)] items-start gap-2.5 rounded-md px-2 py-2 text-left text-sm transition active:bg-raised"
+                  >
+                    <span className="numeric mt-0.5 grid size-5 shrink-0 place-items-center rounded-xs bg-raised text-xs text-ink-muted">
+                      {stop.position}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium text-ink">
+                        {stop.customerName}
+                      </span>
+                      <span className="block truncate text-xs text-ink-muted">{stop.address}</span>
+                    </span>
+                    <ChevronRight className="mt-1 size-4 shrink-0 text-ink-faint" aria-hidden />
+                  </button>
+                </li>
+              ))}
           </ol>
+
+          <p className="mt-2 text-xs text-ink-faint">
+            Toque em qualquer uma para entregar fora de ordem.
+          </p>
 
           {/*
             O limite é do Google, não da rota: o planejamento aceita 15 paradas

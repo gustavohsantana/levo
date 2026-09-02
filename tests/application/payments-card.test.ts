@@ -17,7 +17,7 @@ function pedidoPendente(id = 'pedido-1') {
     establishmentId: PIZZARIA.id,
     source: 'SITE',
     customerName: 'Maria',
-    address: Address.create('Rua das Flores, 10 - Centro, Curitiba'),
+    address: Address.create('Rua das Flores, 10 - Centro, Pouso Alegre'),
     amount: Money.fromCents(4500),
     paymentStatus: 'PENDING',
   });

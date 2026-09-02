@@ -26,7 +26,7 @@ const clock = new FixedClock(new Date('2026-09-01T18:00:00Z'));
 
 async function rotaComTresParadas() {
   const pontos = [
-    Coordinates.create(-25.43, -49.27),
+    Coordinates.create(-22.2307, -45.9346),
     Coordinates.create(-25.44, -49.28),
     Coordinates.create(-25.45, -49.29),
   ];

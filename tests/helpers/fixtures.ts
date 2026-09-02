@@ -15,25 +15,32 @@ import {
 } from '@/core';
 import { InMemoryDatabase } from '@/infrastructure/fakes/in-memory';
 
-/** Pizzaria no centro de Curitiba. */
+/**
+ * Pizzaria no centro de Pouso Alegre.
+ *
+ * A cidade é a mesma da operação real, e não uma genérica: quem lê um teste
+ * falhando reconhece as distâncias, sabe que Pitangueiras fica longe do Centro,
+ * e percebe um número absurdo antes de ir depurar. Endereço de mentira em
+ * cidade que ninguém conhece não dá nenhuma dessas pistas.
+ */
 export const PIZZARIA = new Establishment(
   'est-1',
   'Pizzaria do Zé',
-  Address.create('Rua XV de Novembro, 100 - Centro, Curitiba'),
-  Coordinates.create(-25.4284, -49.2733),
+  Address.create('Rua Comendador José Garcia, 100 - Centro, Pouso Alegre'),
+  Coordinates.create(-22.230747, -45.934612),
 );
 
 export function newDatabase(): InMemoryDatabase {
   const db = new InMemoryDatabase(PIZZARIA);
   db.couriers.set(
     'courier-1',
-    new Courier('courier-1', 'est-1', 'Jefferson', PhoneNumber.create('41999990001'), true),
+    new Courier('courier-1', 'est-1', 'Jefferson', PhoneNumber.create('35999990001'), true),
   );
   // Inativo de propósito: testa a recusa de despachar para quem não está
   // trabalhando.
   db.couriers.set(
     'courier-2',
-    new Courier('courier-2', 'est-1', 'Rodrigo', PhoneNumber.create('41999990002'), false),
+    new Courier('courier-2', 'est-1', 'Rodrigo', PhoneNumber.create('35999990002'), false),
   );
   // Segundo motoboy ativo: necessário para testar disputa por PEDIDO sem
   // esbarrar antes na disputa por MOTOBOY.
@@ -62,7 +69,7 @@ export function makeOrder(
     externalId: overrides.externalId ?? null,
     customerName: overrides.name ?? `Cliente ${id}`,
     customerPhone: overrides.phone === null ? null : PhoneNumber.create(overrides.phone ?? '41988887777'),
-    address: Address.create(`Rua Exemplo, ${id} - Curitiba`),
+    address: Address.create(`Rua Exemplo, ${id} - Pouso Alegre`),
     coordinates,
     amount: Money.fromReais(overrides.amount ?? 50),
   });
@@ -102,7 +109,7 @@ export class FakeRoutingService implements RoutingService {
 export class FakeGeocoder implements Geocoder {
   calls = 0;
 
-  constructor(private readonly result: Coordinates | null = Coordinates.create(-25.43, -49.27)) {}
+  constructor(private readonly result: Coordinates | null = Coordinates.create(-22.2307, -45.9346)) {}
 
   async geocode(): Promise<Coordinates | null> {
     this.calls++;

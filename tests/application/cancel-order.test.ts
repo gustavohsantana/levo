@@ -19,7 +19,7 @@ import { makeOrder, newDatabase } from '../helpers/fixtures';
 let db: InMemoryDatabase;
 let uow: InMemoryUnitOfWork;
 const clock = new FixedClock(new Date('2026-08-31T15:00:00Z'));
-const ponto = Coordinates.create(-25.43, -49.27);
+const ponto = Coordinates.create(-22.2307, -45.9346);
 
 function comandos(over: Partial<MarketplaceCommands> = {}): MarketplaceCommands {
   return { kind: 'IFOOD', ...over } as MarketplaceCommands;

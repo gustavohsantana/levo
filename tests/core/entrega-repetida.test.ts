@@ -10,7 +10,7 @@ import { makeOrder } from '../helpers/fixtures';
  * O sintoma era o pior tipo: a tela do motoboy dizia OK, o painel seguia
  * mostrando o pedido em rota, e não havia erro em lugar nenhum.
  */
-const ponto = Coordinates.create(-25.43, -49.27);
+const ponto = Coordinates.create(-22.2307, -45.9346);
 
 describe('confirmar entrega duas vezes', () => {
   it('a segunda confirmação não lança', () => {

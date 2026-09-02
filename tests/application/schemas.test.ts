@@ -25,7 +25,7 @@ describe('valor em reais', () => {
   it('o formulário de pedido aceita vírgula decimal', () => {
     const parsed = createOrderSchema.parse({
       customerName: 'Maria Silva',
-      address: 'Rua Trajano Reis, 300 - Curitiba',
+      address: 'Rua João Pinheiro, 300 - Pouso Alegre',
       amountReais: '89,90',
     });
 
@@ -35,7 +35,7 @@ describe('valor em reais', () => {
   it('o formulário funciona sem valor informado', () => {
     const parsed = createOrderSchema.parse({
       customerName: 'Maria Silva',
-      address: 'Rua Trajano Reis, 300 - Curitiba',
+      address: 'Rua João Pinheiro, 300 - Pouso Alegre',
       amountReais: '',
     });
 

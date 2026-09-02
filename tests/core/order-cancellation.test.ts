@@ -13,7 +13,7 @@ import { makeOrder } from '../helpers/fixtures';
  * Quem cancela decide se o lojista recebe. Mostrar "Entregue" num pedido
  * cancelado esconde exatamente a parte que dói.
  */
-const ponto = Coordinates.create(-25.43, -49.27);
+const ponto = Coordinates.create(-22.2307, -45.9346);
 
 describe('cancelamento externo', () => {
   it('cancela um pedido novo', () => {

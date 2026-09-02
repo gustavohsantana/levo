@@ -9,33 +9,34 @@ describe('Coordinates', () => {
   });
 
   it('identifica coordenada fora do Brasil', () => {
-    const curitiba = Coordinates.create(-25.4284, -49.2733);
+    const pousoAlegre = Coordinates.create(-22.2307, -45.9346);
     const lisboa = Coordinates.create(38.7223, -9.1393);
 
-    expect(curitiba.isPlausibleForBrazil).toBe(true);
+    expect(pousoAlegre.isPlausibleForBrazil).toBe(true);
     expect(lisboa.isPlausibleForBrazil).toBe(false);
   });
 
   it('calcula distância em linha reta com precisão aceitável', () => {
-    const curitiba = Coordinates.create(-25.4284, -49.2733);
+    const pousoAlegre = Coordinates.create(-22.2307, -45.9346);
     const saoPaulo = Coordinates.create(-23.5505, -46.6333);
 
-    // ~339 km em linha reta. A faixa é larga de propósito: o teste checa que a
-    // fórmula está certa em ordem de grandeza, não um valor de referência.
-    const km = curitiba.distanceTo(saoPaulo) / 1000;
-    expect(km).toBeGreaterThan(330);
-    expect(km).toBeLessThan(345);
+    // ~161 km em linha reta — é o trecho que a operação real conhece de cor.
+    // A faixa é larga de propósito: o teste checa que a fórmula está certa em
+    // ordem de grandeza, não um valor de referência.
+    const km = pousoAlegre.distanceTo(saoPaulo) / 1000;
+    expect(km).toBeGreaterThan(150);
+    expect(km).toBeLessThan(175);
   });
 
   it('serializa para o OSRM na ordem lng,lat', () => {
-    expect(Coordinates.create(-25.4284, -49.2733).toOsrm()).toBe('-49.2733,-25.4284');
+    expect(Coordinates.create(-22.2307, -45.9346).toOsrm()).toBe('-45.9346,-22.2307');
   });
 });
 
 describe('Address', () => {
   it('gera a mesma chave de cache para grafias diferentes do mesmo lugar', () => {
-    const a = Address.create('Av. Sete de Setembro, 1234 - Centro, Curitiba');
-    const b = Address.create('AVENIDA SETE DE SETEMBRO 1234, CENTRO - CURITIBA');
+    const a = Address.create('Av. Getúlio Vargas, 1234 - Centro, Pouso Alegre');
+    const b = Address.create('AVENIDA GETULIO VARGAS 1234, CENTRO - POUSO ALEGRE');
 
     expect(a.cacheKey).toBe(b.cacheKey);
   });
