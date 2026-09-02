@@ -3,6 +3,7 @@
 import { Money, precoMinimo } from '@/core';
 import { containerFor } from '@/composition-root';
 import { Address } from '@/core';
+import { estimarPreparo, faixaDePreparo } from '@/core/services/tempo-de-preparo';
 import { env } from '@/env';
 import { getPrismaClient } from '@/infrastructure/persistence/prisma/client';
 import { createOrderSchema } from '@/application/dto/schemas';
@@ -35,6 +36,8 @@ export interface MenuPublico {
     /** Enquadramento inicial do mapa de conferência: a entrega é perto da loja. */
     lat: number | null;
     lng: number | null;
+    /** "20 a 30 min", aprendido com a própria cozinha. Nulo sem histórico. */
+    preparo: string | null;
   };
   /** Conta Mercado Pago conectada — habilita Pix e cartão online. */
   pixOnlineDisponivel: boolean;
@@ -150,6 +153,8 @@ export async function getMenuPublico(slug: string): Promise<MenuPublico | null> 
     gruposPorProduto.set(vinculo.productId, lista);
   }
 
+  const preparo = await preparoDaCozinha(prisma, establishment.id);
+
   const porCategoria = new Map<string, MenuPublico['categorias'][number]['produtos']>();
 
   for (const produto of produtos) {
@@ -180,6 +185,7 @@ export async function getMenuPublico(slug: string): Promise<MenuPublico | null> 
       pickupEnabled: establishment.pickupEnabled,
       lat: establishment.lat,
       lng: establishment.lng,
+      preparo,
       city: establishment.city ?? '',
       state: establishment.state,
     },
@@ -827,6 +833,55 @@ export async function localizarEnderecoAction(
   } catch {
     return { ok: false };
   }
+}
+
+/**
+ * Quanto a cozinha está demorando hoje, para prometer ao cliente.
+ *
+ * Sai do histórico do próprio estabelecimento, e leva em conta o que já está no
+ * fogo agora: prometer o tempo típico com a cozinha cheia é como se cria cliente
+ * irritado — ele não compara com a média do mês, compara com o que ouviu quando
+ * pediu.
+ */
+async function preparoDaCozinha(
+  prisma: ReturnType<typeof getPrismaClient>,
+  establishmentId: string,
+): Promise<string | null> {
+  const desde = new Date(Date.now() - 30 * 24 * 60 * 60_000);
+
+  const [prontos, naFila] = await Promise.all([
+    prisma.order.findMany({
+      where: { establishmentId, readyAt: { not: null }, createdAt: { gte: desde } },
+      /*
+       * Teto de 400: trinta dias de uma pizzaria movimentada passam disso, e a
+       * mediana não fica mais verdadeira com mil amostras do que com
+       * quatrocentas — só mais cara.
+       */
+      take: 400,
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true, readyAt: true },
+    }),
+    prisma.order.count({ where: { establishmentId, status: 'NEW' } }),
+  ]);
+
+  const estimativa = estimarPreparo({
+    amostrasMinutos: prontos.map(
+      (o: { createdAt: Date; readyAt: Date | null }) =>
+        (o.readyAt!.getTime() - o.createdAt.getTime()) / 60_000,
+    ),
+    naFila,
+    padraoMinutos: 40,
+  });
+
+  /*
+   * Sem histórico, não promete nada.
+   *
+   * Um número inventado na primeira semana da loja é pior que silêncio: ele vira
+   * a referência que o cliente cobra, e a cozinha ainda nem sabe o próprio ritmo.
+   */
+  if (estimativa.base === 'PADRAO') return null;
+
+  return faixaDePreparo(estimativa.minutos);
 }
 
 function emailPixDoCliente(

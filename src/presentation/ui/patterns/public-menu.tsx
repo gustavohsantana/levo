@@ -110,6 +110,19 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
         <p className="mt-1 text-sm text-ink-muted">
           Peça direto com a gente. Entrega com o nosso motoboy.
         </p>
+        {/*
+          * O tempo aparece antes de escolher, não no fim.
+          *
+          * Quem está com pressa decide por ele — descobrir só na tela de
+          * pagamento que vai demorar quarenta minutos é o abandono mais caro,
+          * porque o carrinho já estava montado.
+          */}
+        {menu.establishment.preparo ? (
+          <p className="mt-2 text-sm text-ink-faint">
+            Saindo da cozinha em{' '}
+            <span className="font-medium text-ink-muted">{menu.establishment.preparo}</span> hoje.
+          </p>
+        ) : null}
       </header>
 
       <div className="flex flex-col gap-6">

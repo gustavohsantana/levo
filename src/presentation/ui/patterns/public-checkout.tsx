@@ -270,6 +270,14 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
 
         <h1 className="text-xl font-semibold tracking-tight text-ink">{menu.establishment.name}</h1>
 
+        {menu.establishment.preparo ? (
+          <p className="text-sm text-ink-faint">
+            A cozinha está saindo em{' '}
+            <span className="font-medium text-ink-muted">{menu.establishment.preparo}</span>
+            {retirada ? ' — depois é só buscar.' : ', mais o tempo de entrega.'}
+          </p>
+        ) : null}
+
         {pagamentoAberto ? (
           <p className="rounded-md bg-accent-soft/50 px-3 py-2 text-sm text-accent-ink hairline">
             Tem um Pix ou cartão esperando.{' '}
