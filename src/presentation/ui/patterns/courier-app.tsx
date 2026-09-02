@@ -626,7 +626,16 @@ function CurrentStop({
             href={
               stop.coordinates
                 ? `https://www.google.com/maps/dir/?api=1&destination=${stop.coordinates.lat},${stop.coordinates.lng}&travelmode=driving`
-                : '#'
+                : /*
+                   * Sem pino, navega pelo ENDEREÇO escrito.
+                   *
+                   * O `href="#"` de antes era um botão que não fazia nada — o
+                   * pior tipo, porque parece funcionar. E o Google Maps acha
+                   * endereço que o nosso geocodificador não acha: a base é
+                   * outra, e "Resende" com S ele resolve. Mandar o texto é uma
+                   * chance a mais de o motoboy chegar sem ligar para ninguém.
+                   */
+                  `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(stop.address)}&travelmode=driving`
             }
             target="_blank"
             rel="noreferrer"
