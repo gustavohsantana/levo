@@ -6,6 +6,7 @@ import {
   Check,
   ChevronRight,
   CloudOff,
+  LoaderCircle,
   MapPin,
   Navigation,
   Package,
@@ -87,6 +88,7 @@ export function CourierApp({
    * por isso que ele guarda o id e não o índice.
    */
   const [focoManual, setFocoManual] = useState<string | null>(null);
+  const [replanejando, setReplanejando] = useState(false);
   const current = pending.find((stop) => stop.id === focoManual) ?? pending[0] ?? null;
   const done = stops.length - pending.length;
   // Só o que falta entregar, na ordem que o OSRM definiu. Recalcular a cada
@@ -172,6 +174,50 @@ export function CourierApp({
   }, [route.status, token]);
 
   // ── Ações ──────────────────────────────────────────────────────────────
+  /**
+   * Recalcula o que falta a partir de onde ele está agora.
+   *
+   * A posição vem do aparelho na hora, e não do último ping: o ping pode ter
+   * minutos, e a rota inteira sairia montada a partir de onde ele já não está.
+   */
+  function replanejarDaqui() {
+    if (!navigator.geolocation) {
+      setBlocked('Este aparelho não informa a localização.');
+      return;
+    }
+
+    setReplanejando(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const r = await fetch('/api/driver/replan', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              token,
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+            }),
+          });
+          if (!r.ok) {
+            const corpo = (await r.json().catch(() => ({}))) as { error?: string };
+            setBlocked(corpo.error ?? 'Não deu para recalcular agora.');
+          } else {
+            setFocoManual(null);
+            router.refresh();
+          }
+        } finally {
+          setReplanejando(false);
+        }
+      },
+      () => {
+        setReplanejando(false);
+        setBlocked('Preciso da sua localização para recalcular.');
+      },
+      { enableHighAccuracy: true, timeout: 15_000 },
+    );
+  }
+
   async function resolveStop(stop: DriverStopView, outcome: 'DELIVERED' | 'FAILED') {
     const reason = outcome === 'FAILED' ? window.prompt('O que aconteceu?') : null;
     if (outcome === 'FAILED' && reason === null) return;
@@ -351,6 +397,29 @@ export function CourierApp({
           <p className="mt-2 text-xs text-ink-faint">
             Toque em qualquer uma para entregar fora de ordem.
           </p>
+
+          {/*
+            Refazer a partir daqui.
+            
+            A rota saiu da loja, e é o certo. Mas se ele desviou — passou em
+            casa, pegou bloqueio, entregou fora de ordem — a sequência montada
+            na porta do restaurante passa a custar quilômetro.
+          */}
+          {pending.length > 1 ? (
+            <button
+              type="button"
+              onClick={replanejarDaqui}
+              disabled={replanejando}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-raised px-3 py-2.5 text-sm font-medium text-ink transition active:opacity-70 disabled:opacity-50"
+            >
+              {replanejando ? (
+                <LoaderCircle className="size-4 animate-spin" aria-hidden />
+              ) : (
+                <Navigation className="size-4" aria-hidden />
+              )}
+              {replanejando ? 'Recalculando…' : 'Refazer rota a partir daqui'}
+            </button>
+          ) : null}
 
           {/*
             O limite é do Google, não da rota: o planejamento aceita 15 paradas

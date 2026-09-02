@@ -35,6 +35,8 @@ export const OrderEvents = {
 export const RouteEvents = {
   Planned: 'route.planned',
   Started: 'route.started',
+  /** Reordenada a partir de onde o motoboy estava, no meio do turno. */
+  Replanned: 'route.replanned',
   StopCompleted: 'route.stop_completed',
   Finished: 'route.finished',
 } as const;

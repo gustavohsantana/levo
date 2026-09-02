@@ -25,6 +25,7 @@ import { RenameCategory } from '@/application/use-cases/catalog/rename-category'
 import { SaveProduct } from '@/application/use-cases/catalog/save-product';
 import { ReorderCatalog } from '@/application/use-cases/catalog/reorder-catalog';
 import { SaveCourierPay } from '@/application/use-cases/couriers/save-courier-pay';
+import { ReplanFromHere } from '@/application/use-cases/routes/replan-from-here';
 import { SetProductActive } from '@/application/use-cases/catalog/set-product-active';
 import { RemoveProduct } from '@/application/use-cases/catalog/remove-product';
 import { CompleteStop } from './application/use-cases/routes/complete-stop';
@@ -56,6 +57,7 @@ export interface Container {
     importOrders: ImportOrderFromSource;
     planRoute: PlanRoute;
     startRoute: StartRoute;
+    replanFromHere: ReplanFromHere;
     completeStop: CompleteStop;
     recordPing: RecordCourierPing;
     tracking: GetTrackingSnapshot;
@@ -141,6 +143,7 @@ export function containerFor(establishmentId: string): Container {
       ),
       planRoute: new PlanRoute(uow, routing, optimizer, ids, clock, undefined, config.PUBLIC_BASE_URL),
       startRoute: new StartRoute(uow, clock),
+      replanFromHere: new ReplanFromHere(uow, routing, optimizer, clock),
       completeStop: new CompleteStop(uow, clock),
       recordPing: new RecordCourierPing(uow, clock),
       saveProduct: new SaveProduct(uow, ids, establishmentId),

@@ -49,6 +49,19 @@ export class RouteStop extends Entity {
 
   get orderId() { return this.props.orderId; }
   get position() { return this.props.position; }
+
+  /**
+   * Muda de lugar na sequência, com o novo tempo até chegar.
+   *
+   * Existe só para o replanejamento a partir da posição do motoboy. A parada em
+   * si é a mesma — mesmo cliente, mesmo endereço, mesmo pedido; o que mudou foi
+   * a ordem em que ele passa por ela.
+   */
+  resequence(position: number, etaSeconds: number, legDistanceMeters: number): void {
+    this.props.position = position;
+    this.props.etaSeconds = etaSeconds;
+    this.props.legDistanceMeters = legDistanceMeters;
+  }
   get status() { return this.props.status; }
   get etaSeconds() { return this.props.etaSeconds; }
   get legDistanceMeters() { return this.props.legDistanceMeters; }

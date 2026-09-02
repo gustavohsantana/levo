@@ -141,6 +141,69 @@ export class Route extends AggregateRoot {
   }
 
   /**
+   * Reordena as paradas pendentes e substitui o traçado.
+   *
+   * As entregas já resolvidas não entram: são história, e história não se
+   * replaneja. Elas ficam nas posições que ocuparam, e as pendentes seguem a
+   * numeração a partir daí — assim o motoboy vê "3, 4, 5" continuando de onde
+   * ele parou, e não uma lista que recomeça do 1 no meio do turno.
+   */
+  resequence(
+    orderedStopIds: string[],
+    caminho: {
+      geometry: string | null;
+      distanceMeters: number;
+      durationSeconds: number;
+      legs: Array<{ durationSeconds: number; distanceMeters: number }>;
+    },
+    now = new Date(),
+  ): void {
+    if (this.props.status !== RouteStatus.InProgress) {
+      throw new RouteNotActiveError(this.id, this.props.status);
+    }
+
+    const pendentes = new Map(
+      this.props.stops.filter((s) => s.status === StopStatus.Pending).map((s) => [s.id, s]),
+    );
+
+    if (orderedStopIds.length !== pendentes.size) {
+      throw new EmptyRouteError();
+    }
+
+    // Continua de onde a numeração parou, em vez de recomeçar do 1.
+    let posicao = this.props.stops.length - pendentes.size;
+    let acumulado = 0;
+
+    for (const [indice, stopId] of orderedStopIds.entries()) {
+      const stop = pendentes.get(stopId);
+      if (!stop) throw new NotFoundError('Parada', stopId);
+
+      const leg = caminho.legs[indice];
+      acumulado += leg?.durationSeconds ?? 0;
+      posicao += 1;
+      stop.resequence(posicao, acumulado, leg?.distanceMeters ?? 0);
+    }
+
+    this.props.geometry = caminho.geometry;
+    this.props.distanceMeters = caminho.distanceMeters;
+    this.props.durationSeconds = caminho.durationSeconds;
+
+    /*
+     * O relógio da rota reinicia aqui.
+     *
+     * Os ETAs passam a ser contados a partir de agora, e não da saída da loja —
+     * senão toda parada apareceria atrasada pelo tempo que ele levou no desvio,
+     * e o dono leria isso como motoboy lento.
+     */
+    this.props.startedAt = now;
+
+    this.record(RouteEvents.Replanned, this.props.establishmentId, {
+      paradas: orderedStopIds.length,
+      durationSeconds: caminho.durationSeconds,
+    }, now);
+  }
+
+  /**
    * Conclui uma parada.
    *
    * Deliberadamente **não** exige ordem: o motoboy desvia por rua interditada,
