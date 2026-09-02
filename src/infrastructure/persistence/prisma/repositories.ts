@@ -263,6 +263,20 @@ export class PrismaRouteRepository extends TenantScoped implements RouteReposito
     return count > 0;
   }
 
+  async hasPlannedRouteFor(courierId: string): Promise<boolean> {
+    const count = await this.tx.route.count({
+      where: this.scoped({ courierId, status: 'PLANNED' as RouteStatusEnum }),
+    });
+    return count > 0;
+  }
+
+  async hasRouteInProgressFor(courierId: string): Promise<boolean> {
+    const count = await this.tx.route.count({
+      where: this.scoped({ courierId, status: 'IN_PROGRESS' as RouteStatusEnum }),
+    });
+    return count > 0;
+  }
+
   /** Usado pelo link sem senha do motoboy — o token é a credencial. */
   async findByAccessToken(token: string): Promise<Route | null> {
     const row = await this.tx.route.findUnique({

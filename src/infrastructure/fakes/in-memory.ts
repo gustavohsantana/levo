@@ -149,6 +149,16 @@ function buildRepositories(db: InMemoryDatabase): Repositories {
         (route) => route.courierId === courierId && route.status !== RouteStatus.Finished,
       );
     },
+    async hasPlannedRouteFor(courierId) {
+      return [...db.routes.values()].some(
+        (route) => route.courierId === courierId && route.status === 'PLANNED',
+      );
+    },
+    async hasRouteInProgressFor(courierId) {
+      return [...db.routes.values()].some(
+        (route) => route.courierId === courierId && route.status === 'IN_PROGRESS',
+      );
+    },
   };
 
   const couriers: CourierRepository = {

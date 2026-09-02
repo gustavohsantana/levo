@@ -49,7 +49,11 @@ export class PlanRoute {
       const courier = await repos.couriers.findById(input.courierId);
       if (!courier) throw new NotFoundError('Motoboy', input.courierId);
       if (!courier.active) throw new CourierUnavailableError(input.courierId);
-      if (await repos.routes.hasActiveRouteFor(input.courierId)) {
+      /*
+       * Uma leva na fila por vez. Estar na rua não impede montar a próxima —
+       * essa é a trava que mudou de lugar, para o momento em que ele sai.
+       */
+      if (await repos.routes.hasPlannedRouteFor(input.courierId)) {
         throw new CourierUnavailableError(input.courierId);
       }
 
@@ -135,8 +139,20 @@ export class PlanRoute {
         return order;
       });
 
-      // O mesmo vale para o motoboy: ele pode ter recebido outra rota nesse meio.
-      if (await repos.routes.hasActiveRouteFor(input.courierId)) {
+      /*
+       * Adiantar a próxima leva é permitido; empilhar duas não.
+       *
+       * O pedido fica pronto às 20h10 e o motoboy volta às 20h25. Bloquear até
+       * ele chegar são quinze minutos de comida esfriando por burocracia — e o
+       * dono ainda teria que lembrar de alocar depois, no meio do movimento.
+       *
+       * Com a rota planejada antes, ele chega e já sai: o pedido está separado,
+       * a sequência calculada, e "saiu para entrega" despacha tudo de uma vez.
+       *
+       * O limite é uma leva na fila. Duas não é adiantamento, é bagunça: ele não
+       * saberia qual sai primeiro, e o dono perderia a conta do que já separou.
+       */
+      if (await repos.routes.hasPlannedRouteFor(input.courierId)) {
         throw new CourierUnavailableError(input.courierId);
       }
 

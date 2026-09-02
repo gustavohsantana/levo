@@ -608,7 +608,19 @@ export async function getDashboard() {
         name: courier.name,
         phone: courier.phone.formatted,
         active: courier.active,
-        busy: activeRoutes.some((route) => route.courierId === courier.id),
+        /*
+         * Dois estados, não um.
+         *
+         * "Na rua" não impede o dono de já separar a próxima leva — é o
+         * contrário, é quando ele mais quer adiantar. O que impede é já existir
+         * uma leva esperando por essa pessoa.
+         */
+        naRua: activeRoutes.some(
+          (route) => route.courierId === courier.id && route.status === 'IN_PROGRESS',
+        ),
+        filaCheia: activeRoutes.some(
+          (route) => route.courierId === courier.id && route.status === 'PLANNED',
+        ),
       })),
       activeRoutes: activeRoutes.map((route) =>
         toRouteView(

@@ -41,6 +41,16 @@ export interface RouteRepository {
   /** Histórico de um entregador num intervalo, para o calendário e o acerto. */
   listByCourier(courierId: string, from: Date, to: Date): Promise<Route[]>;
   hasActiveRouteFor(courierId: string): Promise<boolean>;
+  /**
+   * Ja existe uma proxima leva esperando por este motoboy?
+   *
+   * Uma so de cada vez. Duas filas para a mesma pessoa nao e adiantamento, e
+   * bagunca: ele nao saberia qual sai primeiro, e o dono perderia a conta do
+   * que ja separou.
+   */
+  hasPlannedRouteFor(courierId: string): Promise<boolean>;
+  /** Ele esta na rua agora? Ninguem sai duas vezes ao mesmo tempo. */
+  hasRouteInProgressFor(courierId: string): Promise<boolean>;
 }
 
 export interface CourierRepository {

@@ -1,4 +1,5 @@
 import {
+  CourierUnavailableError,
   NotFoundError,
   type Clock,
   type MarketplaceCommandEntry,
@@ -17,6 +18,26 @@ export class StartRoute {
     return this.uow.run(async (repos) => {
       const route = await repos.routes.findById(routeId);
       if (!route) throw new NotFoundError('Rota', routeId);
+
+      /*
+       * Planejar duas levas é adiantamento; sair com as duas é impossível.
+       *
+       * A trava mudou de lugar: antes impedia o dono de adiantar, agora impede
+       * o motoboy de estar em dois lugares — que é onde ela pertence, no
+       * momento em que ele efetivamente sai.
+       *
+       * Só vale para rota ainda planejada. Sem essa condição, mandar iniciar
+       * duas vezes a MESMA rota acusaria "motoboy em outra rota" — verdade por
+       * acidente, já que a outra é ela mesma, e o dono sairia procurando um
+       * problema que não existe. Deixando passar, `start` devolve o erro certo:
+       * rota já iniciada.
+       */
+      if (
+        route.status === 'PLANNED'
+        && (await repos.routes.hasRouteInProgressFor(route.courierId))
+      ) {
+        throw new CourierUnavailableError(route.courierId);
+      }
 
       route.start(this.clock.now());
 

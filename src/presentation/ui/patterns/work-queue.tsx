@@ -26,7 +26,10 @@ interface Courier {
   id: string;
   name: string;
   active: boolean;
-  busy: boolean;
+  /** Já saiu com uma leva. Continua podendo receber a próxima. */
+  naRua: boolean;
+  /** Já tem uma leva separada esperando. Uma de cada vez. */
+  filaCheia: boolean;
 }
 
 /**
@@ -65,7 +68,17 @@ export function WorkQueue({
 
   const routable = useMemo(() => pending.filter((order) => order.isGeocoded), [pending]);
   const unlocated = useMemo(() => pending.filter((order) => !order.isGeocoded), [pending]);
-  const availableCouriers = couriers.filter((courier) => courier.active && !courier.busy);
+  /*
+   * Quem está na rua continua na lista.
+   *
+   * O pedido fica pronto e o motoboy volta dez minutos depois: esperar ele
+   * chegar para só então separar é comida esfriando por burocracia. Com a leva
+   * montada antes, ele chega e já sai.
+   *
+   * Fica de fora só quem já tem uma leva esperando — duas filas para a mesma
+   * pessoa não é adiantamento, é bagunça.
+   */
+  const availableCouriers = couriers.filter((courier) => courier.active && !courier.filaCheia);
 
   /**
    * Seleção com shift para pegar um intervalo.
@@ -280,7 +293,11 @@ export function WorkQueue({
             <option value="">Escolha o motoboy…</option>
             {availableCouriers.map((courier) => (
               <option key={courier.id} value={courier.id}>
-                {courier.name}
+                {/*
+                  Quem está na rua fica na lista, mas dito: escolher sem saber
+                  disso faria o dono achar que o motoboy sai agora.
+                */}
+                {courier.naRua ? `${courier.name} — na rua` : courier.name}
               </option>
             ))}
           </Select>
