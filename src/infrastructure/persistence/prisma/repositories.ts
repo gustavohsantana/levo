@@ -450,7 +450,7 @@ export class PrismaCourierPingRepository implements CourierPingRepository {
     routeId: string,
     coordinates: Coordinates,
     at: Date,
-    source: 'APP' | 'TELEGRAM' = 'APP',
+    source: 'APP' | 'TELEGRAM' | 'CHECKIN' = 'APP',
   ): Promise<void> {
     await this.tx.courierPing.create({
       data: { routeId, lat: coordinates.lat, lng: coordinates.lng, recordedAt: at, source },

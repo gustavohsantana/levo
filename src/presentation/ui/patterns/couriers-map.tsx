@@ -142,10 +142,18 @@ export function CouriersMap({
                       </span>
                     </>
                   ) : null}
-                  {rota.posicao ? (
-                    <> · <span suppressHydrationWarning>{timeAgo(rota.posicao.at)}</span></>
+                  {/*
+                    O motivo, e não só a ausência. "Sem rastreio" sozinho não
+                    diz se o dono liga cobrando, espera, ou se o problema é
+                    nosso — e as três reações são diferentes.
+                  */}
+                  {' · '}
+                  {rota.rastreio === 'no mapa' && rota.posicao ? (
+                    <span suppressHydrationWarning>{timeAgo(rota.posicao.at)}</span>
                   ) : (
-                    <> · sem posição</>
+                    <span className={rota.rastreio === 'recusou o rastreio' ? 'text-amber-700' : ''}>
+                      {rota.rastreio}
+                    </span>
                   )}
                 </span>
               </li>

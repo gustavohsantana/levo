@@ -14,6 +14,8 @@ export const CourierMapper = {
       PhoneNumber.create(row.phone),
       row.active,
       row.telegramChatId,
+      row.tracking,
+      row.trackingDeniedAt,
     );
   },
 

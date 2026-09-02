@@ -15,7 +15,7 @@ export class RecordCourierPing {
 
   async execute(
     routeId: string,
-    input: { lat: number; lng: number; at?: Date; source?: 'APP' | 'TELEGRAM' },
+    input: { lat: number; lng: number; at?: Date; source?: 'APP' | 'TELEGRAM' | 'CHECKIN' },
   ): Promise<void> {
     const coordinates = Coordinates.create(input.lat, input.lng);
 

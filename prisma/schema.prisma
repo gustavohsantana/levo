@@ -153,6 +153,16 @@ model User {
 }
 
 /// Como o motoboy e pago. Os tres acordos que o mercado usa de verdade.
+/// Quanto o sistema acompanha o motoboy.
+enum CourierTracking {
+  /// So no momento da entrega: a posicao e capturada quando ele confirma cada
+  /// parada. Prova onde ele estava, sem segui-lo o dia inteiro. E o padrao.
+  CHECKIN
+  /// Posicao continua durante o turno. Exige que ele compartilhe, e sem isso a
+  /// rota nao aparece — decisao do dono, motoboy por motoboy.
+  CONTINUOUS
+}
+
 enum CourierPayModel {
   /// Valor unico por corrida, independente da distancia. O mais comum em
   /// cidade pequena, onde tudo e perto.
@@ -191,6 +201,14 @@ model Courier {
   /// A unicidade nao e decoracao — ela permite `findUnique`, que e como o
   /// webhook descobre de quem e a posicao sem ja saber o estabelecimento. O
   /// tenant-guard recusa `findFirst` sem escopo, e com razao.
+  /// Quanto o sistema acompanha este motoboy. Acordo pessoal, como o pagamento.
+  tracking            CourierTracking @default(CHECKIN)
+  /// Quando ele recusou a permissao de localizacao no aparelho.
+  ///
+  /// Guardado para a tela do dono poder dizer POR QUE nao ha rastreio. "Recusou"
+  /// e "esta com o aplicativo fechado" sao conversas diferentes: uma e escolha
+  /// dele, a outra e circunstancia.
+  trackingDeniedAt    DateTime?
   telegramChatId      String?         @unique
   /// Segredo do convite. Vive no link `t.me/bot?start=<isto>` e some no uso.
   telegramInviteCode  String?         @unique

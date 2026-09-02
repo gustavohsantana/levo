@@ -1,4 +1,5 @@
 import {
+  Coordinates,
   NotFoundError,
   type Clock,
   type MarketplaceCommandEntry,
@@ -49,7 +50,25 @@ export class CompleteStop {
         }
         order.markDelivered(at);
       }
+
       else order.markFailed(input.reason ?? null, at);
+
+      /*
+       * A posição do momento da confirmação vira ping.
+       *
+       * É o rastreio padrão: um ponto por entrega, com hora. Não segue ninguém
+       * pelo dia — e, ao contrário do contínuo, não depende de o motoboy ter
+       * lembrado de ligar nada. Ele confirma a entrega porque precisa; a
+       * posição vem junto.
+       *
+       * Falha em gravar não derruba a entrega: a entrega é o fato, a posição é
+       * o registro dela.
+       */
+      if (input.lat != null && input.lng != null) {
+        await repos.pings
+          .record(routeId, Coordinates.create(input.lat, input.lng), at, 'CHECKIN')
+          .catch(() => undefined);
+      }
 
       /*
        * O pedido também existe fora daqui. Sem avisar a plataforma, o lojista

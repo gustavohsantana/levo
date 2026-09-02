@@ -95,6 +95,14 @@ export const completeStopSchema = z.object({
   occurredAt: z.coerce.date().optional(),
   /** O que o cliente ditou. Só exigido quando a loja liga a confirmação. */
   deliveryCode: z.string().trim().max(12).nullish(),
+  /**
+   * Onde ele estava ao confirmar.
+   *
+   * É o rastreio padrão: um ponto por entrega, com hora. Não segue ninguém pelo
+   * dia, e prova o que precisa ser provado — que ele estava lá.
+   */
+  lat: z.number().min(-90).max(90).nullish(),
+  lng: z.number().min(-180).max(180).nullish(),
 });
 export type CompleteStopInput = z.infer<typeof completeStopSchema>;
 

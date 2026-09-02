@@ -3,6 +3,7 @@ import { containerFor } from '@/composition-root';
 import type { Order, Route } from '@/core';
 import { requireSession } from './http/session';
 import { completar } from '@/application/use-cases/catalog/reorder-catalog';
+import { statusDoRastreio, textoDoRastreio } from '@/core/services/tracking-status';
 
 /**
  * Leituras das telas do dono.
@@ -237,6 +238,8 @@ export interface RotaNoMapa {
    * que já inclui a perna da última entrega de volta.
    */
   retornoPrevisto: string | null;
+  /** Por que ele aparece (ou não) no mapa: ativo, por entrega, recusou, parou. */
+  rastreio: string;
   paradas: Array<{
     numero: number;
     lat: number;
@@ -262,6 +265,8 @@ export async function getRotasNoMapa(): Promise<RotaNoMapa[]> {
 
     const couriers = await repos.couriers.list();
     const nomes = new Map(couriers.map((c) => [c.id, c.name]));
+    const modos = new Map(couriers.map((c) => [c.id, c.tracking]));
+    const recusas = new Map(couriers.map((c) => [c.id, c.trackingDeniedAt]));
 
     /*
      * Pedidos e posições em lote. Uma consulta por rota transformaria o mapa de
@@ -291,6 +296,14 @@ export async function getRotasNoMapa(): Promise<RotaNoMapa[]> {
          * relógio, e um horário inventado é pior que horário nenhum: o dono
          * planeja a próxima leva em cima dele.
          */
+        rastreio: textoDoRastreio(
+          statusDoRastreio({
+            modo: modos.get(rota.courierId) ?? 'CHECKIN',
+            ultimoPing: ping?.at ?? null,
+            recusadoEm: recusas.get(rota.courierId) ?? null,
+            agora: new Date(),
+          }),
+        ),
         retornoPrevisto: rota.startedAt
           ? new Date(rota.startedAt.getTime() + rota.durationSeconds * 1000).toISOString()
           : null,

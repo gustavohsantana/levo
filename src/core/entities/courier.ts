@@ -16,6 +16,10 @@ export class Courier extends Entity {
      * o que separa um aviso de um spam.
      */
     readonly telegramChatId: string | null = null,
+    /** Quanto o sistema acompanha este motoboy. Acordo pessoal, como o pagamento. */
+    readonly tracking: 'CHECKIN' | 'CONTINUOUS' = 'CHECKIN',
+    /** Quando ele recusou a permissão no aparelho. Diz o porquê da ausência. */
+    readonly trackingDeniedAt: Date | null = null,
   ) {
     super(id);
   }

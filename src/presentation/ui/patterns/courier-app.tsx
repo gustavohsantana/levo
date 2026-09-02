@@ -218,6 +218,36 @@ export function CourierApp({
     );
   }
 
+  /**
+   * Onde ele está agora, sem travar o fluxo.
+   *
+   * Recusa explícita é registrada: o dono precisa poder distinguir "recusou o
+   * rastreio" de "está com o aplicativo fechado". Uma é escolha dele, a outra é
+   * circunstância — e são conversas diferentes.
+   */
+  function posicaoAgora(): Promise<{ lat: number; lng: number } | null> {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) return resolve(null);
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        (erro) => {
+          if (erro.code === erro.PERMISSION_DENIED) {
+            void fetch('/api/driver/tracking-denied', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ token }),
+              keepalive: true,
+            }).catch(() => undefined);
+          }
+          resolve(null);
+        },
+        // Seis segundos: ele está no portão, não vale travar o botão por GPS.
+        { enableHighAccuracy: false, timeout: 6_000, maximumAge: 30_000 },
+      );
+    });
+  }
+
   async function resolveStop(stop: DriverStopView, outcome: 'DELIVERED' | 'FAILED') {
     const reason = outcome === 'FAILED' ? window.prompt('O que aconteceu?') : null;
     if (outcome === 'FAILED' && reason === null) return;
@@ -240,12 +270,23 @@ export function CourierApp({
     // espera o levo de carregamento parado no portão do cliente.
     setResolvedLocally((current) => ({ ...current, [stop.id]: outcome }));
 
+    /*
+     * A posição do momento da confirmação vai junto.
+     *
+     * Espera curta de propósito: o motoboy está no portão, e travar a
+     * confirmação esperando GPS faria ele desistir do botão. Sem posição a
+     * entrega vale do mesmo jeito — a entrega é o fato, a posição é o registro.
+     */
+    const posicao = await posicaoAgora().catch(() => null);
+
     const item = {
       token,
       stopId: stop.id,
       outcome,
       reason,
       deliveryCode,
+      lat: posicao?.lat ?? null,
+      lng: posicao?.lng ?? null,
       occurredAt: new Date().toISOString(),
     };
 
