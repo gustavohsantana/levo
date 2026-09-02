@@ -87,7 +87,19 @@ export class GetTrackingSnapshot {
         courierPosition: ping
           ? { ...ping.coordinates.toJSON(), at: ping.at.toISOString() }
           : null,
-        routeGeometry: route.geometry,
+        /*
+         * O cliente NÃO recebe o traçado da rota.
+         *
+         * A geometria é o ciclo fechado inteiro: todas as paradas na ordem de
+         * visita, mais a volta ao restaurante. Entregá-la deixava o cliente A
+         * ver por quais ruas o motoboy passa e deduzir onde moram B, C e D —
+         * endereço de terceiro, que não é dele para ver.
+         *
+         * O que responde à pergunta dele — "onde está meu pedido?" — é o pino
+         * do entregador e o endereço dele. A linha entre os dois era ruído, e
+         * ruído caro.
+         */
+        routeGeometry: null,
       };
     });
   }
