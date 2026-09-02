@@ -37,18 +37,42 @@ export async function POST(request: Request) {
   // Qualquer outra mensagem é ignorada em silêncio: este bot não conversa.
   if (!chatId || !texto.startsWith('/start')) return NextResponse.json({ ok: true });
 
+  const token = env().TELEGRAM_BOT_TOKEN;
+  if (!token) return NextResponse.json({ ok: true });
+  const bot = new TelegramSender(token);
+
   const codigo = texto.split(/\s+/)[1];
-  if (!codigo) return NextResponse.json({ ok: true });
+
+  /*
+   * `/start` sem código não é erro do motoboy — é como o Telegram se comporta.
+   *
+   * O parâmetro do link só viaja no primeiro start de uma conversa nova. Quem
+   * já abriu o bot antes toca no convite e manda um `/start` pelado, sem
+   * código.
+   *
+   * Calar aqui deixa a pessoa olhando para uma tela que não respondeu, sem
+   * saber se falhou ou se é assim mesmo. Dizer o que fazer custa uma mensagem.
+   */
+  if (!codigo) {
+    await bot
+      .sendText(
+        String(chatId),
+        [
+          'Para receber suas rotas, preciso do convite que a loja gerou.',
+          '',
+          'Cole aqui a mensagem inteira que ela te mandou — ela começa com /start',
+          'e tem um código depois.',
+        ].join('\n'),
+      )
+      .catch(() => undefined);
+    return NextResponse.json({ ok: true });
+  }
 
   const prisma = getPrismaClient(env().DATABASE_URL);
   const courier = await prisma.courier.findUnique({
     where: { telegramInviteCode: codigo },
     select: { id: true, name: true, establishment: { select: { name: true } } },
   });
-
-  const token = env().TELEGRAM_BOT_TOKEN;
-  if (!token) return NextResponse.json({ ok: true });
-  const bot = new TelegramSender(token);
 
   if (!courier) {
     /*
