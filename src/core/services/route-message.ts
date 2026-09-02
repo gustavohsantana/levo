@@ -16,8 +16,21 @@ function primeiroNome(nome: string): string {
   return nome.trim().split(/\s+/)[0] ?? nome.trim();
 }
 
-export function mensagemDaRota(input: RouteMessageInput): string {
+export function mensagemDaRota(input: RouteMessageInput & { comBotao?: boolean }): string {
   const entregas = input.stops === 1 ? '1 entrega' : `${input.stops} entregas`;
+
+  /*
+   * Com botão, o link sai do corpo: repetido embaixo do botão que faz a mesma
+   * coisa, ele só ocupa a tela e dá ao motoboy duas maneiras de acertar o mesmo
+   * alvo — uma delas pior.
+   */
+  if (input.comBotao) {
+    return [
+      `Oi, ${primeiroNome(input.courierName)}! Sua rota da ${input.storeName} está pronta.`,
+      '',
+      `${entregas}. Toque abaixo para ver o caminho e confirmar cada uma.`,
+    ].join('\n');
+  }
 
   /*
    * Sem emoji e sem saudação longa de propósito. Mensagem automática que imita

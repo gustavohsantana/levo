@@ -57,7 +57,13 @@ export class InMemoryDatabase {
   categoryOrder: string[] = [];
   notificacoes = new Map<
     string,
-    { routeId: string; channel: 'TELEGRAM' | 'WHATSAPP'; destination: string; text: string }
+    {
+      routeId: string;
+      channel: 'TELEGRAM' | 'WHATSAPP';
+      destination: string;
+      text: string;
+      link: string;
+    }
   >();
   acordos = new Map<string, CourierPayAgreement>();
   products = new Map<string, Product>();
@@ -373,6 +379,7 @@ function buildRepositories(db: InMemoryDatabase): Repositories {
       channel: 'TELEGRAM' | 'WHATSAPP';
       destination: string;
       text: string;
+      link: string;
     }) {
       db.notificacoes.set(input.routeId, input);
     },

@@ -17,7 +17,17 @@ export class TelegramSender {
     return `https://api.telegram.org/bot${this.botToken}/${metodo}`;
   }
 
-  async sendText(chatId: string, text: string): Promise<void> {
+  /**
+   * Manda a mensagem, com a tela do motoboy num botão quando há link.
+   *
+   * O botão é um Mini App: abre a rota **dentro** do Telegram, em tela cheia,
+   * em vez de jogar o motoboy para o navegador — onde ele perde a conversa de
+   * vista e volta com dois toques. Numa moto isso conta.
+   *
+   * Só vale em conversa privada, que é exatamente o nosso caso: o bot só fala
+   * com quem o convidou.
+   */
+  async sendText(chatId: string, text: string, link?: string | null): Promise<void> {
     const resposta = await fetch(this.url('sendMessage'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -26,6 +36,13 @@ export class TelegramSender {
         text,
         // O link vira prévia gigante e empurra o texto para fora da tela.
         disable_web_page_preview: true,
+        ...(link
+          ? {
+              reply_markup: {
+                inline_keyboard: [[{ text: '🛵 Abrir minha rota', web_app: { url: link } }]],
+              },
+            }
+          : {}),
       }),
     });
 

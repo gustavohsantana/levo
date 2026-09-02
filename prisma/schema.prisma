@@ -444,6 +444,9 @@ model CourierNotification {
   channel         String    @default("WHATSAPP")
   /// Endereco no canal: telefone no WhatsApp, chat id no Telegram.
   destination     String    @default("")
+  /// A tela do motoboy. Guardada a parte do texto porque no Telegram ela vira
+  /// botao de Mini App, e nao um link no meio da mensagem.
+  link            String?
   /// So digitos, com DDI. E o que a WAHA espera antes do @c.us.
   phone           String
   text            String

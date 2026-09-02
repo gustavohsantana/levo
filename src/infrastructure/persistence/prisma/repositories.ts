@@ -535,6 +535,7 @@ export class PrismaCourierNotificationOutbox extends TenantScoped {
     channel: 'TELEGRAM' | 'WHATSAPP';
     destination: string;
     text: string;
+    link: string;
   }): Promise<void> {
     await this.tx.courierNotification.upsert({
       where: { routeId: input.routeId },
@@ -546,6 +547,7 @@ export class PrismaCourierNotificationOutbox extends TenantScoped {
         // `phone` continua preenchido para o WhatsApp; no Telegram nao ha um.
         phone: input.channel === 'WHATSAPP' ? input.destination : '',
         text: input.text,
+        link: input.link,
       },
       update: {},
     });

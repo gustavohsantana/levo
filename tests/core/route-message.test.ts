@@ -28,6 +28,19 @@ describe('mensagem', () => {
     expect(mensagemDaRota({ ...base, stops: 1 })).toContain('1 entrega.');
   });
 
+  it('com botão, o link sai do corpo', () => {
+    /*
+     * No Telegram o link vira Mini App num botão. Repeti-lo embaixo dele dá ao
+     * motoboy duas maneiras de acertar o mesmo alvo — e a de baixo é a pior,
+     * porque joga ele para fora do aplicativo.
+     */
+    const texto = mensagemDaRota({ ...base, comBotao: true });
+
+    expect(texto).not.toContain(base.link);
+    expect(texto).toContain('Toque abaixo');
+    expect(texto).toContain('4 entregas');
+  });
+
   it('o link é a última linha, para o WhatsApp virar botão', () => {
     const linhas = mensagemDaRota(base).split('\n');
     expect(linhas[linhas.length - 1]).toBe(base.link);

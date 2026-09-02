@@ -218,6 +218,8 @@ export interface CourierNotificationOutbox {
     channel: 'TELEGRAM' | 'WHATSAPP';
     destination: string;
     text: string;
+    /** A tela do motoboy. No Telegram vira botao de Mini App. */
+    link: string;
   }): Promise<void>;
 }
 

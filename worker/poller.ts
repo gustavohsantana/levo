@@ -366,7 +366,7 @@ async function drenarWhatsApp(): Promise<void> {
     const bot = new TelegramSender(config.TELEGRAM_BOT_TOKEN);
     for (const aviso of doTelegram) {
       try {
-        await bot.sendText(aviso.destination, aviso.text);
+        await bot.sendText(aviso.destination, aviso.text, aviso.link);
         await prisma.courierNotification.update({
           where: { id: aviso.id },
           data: { sentAt: new Date(), attempts: { increment: 1 }, lastError: null },

@@ -199,14 +199,22 @@ export class PlanRoute {
               : null;
 
         if (courier && canal) {
+          const link = `${this.baseUrl.replace(/\/$/, '')}/m/${route.accessToken}`;
+
           await repos.courierNotifications.enqueue({
             routeId: route.id,
             ...canal,
+            link,
+            /*
+             * No Telegram o link vira botão, então ele sai do corpo. No
+             * WhatsApp não existe botão: lá o link É a mensagem.
+             */
             text: mensagemDaRota({
               courierName: courier.name,
               storeName: loja.name,
               stops: stops.length,
-              link: `${this.baseUrl.replace(/\/$/, '')}/m/${route.accessToken}`,
+              link,
+              comBotao: canal.channel === 'TELEGRAM',
             }),
           });
         }
