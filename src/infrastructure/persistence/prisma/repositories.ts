@@ -178,7 +178,19 @@ export class PrismaPaymentRepository extends TenantScoped implements PaymentRepo
   async listPendingOlderThan(antesDe: Date, limite: number): Promise<Payment[]> {
     const rows = await this.tx.payment.findMany({
       where: this.scoped({
-        status: 'PENDING' as PaymentStatusEnum,
+        /*
+         * `IN_REVIEW` junto de `PENDING`.
+         *
+         * Análise antifraude é estado alcançável e não terminal: o cartão cai em
+         * revisão, o pedido sai da fila da cozinha, e vinte minutos depois o
+         * Mercado Pago aprova. Se o webhook dessa aprovação se perder — e ele é
+         * justamente o caminho frágil — ninguém mais volta a perguntar. O
+         * cliente foi cobrado e o pedido nunca é liberado.
+         *
+         * Esta consulta é a rede de segurança; ela precisa cobrir todo estado do
+         * qual ainda se pode sair.
+         */
+        status: { in: ['PENDING', 'IN_REVIEW'] as PaymentStatusEnum[] },
         createdAt: { lt: antesDe },
       }),
       // Mais antigos primeiro: são os que já venceram, e cada rodada limpa a

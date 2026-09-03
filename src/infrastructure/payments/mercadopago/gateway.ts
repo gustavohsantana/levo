@@ -2,6 +2,20 @@ import { ExternalServiceError, PaymentStatus } from '@/core';
 import type { PaymentGateway } from '@/core/ports/services';
 
 const ORDERS_URL = 'https://api.mercadopago.com/v1/orders';
+/**
+ * Teto para toda chamada ao Mercado Pago.
+ *
+ * Era a única integração do sistema sem nenhum — OSRM, Nominatim, iFood, CEP e
+ * o próprio OAuth do MP já tinham. Sem teto, um gateway degradado numa noite de
+ * sábado pendura a tela do cliente até o limite da plataforma, e cada tentativa
+ * presa segura uma conexão do banco: o painel inteiro começa a arrastar
+ * justamente quando mais gente está pagando.
+ *
+ * Dez segundos: cobrança é operação síncrona, com alguém olhando a tela — além
+ * disso a pessoa já desistiu.
+ */
+const TIMEOUT_MS = 10_000;
+
 const PAYMENTS_URL = 'https://api.mercadopago.com/v1/payments';
 
 interface MpPaymentBody {
@@ -82,7 +96,10 @@ async function buscarIdNumerico(
 ): Promise<string | null> {
   const response = await fetch(
     `${PAYMENTS_URL}/search?external_reference=${encodeURIComponent(orderId)}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      },
   );
 
   const body = (await response.json().catch(() => ({}))) as {
@@ -98,6 +115,7 @@ async function lerPagamento(
   externalId: string,
 ): Promise<{ ok: boolean; status: number; body: MpPaymentBody }> {
   const response = await fetch(`${PAYMENTS_URL}/${externalId}`, {
+    signal: AbortSignal.timeout(TIMEOUT_MS),
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
@@ -115,6 +133,7 @@ export async function resolverIdPagamentoMp(
 
   if (resourceId.startsWith('ORD')) {
     const response = await fetch(`${ORDERS_URL}/${resourceId}`, {
+      signal: AbortSignal.timeout(TIMEOUT_MS),
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const body = (await response.json().catch(() => ({}))) as MpOrderResponse;
@@ -155,6 +174,7 @@ export class MercadoPagoGateway implements PaymentGateway {
      * canal do cartão na tela.
      */
     const response = await fetch(PAYMENTS_URL, {
+      signal: AbortSignal.timeout(TIMEOUT_MS),
       method: 'POST',
       headers: {
         Authorization: `Bearer ${input.accessToken}`,
@@ -224,6 +244,7 @@ export class MercadoPagoGateway implements PaymentGateway {
    */
   async cancelPixCharge(input: { accessToken: string; externalId: string }): Promise<void> {
     await fetch(`${PAYMENTS_URL}/${input.externalId}`, {
+      signal: AbortSignal.timeout(TIMEOUT_MS),
       method: 'PUT',
       headers: {
         Authorization: `Bearer ${input.accessToken}`,
@@ -250,6 +271,7 @@ export class MercadoPagoGateway implements PaymentGateway {
     const backUrl = input.backUrl?.startsWith('https://') ? input.backUrl : undefined;
 
     const response = await fetch('https://api.mercadopago.com/checkout/preferences', {
+      signal: AbortSignal.timeout(TIMEOUT_MS),
       method: 'POST',
       headers: {
         Authorization: `Bearer ${input.accessToken}`,
@@ -345,6 +367,7 @@ export class MercadoPagoGateway implements PaymentGateway {
     const documento = input.identification?.number.replace(/\D/g, '') ?? '';
 
     const response = await fetch(PAYMENTS_URL, {
+      signal: AbortSignal.timeout(TIMEOUT_MS),
       method: 'POST',
       headers: {
         Authorization: `Bearer ${input.accessToken}`,

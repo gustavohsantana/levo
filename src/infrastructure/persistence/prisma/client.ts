@@ -127,3 +127,27 @@ export function getPrismaClient(connectionString: string): LevoPrismaClient {
   }
   return singleton;
 }
+
+let semGuarda: PrismaClient | undefined;
+
+/**
+ * O cliente sem a guarda, para a única pergunta que não tem estabelecimento.
+ *
+ * Existe para consultas cuja pergunta É "de quem é isto?" — o webhook do Mercado
+ * Pago chega sabendo só a conta que recebeu o dinheiro, e precisa descobrir a
+ * loja antes de poder escopar qualquer coisa. Exigir `establishmentId` aí é
+ * exigir a resposta como pergunta, e a guarda derrubava o caminho inteiro: o
+ * lojista pagava, o webhook dava 500, e o pedido nunca era liberado.
+ *
+ * O nome é feio de propósito. Toda chamada a esta função deve caber numa mão, e
+ * um `grep` tem que encontrar todas — se um dia isto aparecer numa consulta de
+ * tela, é bug.
+ */
+export function getPrismaClientSemGuardaDeInquilino(connectionString: string): PrismaClient {
+  if (!semGuarda) {
+    semGuarda = new PrismaClient({
+      adapter: new PrismaPg({ connectionString: comSslVerificado(connectionString) }),
+    });
+  }
+  return semGuarda;
+}

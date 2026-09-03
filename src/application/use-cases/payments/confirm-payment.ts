@@ -45,7 +45,17 @@ export class ConfirmPayment {
         const accessToken = await this.getAccessToken(this.establishmentId);
         const resposta = await fetch(
           `https://api.mercadopago.com/v1/payments/${input.externalId}`,
-          { headers: { Authorization: `Bearer ${accessToken}` } },
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+            /*
+             * Esta chamada acontece DENTRO da transação do Prisma, que tem teto
+             * de 15s. Sem teto próprio, o Mercado Pago lento estourava a
+             * transação inteira e derrubava a confirmação — que é chamada de 3
+             * em 3 segundos pela tela do cliente, então várias conexões ficavam
+             * retidas ao mesmo tempo.
+             */
+            signal: AbortSignal.timeout(8_000),
+          },
         );
         if (resposta.ok) {
           const corpo = (await resposta.json()) as { external_reference?: string };
@@ -67,15 +77,21 @@ export class ConfirmPayment {
     }
 
     const now = this.clock.now();
-    if (paymentRow.status !== PaymentStatus.Paid && !paymentRow.isPending(now)) {
-      await this.uow.run(async (repos) => {
-        const payment = await repos.payments.findByOrderId(paymentRow.orderId);
-        if (!payment || payment.status !== PaymentStatus.Pending) return;
-        payment.markExpired(now);
-        await repos.payments.save(payment);
-      });
-      return 'EXPIRED';
-    }
+
+    /*
+     * O prazo local venceu — mas quem decide se o dinheiro entrou é o gateway.
+     *
+     * Antes, o vencimento local fechava o pagamento como EXPIRED sem consultar
+     * ninguém, e EXPIRED é terminal: nada mais reabria. O cliente que lê o QR e
+     * paga aos 29min50s caía exatamente aí. O dinheiro estava na conta do
+     * lojista, e o pedido nunca era liberado para a cozinha.
+     *
+     * Agora o vencimento só decide o que fazer DEPOIS da resposta do Mercado
+     * Pago, lá embaixo. Se a consulta falhar, este caso de uso lança e o pedido
+     * segue pendente — a próxima rodada da reconciliação tenta de novo. Ficar
+     * pendente por engano custa uma consulta; expirar por engano custa a venda.
+     */
+    const prazoVencido = paymentRow.status !== PaymentStatus.Paid && !paymentRow.isPending(now);
 
     const accessToken = await this.getAccessToken(this.establishmentId);
     const remoto = await this.gateway.getCharge({
@@ -187,6 +203,24 @@ export class ConfirmPayment {
     }
 
     if (remoto.status === PaymentStatus.Expired) {
+      await this.uow.run(async (repos) => {
+        const payment = await repos.payments.findByOrderId(paymentRow.orderId);
+        if (!payment || payment.status !== PaymentStatus.Pending) return;
+        payment.rebindExternalId(remoto.resolvedExternalId);
+        payment.markExpired(now);
+        await repos.payments.save(payment);
+      });
+      return 'EXPIRED';
+    }
+
+    /*
+     * Agora sim: o prazo venceu E o Mercado Pago confirma que não entrou.
+     *
+     * Esta é a mesma conclusão de antes — só que tomada depois de perguntar, e
+     * não no lugar de perguntar. É a diferença entre fechar uma cobrança morta e
+     * fechar uma cobrança que acabou de ser paga.
+     */
+    if (prazoVencido) {
       await this.uow.run(async (repos) => {
         const payment = await repos.payments.findByOrderId(paymentRow.orderId);
         if (!payment || payment.status !== PaymentStatus.Pending) return;

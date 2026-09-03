@@ -53,15 +53,28 @@ export async function POST(request: Request) {
 
     const prisma = getPrismaClient(env().DATABASE_URL);
 
-    await prisma.integrationEvent.create({
-      data: {
+    const externalEventId =
+      evento.id ?? `${evento.code}-${evento.orderId}-${evento.createdAt}`;
+
+    /*
+     * `upsert`, e não `create`.
+     *
+     * O iFood reentrega o que não recebe 200, e `externalEventId` é único — com
+     * `create`, a reentrega batia na constraint e virava 500, que faz o iFood
+     * reentregar de novo. Erro permanente por conta própria, e reentrega é item
+     * de homologação deles.
+     */
+    await prisma.integrationEvent.upsert({
+      where: { provider_externalEventId: { provider: 'IFOOD', externalEventId } },
+      create: {
         provider: 'IFOOD',
-        externalEventId: evento.id ?? `${evento.code}-${evento.orderId}-${evento.createdAt}`,
+        externalEventId,
         code: evento.code ?? 'UNKNOWN',
         externalOrderId: evento.orderId,
         merchantId: evento.merchantId ?? null,
         payload: evento,
       },
+      update: { payload: evento },
     });
 
     return NextResponse.json({ received: true });
