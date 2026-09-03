@@ -30,8 +30,12 @@ export * from './reports-core';
  * Os totais continuam somando o período inteiro — é o que os torna corretos. O
  * que pagina é a lista: trezentas linhas de uma vez não são controle, são uma
  * página que não abre no celular, e ninguém lê a de número 217 sem procurar.
+ *
+ * Dez, e não cinquenta. Cinquenta ainda era rolagem longa demais para a
+ * pergunta que a tela responde — "quem levou o quê, e quando" — que se resolve
+ * olhando poucas linhas por vez e trocando de página.
  */
-const POR_PAGINA = 50;
+const POR_PAGINA = 10;
 
 export async function getRelatorio(filtro: FiltroRelatorio): Promise<Relatorio> {
   const session = await requireSession();
