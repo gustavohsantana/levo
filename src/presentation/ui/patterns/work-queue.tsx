@@ -20,6 +20,7 @@ import { OrderBoard } from './order-board';
 import type { ProductView } from '@/presentation/queries';
 import type { Faixa } from './delivery-fee-bands';
 import { NewOrderDialog } from './new-order-dialog';
+import { VizinhosSugeridos } from './vizinhos-sugeridos';
 import { PinPickerDialog } from './pin-picker-dialog';
 
 interface Courier {
@@ -141,6 +142,14 @@ export function WorkQueue({
    * não faz nada, e botão que não faz nada ensina a ignorar botões.
    */
   const selecionados = pending.filter((order) => selected.has(order.id));
+
+  /*
+   * A sugestão só olha quem ainda pode entrar numa rota. Pedido já despachado
+   * não é oportunidade — é trabalho feito.
+   */
+  function selecionarGrupo(ids: string[]) {
+    setSelected((atual) => new Set([...atual, ...ids]));
+  }
   const paraAceitar = selecionados.filter((order) => order.stage === 'NOVO');
   const paraProntos = selecionados.filter((order) => order.stage !== 'PRONTO');
 
@@ -214,6 +223,18 @@ export function WorkQueue({
           }
         />
       </header>
+
+      {/*
+        A oportunidade aparece antes da fila, e não dentro dela.
+        Dentro, ela viraria mais um selo em mais um cartão numa noite de vinte
+        pedidos — e o valor dela é justamente aparecer quando ninguém tem tempo
+        de comparar endereço por endereço.
+      */}
+      <VizinhosSugeridos
+        pedidos={pending.map((o) => ({ id: o.id, coordinates: o.coordinates }))}
+        selecionados={selected}
+        onSelecionar={selecionarGrupo}
+      />
 
       {/*
         O resultado da otimização aparece aqui, não num toast que some.

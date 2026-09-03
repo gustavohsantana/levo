@@ -202,6 +202,14 @@ model Courier {
   /// webhook descobre de quem e a posicao sem ja saber o estabelecimento. O
   /// tenant-guard recusa `findFirst` sem escopo, e com razao.
   /// Quanto o sistema acompanha este motoboy. Acordo pessoal, como o pagamento.
+  /**
+   * Quantos pedidos ele leva por viagem.
+   *
+   * Era 15 fixo no código, igual para todo mundo. Quem entrega de carro leva
+   * mais, quem entrega de bicicleta leva bem menos — e o baú da marmitaria não
+   * comporta o mesmo número de pedidos que o da lanchonete.
+   */
+  maxStops            Int             @default(15)
   tracking            CourierTracking @default(CHECKIN)
   /// Quando ele recusou a permissao de localizacao no aparelho.
   ///

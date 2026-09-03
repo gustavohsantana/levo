@@ -206,6 +206,21 @@ function CourierForm({
             required
           />
         </Field>
+
+        <Field
+          label="Pedidos por viagem"
+          hint="quanto cabe no baú dele — de carro cabe mais, de bicicleta bem menos"
+        >
+          <Input
+            name="maxStops"
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={15}
+            defaultValue={entregador?.maxStops ?? 15}
+            required
+          />
+        </Field>
       </div>
 
       {erro ? <p className="mt-3 text-sm text-danger">{erro}</p> : null}

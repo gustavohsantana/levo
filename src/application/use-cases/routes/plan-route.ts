@@ -40,6 +40,13 @@ export class PlanRoute {
 
   async execute(input: Input): Promise<Route> {
     if (input.orderIds.length === 0) throw new EmptyRouteError();
+
+    /*
+     * O teto global continua, como rede: ele protege o roteirizador de uma leva
+     * absurda mesmo que alguém configure um motoboy com capacidade sem sentido.
+     * O teto que vale no dia a dia, porém, é o do motoboy — e ele só pode ser
+     * conferido depois de saber quem é, logo abaixo.
+     */
     if (input.orderIds.length > this.maxStops) {
       throw new RouteTooLargeError(input.orderIds.length, this.maxStops);
     }
@@ -49,6 +56,17 @@ export class PlanRoute {
       const courier = await repos.couriers.findById(input.courierId);
       if (!courier) throw new NotFoundError('Motoboy', input.courierId);
       if (!courier.active) throw new CourierUnavailableError(input.courierId);
+
+      /*
+       * A capacidade é dele, não do sistema.
+       *
+       * Quem entrega de carro leva mais, quem entrega de bicicleta leva bem
+       * menos. Antes eram 15 para todo mundo, e o número só aparecia como recusa
+       * depois que o dono já tinha montado a leva.
+       */
+      if (input.orderIds.length > courier.maxStops) {
+        throw new RouteTooLargeError(input.orderIds.length, courier.maxStops);
+      }
       /*
        * Uma leva na fila por vez. Estar na rua não impede montar a próxima —
        * essa é a trava que mudou de lugar, para o momento em que ele sai.

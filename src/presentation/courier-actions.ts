@@ -14,6 +14,7 @@ export async function salvarEntregadorAction(formData: FormData): Promise<Action
     id: formData.get('id') ?? '',
     name: formData.get('name'),
     phone: formData.get('phone'),
+    maxStops: formData.get('maxStops') ?? 15,
   });
 
   if (!parsed.success) {
@@ -26,6 +27,7 @@ export async function salvarEntregadorAction(formData: FormData): Promise<Action
       id: parsed.data.id || null,
       name: parsed.data.name,
       phone: parsed.data.phone,
+      maxStops: parsed.data.maxStops,
     });
 
     revalidatePath('/dashboard/entregadores');

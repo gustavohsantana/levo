@@ -189,6 +189,8 @@ export interface CourierView {
   busy: boolean;
   /** O acordo em uma linha. `null` quando ainda não foi combinado. */
   pagamento: string | null;
+  /** Quantos pedidos ele leva por viagem. */
+  maxStops: number;
   /** Onde ele estava por último, se está em rota agora. */
   posicao: { lat: number; lng: number; at: string; origem: string } | null;
 }
@@ -386,6 +388,7 @@ export async function getCouriers(): Promise<CourierView[]> {
         active: courier.active,
         busy: emRota.has(courier.id),
         pagamento: acordo ? resumoDoAcordo(acordo) : null,
+        maxStops: courier.maxStops,
         posicao: ping
           ? {
               ...ping.coordinates.toJSON(),

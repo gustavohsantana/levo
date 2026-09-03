@@ -78,6 +78,17 @@ export const saveCourierSchema = z.object({
   id: z.string().min(1).optional().or(z.literal('')),
   name: z.string().trim().min(2, 'Informe o nome do entregador'),
   phone: z.string().trim().min(10, 'Telefone incompleto'),
+  /*
+   * Teto de 15 porque é o que o roteirizador aguenta bem, e porque acima disso a
+   * última entrega sai fria de qualquer jeito. Piso de 1: motoboy que leva zero
+   * pedidos é motoboy pausado, e para isso já existe botão.
+   */
+  maxStops: z.coerce
+    .number()
+    .int()
+    .min(1, 'Pelo menos 1 pedido por viagem')
+    .max(15, 'No máximo 15 por viagem')
+    .default(15),
 });
 export type SaveCourierInput = z.infer<typeof saveCourierSchema>;
 

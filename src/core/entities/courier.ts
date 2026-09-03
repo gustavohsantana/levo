@@ -20,6 +20,14 @@ export class Courier extends Entity {
     readonly tracking: 'CHECKIN' | 'CONTINUOUS' = 'CHECKIN',
     /** Quando ele recusou a permissão no aparelho. Diz o porquê da ausência. */
     readonly trackingDeniedAt: Date | null = null,
+    /**
+     * Quantos pedidos ele leva por viagem.
+     *
+     * Era 15 fixo no código, igual para todo mundo — e não é: quem entrega de
+     * carro leva mais, quem entrega de bicicleta leva bem menos, e o baú da
+     * marmitaria não comporta o mesmo número de pedidos que o da lanchonete.
+     */
+    readonly maxStops: number = 15,
   ) {
     super(id);
   }

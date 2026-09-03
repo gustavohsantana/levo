@@ -16,6 +16,7 @@ export const CourierMapper = {
       row.telegramChatId,
       row.tracking,
       row.trackingDeniedAt,
+      row.maxStops,
     );
   },
 
@@ -26,6 +27,7 @@ export const CourierMapper = {
       name: courier.name,
       phone: courier.phone.value,
       active: courier.active,
+      maxStops: courier.maxStops,
     };
   },
 };
