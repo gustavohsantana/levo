@@ -33,6 +33,8 @@ export interface OrderView {
   stage: 'NOVO' | 'MONTANDO' | 'PRONTO' | 'EM_ROTA' | 'FINALIZADO';
   confirmedAt: string | null;
   readyAt: string | null;
+  /** Marcado pelo dono porque o cliente ligou cobrando. */
+  urgente: boolean;
   items: Array<{
     name: string;
     /** Complementos, como o marketplace os descreve. Vazio no pedido manual. */
@@ -99,6 +101,7 @@ function toOrderView(order: Order, whatsapp: string | null, trackingUrl: string)
     isGeocoded: order.isGeocoded,
     coordinates: order.coordinates?.toJSON() ?? null,
     stage: order.stage,
+    urgente: order.urgente,
     items: order.items.map((item) => ({
       name: item.name,
       options: item.options ?? [],

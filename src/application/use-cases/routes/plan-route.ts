@@ -17,6 +17,7 @@ import {
   baselineDuration,
 } from '@/core';
 import { mensagemDaRota, telefoneParaWhatsApp } from '@/core/services/route-message';
+import { compararPrioridade } from '@/core/services/prioridade-na-rota';
 
 interface Input {
   courierId: string;
@@ -142,13 +143,35 @@ export class PlanRoute {
     const optimized = this.optimizer.optimize(matrix);
 
     /*
+     * O pedido urgente, quando vale a pena adiantar.
+     *
+     * "Urgente" não pode significar "vai primeiro": medido neste mesmo
+     * otimizador, forçar a última parada de um corredor para o começo adianta o
+     * urgente em 6 minutos e atrasa cada um dos outros em 32 — e faz o motoboy
+     * passar na frente de três casas sem entregar, para voltar depois.
+     *
+     * Então quem decide é a comparação. Ela adianta só quando o urgente ganha
+     * mais do que cada um dos outros perde; no caso comum, em que o urgente já
+     * está no caminho, ela mantém a rota econômica sozinha.
+     *
+     * Um urgente por rota: marcar tudo como prioridade é não ter prioridade.
+     */
+    const iUrgente = orders.findIndex((o) => o.urgente);
+    let ordemFinal = optimized.order;
+
+    if (iUrgente >= 0 && orders.length > 1) {
+      const comparacao = compararPrioridade(matrix, iUrgente + 1, this.optimizer);
+      if (comparacao.recomendacao === 'ADIANTAR') ordemFinal = comparacao.ordemAdiantada;
+    }
+
+    /*
      * Os sem pino vão ao fim, na ordem em que o dono os escolheu.
      *
      * Não há como ordená-los: sem coordenada não existe distância entre eles. A
      * ordem de seleção é o único critério que o dono reconhece, e ele escolheu
      * por algum motivo.
      */
-    const sequence = [...optimized.order.map((index) => orders[index - 1]), ...semPino];
+    const sequence = [...ordemFinal.map((index) => orders[index - 1]), ...semPino];
     /*
      * O traçado cobre só quem tem pino. Os outros não têm por onde passar, e
      * desenhar uma linha até um ponto inventado seria pior que não desenhar.

@@ -290,6 +290,13 @@ model Order {
   /// Saiu da cozinha e espera motoboy. Separa "montando" de "pronto" no
   /// painel, que sao filas com donos diferentes.
   readyAt          DateTime?
+  /**
+   * Quando o dono marcou este pedido como urgente.
+   *
+   * Data e não booleano: "há quanto tempo está urgente" é a pergunta que o
+   * painel faz, e um `true` não responde. Nulo é o normal.
+   */
+  urgentAt        DateTime?
   createdAt        DateTime        @default(now())
   deliveredAt      DateTime?
 

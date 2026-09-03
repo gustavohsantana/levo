@@ -1,6 +1,8 @@
 'use client';
 
-import { MessageCircle } from 'lucide-react';
+import { useTransition } from 'react';
+import { Flame, MessageCircle } from 'lucide-react';
+import { marcarUrgenteAction } from '@/presentation/actions';
 import type { OrderView } from '@/presentation/queries';
 import { cn } from '../cn';
 import { clockTime, currency, phoneDisplay } from '../format';
@@ -21,6 +23,8 @@ export function OrderRow({
   selected: boolean;
   onToggle: (id: string, shiftKey: boolean) => void;
 }) {
+  const [marcando, marcar] = useTransition();
+
   return (
     <div
       className={cn(
@@ -45,7 +49,12 @@ export function OrderRow({
       />
 
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-ink">{order.customerName}</p>
+        <p className="flex items-center gap-1.5 truncate text-sm font-medium text-ink">
+          {order.urgente ? (
+            <Flame className="size-3.5 shrink-0 text-danger" aria-label="Urgente" />
+          ) : null}
+          {order.customerName}
+        </p>
         <p className="truncate text-xs text-ink-muted">
           {order.address}
           {order.reference ? <span className="text-ink-faint"> · {order.reference}</span> : null}
@@ -65,6 +74,37 @@ export function OrderRow({
       <span className="numeric w-11 text-right text-xs text-ink-faint">
         {clockTime(order.createdAt)}
       </span>
+
+      {/*
+        A marcação de urgente fica junto do horário, e não escondida no detalhe.
+        O gatilho dela é o telefone tocando — o dono precisa marcar sem sair da
+        fila e sem procurar onde.
+      */}
+      <button
+        type="button"
+        disabled={marcando}
+        onClick={(e) => {
+          // Sem isto o clique também seleciona a linha, e o dono acha que marcou
+          // errado.
+          e.stopPropagation();
+          marcar(async () => {
+            await marcarUrgenteAction(order.id, !order.urgente);
+          });
+        }}
+        title={
+          order.urgente
+            ? 'Tirar a marca de urgente'
+            : 'Marcar como urgente — o cliente já ligou cobrando'
+        }
+        className={cn(
+          'shrink-0 rounded-md p-1 transition disabled:opacity-40',
+          order.urgente
+            ? 'text-danger hover:bg-danger-soft'
+            : 'text-ink-faint/40 hover:bg-raised hover:text-ink-muted',
+        )}
+      >
+        <Flame className="size-3.5" aria-hidden />
+      </button>
 
       {/*
         O link do WhatsApp já fica aqui, com a mensagem escrita.

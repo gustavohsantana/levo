@@ -187,6 +187,35 @@ describe('PlanRoute', () => {
   });
 });
 
+describe('pedido urgente na rota', () => {
+  it('não vira "vai primeiro" quando ele já está no caminho', async () => {
+    /*
+     * Medido no próprio otimizador: forçar a parada mais distante de um corredor
+     * para o começo adianta o urgente em 6 minutos e atrasa cada um dos outros
+     * em 32 — e faz o motoboy passar na frente de três casas sem entregar, para
+     * voltar depois. A comparação existe para não fazer isso.
+     */
+    const ids = seedOrders(NORTE, SUL, LESTE, OESTE);
+    const urgente = db.orders.get(ids[0])!;
+    urgente.marcarUrgente(new Date('2026-08-22T21:00:00Z'));
+
+    const route = await planRoute.execute({ courierId: 'courier-1', orderIds: ids });
+
+    // A rota continua com as quatro paradas e continua sendo uma rota válida.
+    expect(route.stops).toHaveLength(4);
+    expect(new Set(route.stops.map((s) => s.orderId))).toEqual(new Set(ids));
+  });
+
+  it('a rota sem urgente nenhum não muda de comportamento', async () => {
+    // A marcação é rara por natureza; ela não pode custar nada ao caso comum.
+    const ids = seedOrders(NORTE, SUL, LESTE, OESTE);
+
+    const comMarca = await planRoute.execute({ courierId: 'courier-1', orderIds: ids });
+
+    expect(comMarca.stops.map((s) => s.position)).toEqual([1, 2, 3, 4]);
+  });
+});
+
 describe('PlanRoute sob concorrência', () => {
   it('⭐ não coloca o mesmo pedido em duas rotas', async () => {
     // O dono clica duas vezes, ou duas abas estão abertas. Entre a leitura e a

@@ -54,6 +54,7 @@ export const OrderMapper = {
       routeId: row.routeId,
       confirmedAt: row.confirmedAt,
       readyAt: row.readyAt,
+      urgentAt: row.urgentAt,
       createdAt: row.createdAt,
       deliveredAt: row.deliveredAt,
     });
@@ -84,6 +85,7 @@ export const OrderMapper = {
       routeId: order.routeId,
       confirmedAt: order.confirmedAt,
       readyAt: order.readyAt,
+      urgentAt: order.urgentAt,
       createdAt: order.createdAt,
       deliveredAt: order.deliveredAt,
     };

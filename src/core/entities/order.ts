@@ -73,6 +73,8 @@ interface OrderProps {
   routeId: string | null;
   confirmedAt: Date | null;
   readyAt: Date | null;
+  /** Quando o dono marcou como urgente. Nulo é o normal. */
+  urgentAt: Date | null;
   createdAt: Date;
   deliveredAt: Date | null;
 }
@@ -141,6 +143,7 @@ export class Order extends AggregateRoot {
       routeId: null,
       confirmedAt: null,
       readyAt: null,
+      urgentAt: null,
       createdAt: now,
       deliveredAt: null,
     });
@@ -220,6 +223,24 @@ export class Order extends AggregateRoot {
   get amount() { return this.props.amount; }
   get confirmedAt() { return this.props.confirmedAt; }
   get readyAt() { return this.props.readyAt; }
+  get urgentAt() { return this.props.urgentAt; }
+  get urgente() { return this.props.urgentAt !== null; }
+
+  /**
+   * O dono marca quando o cliente liga cobrando.
+   *
+   * Nunca deduzido do tempo de espera: a informação que decide — que o cliente
+   * ligou — não chega ao banco, e um pedido antigo não é necessariamente um
+   * pedido reclamado. Marcar é ato consciente, e por isso é raro e confiável.
+   */
+  marcarUrgente(at: Date): void {
+    this.props.urgentAt ??= at;
+  }
+
+  /** Passou a bronca. Desmarcar é tão normal quanto marcar. */
+  desmarcarUrgente(): void {
+    this.props.urgentAt = null;
+  }
 
   /**
    * Em qual coluna do painel o pedido está.

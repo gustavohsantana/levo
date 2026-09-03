@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { containerFor } from '@/composition-root';
-import { Address, Money } from '@/core';
+import { Address, Money, NotFoundError } from '@/core';
 import { createOrderSchema, credentialsSchema, planRouteSchema } from '@/application/dto/schemas';
 import { createSession, destroySession, requireSession } from './http/session';
 import { toFormError } from './http/error-mapper';
@@ -58,6 +58,40 @@ export async function loginAction(_prev: unknown, formData: FormData): Promise<A
   }
 
   redirect('/dashboard');
+}
+
+/**
+ * Marca ou desmarca um pedido como urgente.
+ *
+ * O gatilho é sempre humano — o cliente ligou cobrando —, e essa informação não
+ * chega ao banco por outro caminho. Deduzir urgência do tempo de espera seria
+ * chutar: pedido antigo não é necessariamente pedido reclamado, e um sistema que
+ * reordena rota sozinho por palpite perde a confiança na primeira vez que erra.
+ */
+export async function marcarUrgenteAction(
+  orderId: string,
+  urgente: boolean,
+): Promise<ActionResult> {
+  try {
+    const session = await requireSession();
+    const container = containerFor(session.establishmentId);
+
+    await container.uow.run(async (repos) => {
+      const order = await repos.orders.findById(orderId);
+      if (!order) throw new NotFoundError('Pedido', orderId);
+
+      if (urgente) order.marcarUrgente(new Date());
+      else order.desmarcarUrgente();
+
+      await repos.orders.save(order);
+    });
+
+    revalidatePath('/dashboard');
+    revalidatePath('/cozinha');
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
 }
 
 export async function logoutAction(): Promise<void> {
