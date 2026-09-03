@@ -21,7 +21,21 @@ export type ActionResult =
    * `centro` é onde abrir o mapa para o dono marcar com o dedo — a cidade, que o
    * geocodificador acha mesmo quando erra a rua.
    */
-  | { ok: false; error: string; precisaDoMapa: true; centro: { lat: number; lng: number } };
+  | {
+      ok: false;
+      error: string;
+      precisaDoMapa: true;
+      centro: { lat: number; lng: number };
+      /*
+       * O que a pessoa já digitou, de volta.
+       *
+       * A ação devolve os campos porque o React limpa o formulário quando ela
+       * termina — e sem isto o dono preenche sete campos, vê o mapa, marca o
+       * ponto e descobre que tem que digitar tudo outra vez. É o abandono mais
+       * caro possível: acontece depois de ele já ter feito todo o trabalho.
+       */
+      valores: Record<string, string>;
+    };
 
 /**
  * O cadastro de uma loja nova — a porta de entrada de todo cliente que vier.
@@ -125,6 +139,17 @@ export async function cadastrarAction(
         ok: false,
         precisaDoMapa: true,
         centro,
+        valores: {
+          nomeDaLoja: dados.nomeDaLoja,
+          endereco: dados.endereco,
+          cidade: dados.cidade,
+          estado: dados.estado,
+          nome: dados.nome,
+          email: dados.email,
+          // A senha volta também: sem ela, o segundo envio falha na validação e
+          // a pessoa nem entende por quê.
+          password: dados.password,
+        },
         error:
           'Não achamos esse endereço no mapa. Toque no mapa abaixo para marcar ' +
           'onde fica a sua loja — é desse ponto que sai o cálculo de todas as rotas.',

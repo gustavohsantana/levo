@@ -35,11 +35,20 @@ export function SignupForm() {
    */
   const precisaDoMapa = Boolean(state && !state.ok && 'precisaDoMapa' in state);
 
+  /*
+   * O React limpa o formulário quando a ação termina, e campo não controlado
+   * volta vazio. Repor a partir do que o servidor devolveu é o que impede o dono
+   * de redigitar sete campos só porque o mapa não achou a rua dele.
+   */
+  const anterior: Record<string, string> =
+    state && !state.ok && 'valores' in state ? state.valores : {};
+
   return (
     <form action={action} className="flex flex-col gap-4">
       <Field label="Nome da loja">
         <Input
           name="nomeDaLoja"
+          defaultValue={anterior.nomeDaLoja ?? ''}
           required
           autoFocus
           maxLength={60}
@@ -53,6 +62,7 @@ export function SignupForm() {
       >
         <Input
           name="endereco"
+          defaultValue={anterior.endereco ?? ''}
           required
           placeholder="Rua Comendador José Garcia, 100 - Centro"
         />
@@ -62,22 +72,26 @@ export function SignupForm() {
           mesmo nome do outro lado do país. */}
       <div className="grid grid-cols-[1fr_5rem] gap-3">
         <Field label="Cidade">
-          <Input name="cidade" required placeholder="Pouso Alegre" />
+          <Input name="cidade"
+          defaultValue={anterior.cidade ?? ''} required placeholder="Pouso Alegre" />
         </Field>
         <Field label="Estado">
-          <Input name="estado" required maxLength={2} placeholder="MG" />
+          <Input name="estado"
+          defaultValue={anterior.estado ?? ''} required maxLength={2} placeholder="MG" />
         </Field>
       </div>
 
       <div className="mt-2 hairline-t pt-4">
         <Field label="Seu nome">
-          <Input name="nome" required placeholder="Zé" />
+          <Input name="nome"
+          defaultValue={anterior.nome ?? ''} required placeholder="Zé" />
         </Field>
       </div>
 
       <Field label="E-mail">
         <Input
           name="email"
+          defaultValue={anterior.email ?? ''}
           type="email"
           autoComplete="username"
           required
@@ -86,7 +100,12 @@ export function SignupForm() {
       </Field>
 
       <Field label="Senha" hint="No mínimo 8 caracteres.">
-        <Input name="password" type="password" autoComplete="new-password" required minLength={8} />
+        <Input name="password"
+          defaultValue={anterior.password ?? ''}
+          type="password"
+          autoComplete="new-password"
+          required
+          minLength={8} />
       </Field>
 
       {state && !state.ok ? (
