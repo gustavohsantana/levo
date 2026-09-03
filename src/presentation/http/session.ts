@@ -67,9 +67,10 @@ export async function getSession(): Promise<Session | null> {
   const token = (await cookies()).get(COOKIE)?.value;
   if (!token) return null;
 
+  let sessao: Session;
   try {
     const { payload } = await jwtVerify(token, secret());
-    return {
+    sessao = {
       userId: String(payload.sub),
       establishmentId: String(payload.establishmentId),
       name: String(payload.name),
@@ -77,6 +78,27 @@ export async function getSession(): Promise<Session | null> {
   } catch {
     return null;
   }
+
+  /*
+   * O cookie diz quem é; o banco diz se ainda existe.
+   *
+   * O token é autocontido e vale 12 horas, então ele continua "válido" depois
+   * de o usuário ser removido — ou de a loja inteira sumir. Sem esta conferência
+   * a pessoa fica presa num laço sem saída: o painel quebra porque o
+   * estabelecimento não existe, e `/login` a devolve para o painel porque a
+   * sessão "existe". Não há tela por onde escapar, nem para o suporte.
+   *
+   * É uma busca por chave primária, e é o que também faz a remoção de acesso
+   * valer de imediato em vez de esperar o cookie vencer.
+   */
+  const usuario = await getPrismaClient(env().DATABASE_URL).user.findUnique({
+    where: { id: sessao.userId },
+    select: { establishmentId: true },
+  });
+
+  if (!usuario || usuario.establishmentId !== sessao.establishmentId) return null;
+
+  return sessao;
 }
 
 /** Para telas e ações que exigem o dono logado. */
