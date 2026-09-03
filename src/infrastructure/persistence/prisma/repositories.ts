@@ -740,17 +740,33 @@ export class PrismaOptionGroupRepository implements OptionGroupRepository {
   }
 
   async save(grupo: OptionGroupSpec): Promise<void> {
-    await this.tx.optionGroup.upsert({
-      where: { id: grupo.id },
-      create: {
-        id: grupo.id,
-        establishmentId: this.establishmentId,
-        name: grupo.name,
-        min: grupo.min,
-        max: grupo.max,
-      },
-      update: { name: grupo.name, min: grupo.min, max: grupo.max },
+    /*
+     * `updateMany` escopado em vez de `upsert` por id.
+     *
+     * O `upsert` casava a linha só pelo `id`, e o ramo de atualização gravava
+     * sem `establishmentId` — o id vem do navegador, então bastava mandar o id
+     * de outra loja para reescrever o cardápio dela. `delete()`, logo abaixo,
+     * já usava o padrão certo; `save` não tinha recebido.
+     *
+     * A conferência de dono também existe no caso de uso, que devolve erro
+     * legível. Esta aqui é a que sobra se alguém chamar o repositório direto.
+     */
+    const atualizados = await this.tx.optionGroup.updateMany({
+      where: { id: grupo.id, establishmentId: this.establishmentId },
+      data: { name: grupo.name, min: grupo.min, max: grupo.max },
     });
+
+    if (atualizados.count === 0) {
+      await this.tx.optionGroup.create({
+        data: {
+          id: grupo.id,
+          establishmentId: this.establishmentId,
+          name: grupo.name,
+          min: grupo.min,
+          max: grupo.max,
+        },
+      });
+    }
 
     /*
      * Apaga e recria as opções.
@@ -778,6 +794,30 @@ export class PrismaOptionGroupRepository implements OptionGroupRepository {
   }
 
   async setForProduct(productId: string, groupIds: string[]): Promise<void> {
+    /*
+     * `ProductOptionGroup` não tem `establishmentId` — o dono dela é o produto.
+     *
+     * Então o escopo precisa ser verificado antes, nas duas pontas: o produto
+     * que recebe os grupos, e os grupos que vão nele. Sem isso, apagar por
+     * `productId` cru desanexava as opções do produto de qualquer loja, e a
+     * consulta do cardápio público monta a tela sem refiltrar — o vínculo
+     * cruzado apareceria de verdade para o cliente da loja invadida.
+     */
+    const produto = await this.tx.product.findFirst({
+      where: { id: productId, establishmentId: this.establishmentId },
+      select: { id: true },
+    });
+    if (!produto) throw new NotFoundError('Produto', productId);
+
+    if (groupIds.length > 0) {
+      const meus = await this.tx.optionGroup.count({
+        where: { id: { in: groupIds }, establishmentId: this.establishmentId },
+      });
+      if (meus !== groupIds.length) {
+        throw new NotFoundError('Grupo de opções', groupIds.join(', '));
+      }
+    }
+
     await this.tx.productOptionGroup.deleteMany({ where: { productId } });
     if (groupIds.length > 0) {
       await this.tx.productOptionGroup.createMany({
@@ -787,6 +827,18 @@ export class PrismaOptionGroupRepository implements OptionGroupRepository {
   }
 
   async attachToCategory(groupId: string, category: string): Promise<number> {
+    /*
+     * O grupo também precisa ser desta loja, e não só os produtos.
+     *
+     * Anexar um grupo alheio não rouba escrita, mas vaza leitura: o cardápio
+     * público monta a tela a partir do vínculo, então os nomes e preços do
+     * grupo de outra loja apareceriam aqui.
+     */
+    const meu = await this.tx.optionGroup.count({
+      where: { id: groupId, establishmentId: this.establishmentId },
+    });
+    if (meu === 0) throw new NotFoundError('Grupo de opções', groupId);
+
     const produtos = await this.tx.product.findMany({
       where: { establishmentId: this.establishmentId, category },
       select: { id: true },

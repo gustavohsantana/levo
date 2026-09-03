@@ -129,7 +129,18 @@ export async function getMenuPublico(slug: string): Promise<MenuPublico | null> 
    * descobrir isso só na cozinha custa o pedido.
    */
   const vinculos = await prisma.productOptionGroup.findMany({
-    where: { productId: { in: produtos.map((p) => p.id) } },
+    /*
+     * Filtra pelo dono do grupo, e não só pelos produtos.
+     *
+     * `ProductOptionGroup` não tem `establishmentId` — quem tem é o grupo. Sem
+     * este filtro, um vínculo cruzado gravado por engano ou por má-fé renderiza
+     * de verdade nesta tela, que é a que o cliente final vê. O repositório do
+     * painel (`forProducts`) já filtrava assim; esta consulta ficou para trás.
+     */
+    where: {
+      productId: { in: produtos.map((p) => p.id) },
+      group: { establishmentId: establishment.id },
+    },
     orderBy: { position: 'asc' },
     include: {
       group: { include: { options: { where: { active: true }, orderBy: { position: 'asc' } } } },

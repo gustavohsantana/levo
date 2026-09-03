@@ -13,7 +13,28 @@ const TENANT_SCOPED = new Set([
   'Route',
   'DomainEventLog',
   'IntegrationCredential',
+  /*
+   * Estes quatro têm `establishmentId` e ficaram fora da lista original.
+   *
+   * A ausência não era teórica: `Product` e `OptionGroup` são os modelos do
+   * cardápio, cujos ids o cardápio público entrega no corpo da página — e foi
+   * por eles que passou a escrita entre lojas que este arame agora derruba.
+   */
+  'Product',
+  'OptionGroup',
+  'WhatsappSession',
+  'DeliveryFeeRule',
 ]);
+
+/*
+ * `CourierNotification` e `MarketplaceCommand` ficam DE FORA, e não por
+ * esquecimento.
+ *
+ * São caixas de saída, e quem as consome é o worker — um processo só, que drena
+ * a fila de todas as lojas. Guardá-las derrubaria exatamente o caminho que leva
+ * a rota até o motoboy. O escopo delas é garantido na escrita, que sempre passa
+ * por um repositório com o estabelecimento no construtor.
+ */
 
 const READ_OPERATIONS = new Set([
   'findMany',

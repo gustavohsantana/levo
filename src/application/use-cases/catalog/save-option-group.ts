@@ -1,4 +1,11 @@
-import { Money, ValidationError, type IdGenerator, type OptionGroupSpec, type UnitOfWork } from '@/core';
+import {
+  Money,
+  NotFoundError,
+  ValidationError,
+  type IdGenerator,
+  type OptionGroupSpec,
+  type UnitOfWork,
+} from '@/core';
 
 export interface OptionGroupInput {
   id?: string;
@@ -52,6 +59,19 @@ export class SaveOptionGroup {
     const negativo = input.options.find((o) => o.priceReais < 0);
     if (negativo) {
       throw new ValidationError(`Preço inválido em "${negativo.name}"`, { opcao: negativo.name });
+    }
+
+    /*
+     * O id vem do navegador, então tem que ser confrontado com o dono.
+     *
+     * O cardápio público de qualquer loja entrega os ids dos grupos no corpo da
+     * página. Sem esta conferência, o dono de uma loja mandava o id de outra e
+     * reescrevia nome e preço lá — e o `findById` do repositório é escopado, então
+     * ele é a própria conferência.
+     */
+    if (input.id) {
+      const existente = await this.uow.run((repos) => repos.optionGroups.findById(input.id!));
+      if (!existente) throw new NotFoundError('Grupo de opções', input.id);
     }
 
     const grupo: OptionGroupSpec = {
