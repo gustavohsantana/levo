@@ -129,3 +129,27 @@ export const credentialsSchema = z.object({
   email: z.string().trim().toLowerCase().email('E-mail inválido'),
   password: z.string().min(8, 'Senha de no mínimo 8 caracteres'),
 });
+
+/**
+ * O cadastro de uma loja nova.
+ *
+ * Pede o mínimo que o sistema não consegue inventar sozinho. Tudo o mais —
+ * taxa de entrega, horário, cardápio, motoboys — tem padrão e se ajusta depois,
+ * porque formulário longo na primeira tela é onde o interessado desiste.
+ *
+ * O endereço é a exceção: ele é a origem de toda rota, e uma origem errada
+ * estraga todo cálculo do produto em silêncio.
+ */
+export const cadastroSchema = z.object({
+  nomeDaLoja: z.string().trim().min(2, 'Diga o nome da loja').max(60),
+  endereco: z.string().trim().min(10, 'Endereço completo, com número e bairro'),
+  cidade: z.string().trim().min(2, 'Diga a cidade'),
+  estado: z
+    .string()
+    .trim()
+    .length(2, 'A sigla do estado tem duas letras')
+    .transform((s) => s.toUpperCase()),
+  nome: z.string().trim().min(2, 'Diga o seu nome'),
+  email: z.string().trim().toLowerCase().email('E-mail inválido'),
+  password: z.string().min(8, 'Senha de no mínimo 8 caracteres'),
+});
