@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">Levô Motoboy</string>
+
+    <string name="rastreio_canal">Rastreio da rota</string>
+    <string name="rastreio_canal_descricao">Mantém a sua posição atualizada enquanto a rota está em andamento.</string>
+    <string name="rastreio_titulo">Rota em andamento</string>
+    <string name="rastreio_texto">A loja está acompanhando as suas entregas.</string>
+
+    <string name="fundo_titulo">Falta um passo</string>
+    <string name="fundo_texto">Para a loja continuar te vendo no mapa com a tela apagada, escolha \"Permitir o tempo todo\" na permissão de localização.\n\nSem isso o rastreio para toda vez que o celular vai para o bolso.</string>
+    <string name="fundo_abrir">Abrir ajustes</string>
+    <string name="fundo_depois">Agora não</string>
+</resources>

@@ -1,0 +1,17 @@
+<!--
+  O simbolo do Levo, so o traco: a barra de notificacao pinta o icone de branco
+  solido e descarta a cor, entao qualquer preenchimento vira mancha.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M7,3 L9.5,3 L9.5,14.5 L18,14.5 L18,17 L7,17 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M18,14 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
+</vector>

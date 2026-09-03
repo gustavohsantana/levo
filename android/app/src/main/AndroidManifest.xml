@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <!--
+      A permissao que faz o app existir. O sistema NAO concede ela numa caixa de
+      dialogo: do Android 11 em diante a pessoa precisa ir nas Configuracoes e
+      escolher "Permitir o tempo todo" com a mao. A tela de ajuste existe por isso.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Obrigatoria a partir do Android 14, junto do tipo declarado no <service>. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+
+    <!-- Android 13+. Sem ela a notificacao fixa nao aparece, e sem a notificacao
+         o servico e morto. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:name=".Aplicacao"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="false"
+        android:theme="@style/Theme.Levo"
+        android:usesCleartextTraffic="false">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
+            android:windowSoftInputMode="adjustResize">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!--
+              O link que o dono manda pelo WhatsApp abre direto no app.
+              Precisa do assetlinks.json publicado no dominio para o
+              android:autoVerify valer — sem ele o Android mostra o seletor
+              "abrir com", que e onde o motoboy escolhe o navegador e o app
+              nunca mais e usado.
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="levoentregas.vercel.app"
+                    android:pathPrefix="/m/" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          O tipo "location" e obrigatorio desde o Android 14, e tem que casar com a
+          permissao FOREGROUND_SERVICE_LOCATION. Sem os dois o sistema derruba o
+          servico assim que ele sobe, com uma excecao que so aparece em execucao.
+        -->
+        <service
+            android:name=".RastreioService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
+    </application>
+</manifest>

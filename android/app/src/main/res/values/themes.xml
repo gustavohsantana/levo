@@ -1,0 +1,8 @@
+<resources>
+    <style name="Theme.Levo" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- O verde da marca, o mesmo do painel. -->
+        <item name="colorPrimary">#476B00</item>
+        <item name="android:statusBarColor">#476B00</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

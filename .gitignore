@@ -55,3 +55,12 @@ next-env.d.ts
 # generate` explícito (ele instala com --ignore-scripts). Versionar só rendia
 # 48 mil linhas de ruído no diff a cada mudança de schema ou de versão.
 /src/generated/
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+*.jks
+*.keystore

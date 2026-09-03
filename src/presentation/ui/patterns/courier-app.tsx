@@ -1,6 +1,19 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+
+/**
+ * O que o app Android expõe para esta página.
+ *
+ * Minúscula de propósito: cada método aqui é código nativo, e código nativo só
+ * se corrige reinstalando o APK em cada motoboy — enquanto a página se corrige
+ * num deploy.
+ */
+interface PonteDoApp {
+  rastrear(token: string): void;
+  parar(): void;
+  temPermissao(): boolean;
+}
 import { useRouter } from 'next/navigation';
 import {
   Check,
@@ -127,9 +140,40 @@ export function CourierApp({
     return () => clearInterval(timer);
   }, [route.status, router]);
 
+  /*
+   * Dentro do app Android, quem rastreia é o serviço nativo.
+   *
+   * É a única coisa que a web não faz: posição com a tela apagada, que é como o
+   * celular passa o turno — no bolso ou preso no guidão. A página continua sendo
+   * a mesma nos dois lugares; ela só avisa o app quando a rota começa e quando
+   * acaba, e o app cuida do resto.
+   *
+   * No navegador `LevoApp` não existe, e nada disso acontece.
+   */
+  useEffect(() => {
+    const app = (window as unknown as { LevoApp?: PonteDoApp }).LevoApp;
+    if (!app) return;
+
+    if (route.status === 'IN_PROGRESS') app.rastrear(token);
+    else app.parar();
+
+    /*
+     * Sem parar na desmontagem: sair da tela não é fim de rota. O motoboy troca
+     * de aplicativo o tempo todo, e desligar o rastreio a cada troca é
+     * exatamente o defeito que o app veio corrigir.
+     */
+  }, [route.status, token]);
+
   // ── GPS ────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (route.status !== 'IN_PROGRESS' || !navigator.geolocation) return;
+
+    /*
+     * Dentro do app o serviço nativo já manda posição, e melhor. Ligar o
+     * `watchPosition` junto acenderia o GPS duas vezes para o mesmo dado — o
+     * dobro de bateria pelo mesmo mapa.
+     */
+    if ((window as unknown as { LevoApp?: PonteDoApp }).LevoApp) return;
 
     let last = 0;
 
