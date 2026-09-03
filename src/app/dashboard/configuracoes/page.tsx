@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { env } from '@/env';
 import { currentContainer } from '@/presentation/queries';
 import { Settings } from '@/presentation/ui/patterns/settings';
+import { Team } from '@/presentation/ui/patterns/team';
+import { listarAcessos } from '@/presentation/team';
 
 export const metadata: Metadata = { title: 'Configurações · Levô' };
 export const dynamic = 'force-dynamic';
@@ -29,5 +31,12 @@ export default async function ConfiguracoesPage() {
     };
   });
 
-  return <Settings establishment={establishment} faixas={faixas} />;
+  const acessos = await listarAcessos();
+
+  return (
+    <div className="flex flex-col gap-5">
+      <Settings establishment={establishment} faixas={faixas} />
+      <Team acessos={acessos} />
+    </div>
+  );
 }

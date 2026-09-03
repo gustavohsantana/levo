@@ -4,12 +4,27 @@ import { WorkQueue } from '@/presentation/ui/patterns/work-queue';
 import { DayLedger } from '@/presentation/ui/patterns/day-ledger';
 import { FinishedOrders } from '@/presentation/ui/patterns/finished-orders';
 import { AutoRefresh } from '@/presentation/ui/patterns/auto-refresh';
+import { PrimeirosPassos } from '@/presentation/ui/patterns/primeiros-passos';
+import { deveMostrarRoteiro } from '@/core/services/primeiros-passos';
 
 export const metadata: Metadata = { title: 'Painel · Levô' };
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
   const [data, produtos] = await Promise.all([getDashboard(), getCatalog()]);
+
+  /*
+   * Montado do que o painel já carregou, em vez de consulta nova: são quatro
+   * contagens que já estão na mão, e a tela mais quente do produto não precisa
+   * de mais uma ida ao banco para saber se a loja é novinha.
+   */
+  const loja = {
+    produtos: produtos.length,
+    motoboys: data.couriers.length,
+    taxaConfigurada:
+      data.establishment.deliveryFeeReais > 0 || data.establishment.feeBands.length > 0,
+    pedidos: data.today.orders,
+  };
 
   return (
     <>
@@ -22,6 +37,13 @@ export default async function DashboardPage() {
           o espaço nobre é da fila de trabalho, logo abaixo.
         */}
         <DayLedger establishmentName={data.establishment.name} today={data.today} />
+
+      {/*
+        Só para quem ainda não configurou o essencial.
+        Depois disso some, porque lista de tarefas que fica para sempre vira
+        decoração ocupando a dobra da tela mais usada do produto.
+      */}
+      {deveMostrarRoteiro(loja) ? <PrimeirosPassos loja={loja} /> : null}
 
         <WorkQueue
           pending={data.pending}

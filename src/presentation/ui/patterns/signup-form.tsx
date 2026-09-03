@@ -1,7 +1,13 @@
 'use client';
 
-import { useActionState } from 'react';
-import { LoaderCircle } from 'lucide-react';
+import { useActionState, useState } from 'react';
+import dynamic from 'next/dynamic';
+import { LoaderCircle, MapPin } from 'lucide-react';
+
+const RouteMap = dynamic(() => import('./route-map').then((m) => m.RouteMap), {
+  ssr: false,
+  loading: () => <div className="h-full w-full animate-pulse bg-raised" />,
+});
 import { cadastrarAction } from '@/presentation/onboarding';
 import { Button, Field, Input } from '../primitives';
 
@@ -18,6 +24,16 @@ import { Button, Field, Input } from '../primitives';
  */
 export function SignupForm() {
   const [state, action, pending] = useActionState(cadastrarAction, null);
+  const [pin, setPin] = useState<{ lat: number; lng: number } | null>(null);
+
+  /*
+   * O mapa só aparece quando a busca por texto falha.
+   *
+   * Pedir confirmação do que já está certo é atrito puro, e ensina a pessoa a
+   * clicar sem ler — aí, no dia em que a confirmação importa, ela clica sem ler
+   * também.
+   */
+  const precisaDoMapa = Boolean(state && !state.ok && 'precisaDoMapa' in state);
 
   return (
     <form action={action} className="flex flex-col gap-4">
@@ -74,14 +90,51 @@ export function SignupForm() {
       </Field>
 
       {state && !state.ok ? (
-        <p role="alert" className="rounded-md bg-danger-soft px-3 py-2 text-xs text-danger">
+        <p
+          role="alert"
+          className={`rounded-md px-3 py-2 text-xs ${
+            precisaDoMapa ? 'bg-warning-soft text-ink' : 'bg-danger-soft text-danger'
+          }`}
+        >
           {state.error}
         </p>
       ) : null}
 
-      <Button type="submit" variant="primary" size="lg" disabled={pending} className="mt-1">
+      {precisaDoMapa && state && !state.ok && 'centro' in state ? (
+        <div>
+          <div className="h-56 overflow-hidden rounded-md hairline">
+            <RouteMap
+              className="h-full w-full"
+              center={state.centro}
+              /* Não reenquadra depois do primeiro toque: o mapa fugiria do dedo. */
+              autoFit={!pin}
+              onPick={setPin}
+              markers={pin ? [{ ...pin, label: 'Minha loja', kind: 'origin' }] : []}
+            />
+          </div>
+
+          <p className="mt-2 flex items-center gap-1.5 text-xs text-ink-muted">
+            <MapPin className="size-3.5 shrink-0" aria-hidden />
+            {pin
+              ? 'Ponto marcado. Confira e crie sua loja.'
+              : 'Toque no mapa onde fica a sua loja.'}
+          </p>
+
+          {/* Vai junto no próximo envio; o servidor prefere o ponto ao texto. */}
+          <input type="hidden" name="lat" value={pin?.lat ?? ''} />
+          <input type="hidden" name="lng" value={pin?.lng ?? ''} />
+        </div>
+      ) : null}
+
+      <Button
+        type="submit"
+        variant="primary"
+        size="lg"
+        disabled={pending || (precisaDoMapa && !pin)}
+        className="mt-1"
+      >
         {pending ? <LoaderCircle className="animate-spin" /> : null}
-        Criar minha loja
+        {precisaDoMapa && !pin ? 'Marque no mapa para continuar' : 'Criar minha loja'}
       </Button>
     </form>
   );
