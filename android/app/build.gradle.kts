@@ -1,6 +1,21 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+}
+
+/*
+ * A senha da chave mora fora do repositorio.
+ *
+ * `keystore.properties` esta no .gitignore junto com o proprio .jks. Sem o
+ * arquivo, o build de release simplesmente sai sem assinatura em vez de
+ * quebrar — quem so quer compilar para testar nao precisa da chave, e quem
+ * precisa dela recebe um erro claro do Gradle na hora de enviar.
+ */
+val assinatura = Properties().apply {
+    val arquivo = rootProject.file("keystore.properties")
+    if (arquivo.exists()) arquivo.inputStream().use { load(it) }
 }
 
 android {
@@ -32,8 +47,36 @@ android {
         buildConfigField("String", "BASE_URL", "\"https://levoentregas.vercel.app\"")
     }
 
+    signingConfigs {
+        create("envio") {
+            /*
+             * Chave de ENVIO, nao de assinatura final.
+             *
+             * Com o Play App Signing, o Google guarda a chave definitiva e esta
+             * aqui so prova que o pacote veio de voce. Perde-la da trabalho, mas
+             * e recuperavel — perder a definitiva, nao seria.
+             *
+             * Consequencia pratica: a impressao SHA-256 que vai no
+             * assetlinks.json da versao da LOJA e a que o Console mostra, e nao
+             * a desta chave. Para o APK distribuido por fora (Drive), vale esta.
+             * As duas podem conviver no mesmo arquivo.
+             */
+            val caminho = assinatura.getProperty("storeFile")
+            if (caminho != null) {
+                storeFile = rootProject.file(caminho)
+                storePassword = assinatura.getProperty("storePassword")
+                keyAlias = assinatura.getProperty("keyAlias")
+                keyPassword = assinatura.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            // Sem o keystore.properties, sai sem assinar em vez de quebrar.
+            if (assinatura.getProperty("storeFile") != null) {
+                signingConfig = signingConfigs.getByName("envio")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

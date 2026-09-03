@@ -32,42 +32,61 @@ endereço que a web já usa. Nada muda no servidor.
 
 ## Compilar
 
-Precisa do Android Studio (SDK 36). O wrapper do Gradle vem incompleto de
-propósito: abra a pasta `android/` no Android Studio e ele completa sozinho na
-primeira sincronização.
-
 ```
 ./gradlew assembleDebug     # APK de teste
-./gradlew assembleRelease   # APK assinado, para distribuir
+./gradlew bundleRelease     # AAB assinado, para a Play Store
+./gradlew assembleRelease   # APK assinado, para distribuir por fora
 ```
 
-## A chave de assinatura — faça isso antes do primeiro envio
+A Play Store quer o **AAB** (`bundleRelease`), não o APK. O APK serve para
+instalar direto, pelo Drive.
 
-**Ela é definitiva.** Publicou com uma chave, é aquela para sempre; perdeu a
-chave, perdeu o app e precisa republicar com outro nome de pacote. O mesmo vale
-para o `applicationId` (`br.com.levo.entregador`), que também não muda depois do
-primeiro envio.
+## A chave de assinatura
+
+**Já foi criada**, em `android/levo-upload.jks`, com o alias `levo`.
+
+Ela e a senha **não estão no Git** — nem podem estar. Então, ao trocar de
+máquina, clonar o repositório NÃO traz a chave:
+
+1. Copie `levo-upload.jks` à mão (pendrive, AirDrop, gerenciador de senhas com
+   anexo — não por e-mail nem chat).
+2. Na outra máquina, crie `android/keystore.properties` a partir do
+   `keystore.properties.exemplo` e preencha a senha.
+
+O Gradle lê esse arquivo sozinho. Sem ele, o build de release sai **sem
+assinatura** em vez de quebrar — quem só quer compilar para testar não precisa
+da chave.
+
+Perder a chave dá trabalho, mas com o Play App Signing é recuperável pelo
+Google: esta é a chave de *envio*, e a definitiva fica com eles.
+
+### As duas impressões digitais
+
+O `assetlinks.json` aceita mais de uma, e você vai precisar das duas:
+
+- **Da loja:** a que o Console mostra em *Configuração → Integridade do app →
+  Assinatura de apps*. É ela que vale para quem instalar pela Play Store.
+- **Do APK distribuído por fora** (Drive): a desta chave aqui, que sai com
+  `keytool -list -v -keystore levo-upload.jks -alias levo | grep SHA256`.
+
+Sem a impressão certa, o link do WhatsApp não abre no app: o Android mostra o
+seletor "abrir com", o motoboy escolhe o navegador uma vez, e o app nunca mais
+é usado.
+
+## Montar o ambiente numa máquina nova
 
 ```bash
-keytool -genkey -v -keystore levo-release.jks \
-  -keyalg RSA -keysize 2048 -validity 10000 -alias levo
+brew install --cask android-commandlinetools   # ~156 MB
+brew install openjdk@17                        # se ainda não tiver
+sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools"
 ```
 
-Guarde o `.jks` e a senha **fora do repositório** e com cópia em outro lugar.
-Se for usar o Play App Signing, essa vira a chave de *upload* — o Google guarda
-a de assinatura, o que reduz o risco, mas a de upload ainda precisa sobreviver.
+Reserve **uns 4 GB livres**: o que engorda não são as ferramentas, é o cache de
+dependências do Gradle (~1,5 GB), e ele não avisa antes — quebra no meio.
 
-Depois, pegue a impressão digital:
-
-```bash
-keytool -list -v -keystore levo-release.jks -alias levo | grep SHA256
-```
-
-e cole em `public/.well-known/assetlinks.json`, no lugar do texto
-`PREENCHER`. **Sem esse passo o link do WhatsApp não abre no app** — o Android
-mostra o seletor "abrir com", o motoboy escolhe o navegador uma vez, e o app
-nunca mais é usado. Se for usar Play App Signing, a impressão que vale é a que
-o Console mostra, não a da sua chave local.
+O `gradlew` **não está no repositório**. Abra a pasta `android/` no Android
+Studio e ele gera o wrapper na primeira sincronização; ou instale o Gradle e
+rode `gradle wrapper` uma vez.
 
 ## Distribuir pelo Drive, antes da loja
 
