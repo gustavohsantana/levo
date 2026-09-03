@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "br.com.levo.motoboy"
+    namespace = "br.com.levo.entregador"
 
     /*
      * A Play Store exige que app novo mire a API recente do ano.
@@ -19,7 +19,7 @@ android {
          * applicationId — trocar significa outro app, com outra ficha e outra
          * base de usuarios.
          */
-        applicationId = "br.com.levo.motoboy"
+        applicationId = "br.com.levo.entregador"
 
         // Android 8. Abaixo disso o servico em primeiro plano funciona diferente,
         // e nao vale carregar dois caminhos por aparelho que motoboy nao usa mais.

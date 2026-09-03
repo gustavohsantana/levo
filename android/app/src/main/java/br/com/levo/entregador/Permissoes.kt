@@ -1,4 +1,4 @@
-package br.com.levo.motoboy
+package br.com.levo.entregador
 
 import android.Manifest
 import android.content.Context

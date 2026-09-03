@@ -1,4 +1,4 @@
-package br.com.levo.motoboy
+package br.com.levo.entregador
 
 import android.annotation.SuppressLint
 import android.content.Intent
@@ -14,7 +14,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import br.com.levo.motoboy.databinding.ActivityMainBinding
+import br.com.levo.entregador.databinding.ActivityMainBinding
 
 /**
  * A tela unica: a mesma pagina web que roda no navegador.

@@ -1,4 +1,4 @@
-package br.com.levo.motoboy
+package br.com.levo.entregador
 
 import android.app.Notification
 import android.app.NotificationChannel

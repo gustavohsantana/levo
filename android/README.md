@@ -1,4 +1,4 @@
-# Levô Motoboy — app Android
+# Levô Entregador — app Android
 
 Casca nativa em volta de `/m/{token}`, a mesma tela que roda no navegador.
 
@@ -45,7 +45,7 @@ primeira sincronização.
 
 **Ela é definitiva.** Publicou com uma chave, é aquela para sempre; perdeu a
 chave, perdeu o app e precisa republicar com outro nome de pacote. O mesmo vale
-para o `applicationId` (`br.com.levo.motoboy`), que também não muda depois do
+para o `applicationId` (`br.com.levo.entregador`), que também não muda depois do
 primeiro envio.
 
 ```bash

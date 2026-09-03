@@ -3,7 +3,7 @@
     "relation": ["delegate_permission/common.handle_all_urls"],
     "target": {
       "namespace": "android_app",
-      "package_name": "br.com.levo.motoboy",
+      "package_name": "br.com.levo.entregador",
       "sha256_cert_fingerprints": [
         "PREENCHER: impressao SHA-256 da chave de assinatura"
       ]

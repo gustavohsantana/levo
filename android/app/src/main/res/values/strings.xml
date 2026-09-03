@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Levô Motoboy</string>
+    <string name="app_name">Levô Entregador</string>
 
     <string name="rastreio_canal">Rastreio da rota</string>
     <string name="rastreio_canal_descricao">Mantém a sua posição atualizada enquanto a rota está em andamento.</string>
