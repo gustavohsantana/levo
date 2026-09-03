@@ -10,6 +10,13 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   resolve: { tsconfigPaths: true },
   test: {
+    /*
+     * A trava roda antes de qualquer arquivo de teste.
+     *
+     * Esta suíte apaga tabelas entre os casos, então a primeira pergunta não é
+     * "os testes passam", é "posso apagar este banco". Ver `guarda-do-banco.ts`.
+     */
+    globalSetup: ['./tests/integration/guarda-do-banco.ts'],
     environment: 'node',
     include: ['tests/integration/**/*.test.ts'],
     fileParallelism: false,
