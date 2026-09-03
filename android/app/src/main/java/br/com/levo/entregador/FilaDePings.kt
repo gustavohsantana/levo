@@ -17,6 +17,19 @@ import org.json.JSONObject
  */
 class FilaDePings(private val contexto: Context) {
 
+    /*
+     * A fila e mexida por duas threads.
+     *
+     * `enfileirar` roda na principal, junto da posicao que chega do sistema;
+     * `descartarPrimeiros` roda na de rede, depois do envio. As duas fazem
+     * ler-alterar-gravar em SharedPreferences, que nao e atomico — sem trava, um
+     * intercalar perde a posicao recem-gravada ou reenvia a que ja subiu.
+     *
+     * `@Synchronized` no metodo inteiro e o suficiente: sao operacoes de
+     * milissegundos sobre uma lista de no maximo 200 itens minusculos.
+     */
+
+
     /**
      * Teto de 200.
      *
@@ -26,6 +39,7 @@ class FilaDePings(private val contexto: Context) {
      */
     private val teto = 200
 
+    @Synchronized
     fun enfileirar(ping: JSONObject) {
         val fila = ler()
         fila.put(ping)
@@ -33,16 +47,19 @@ class FilaDePings(private val contexto: Context) {
         gravar(fila)
     }
 
+    @Synchronized
     fun tudo(): List<JSONObject> {
         val fila = ler()
         return (0 until fila.length()).mapNotNull { fila.optJSONObject(it) }
     }
 
+    @Synchronized
     fun limpar() {
         prefs().edit().remove(CHAVE).apply()
     }
 
     /** Remove os que ja subiram, preservando os que entraram durante o envio. */
+    @Synchronized
     fun descartarPrimeiros(quantos: Int) {
         val fila = ler()
         repeat(minOf(quantos, fila.length())) { fila.remove(0) }

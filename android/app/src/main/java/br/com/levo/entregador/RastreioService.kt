@@ -66,10 +66,26 @@ class RastreioService : Service() {
         }
 
         /*
-         * A notificacao tem que subir nos primeiros segundos, antes de qualquer
-         * outra coisa. Se o servico demorar para chamar startForeground, o
-         * sistema o derruba com ForegroundServiceDidNotStartInTimeException — e
-         * isso so aparece rodando, nunca ao compilar.
+         * A permissao vem ANTES do startForeground, e nao depois.
+         *
+         * Com `foregroundServiceType="location"`, o Android 14+ recusa subir o
+         * servico sem a permissao concedida — e recusa lancando, nao devolvendo
+         * erro. Dois caminhos chegam aqui sem permissao: a recriacao por
+         * START_STICKY, em que o Intent volta nulo, e a revogacao feita nas
+         * Configuracoes com o servico ja de pe.
+         *
+         * Nada disso aparece ao compilar. Aparece no celular do motoboy, no meio
+         * do turno.
+         */
+        if (!Permissoes.podeRastrear(this)) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        /*
+         * Passada a permissao, a notificacao tem que subir nos primeiros
+         * segundos. Se o servico demorar para chamar startForeground, o sistema o
+         * derruba com ForegroundServiceDidNotStartInTimeException.
          */
         startForeground(ID_NOTIFICACAO, notificacao())
 
