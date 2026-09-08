@@ -1,19 +1,21 @@
-'use client';
-
-import { useEffect, type CSSProperties } from 'react';
+import type { CSSProperties } from 'react';
 
 /**
  * Salto de página sem `redirect()` do Next.
  *
  * No WebView do Android o 307 do servidor chega vazio e a tela fica branca.
- * `location.replace` e o meta refresh ficam no mesmo host, no próprio documento.
+ * O meta refresh fica no mesmo host, no próprio documento, e vale já na
+ * primeira leitura do HTML — não espera hidratação.
+ *
+ * Um `location.replace` num efeito acompanhava este refresh, e os dois juntos
+ * pediam a mesma navegação duas vezes. Um Chromium moderno concilia; o 87 do
+ * tablet do piloto não é terreno para apostar nisso, e um salto basta.
+ *
+ * O link embaixo é a saída manual: se o salto não acontecer, a tela deixa de
+ * ser beco sem saída no meio da rua.
  */
 export function CourierHardNav({ href, label }: { href: string; label: string }) {
   const alvo = caminhoDoApp(href);
-
-  useEffect(() => {
-    window.location.replace(alvo);
-  }, [alvo]);
 
   return (
     <main style={tela}>
@@ -39,6 +41,11 @@ export function CourierHardNav({ href, label }: { href: string; label: string })
         </svg>
         <h1 style={titulo}>{label}</h1>
         <p style={subtitulo}>Só um instante.</p>
+        <p style={{ ...subtitulo, marginTop: 16 }}>
+          <a href={alvo} style={{ color: '#4d7a12', fontWeight: 600 }}>
+            Se demorar, toque aqui
+          </a>
+        </p>
       </div>
     </main>
   );
@@ -52,7 +59,9 @@ function caminhoDoApp(href: string): string {
 
 const tela: CSSProperties = {
   display: 'grid',
-  minHeight: '100dvh',
+  // `vh`, e nao `dvh`: unidade de 2022, e o WebView do tablet e de 2020.
+  // Estilo embutido nao passa pelo PostCSS, entao aqui nao ha rede de baixo.
+  minHeight: '100vh',
   placeItems: 'center',
   padding: '40px 20px',
   background: '#faf9f7',

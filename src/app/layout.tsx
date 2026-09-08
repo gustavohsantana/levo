@@ -9,14 +9,31 @@ import './globals.css';
  * visual de aplicação gerada por IA. A Instrument tem o mesmo rigor de
  * grotesca de interface com um desenho menos onipresente.
  */
+/*
+ * Pesos fixos, e nao a fonte variavel.
+ *
+ * Sem `weight` o next/font baixa o arquivo variavel (`font-weight: 400 700`), e
+ * o FreeType do WebView Chromium 87 — o do tablet do piloto, congelado em 2020
+ * — mata o processo que desenha a pagina ao instanciar esse eixo na SEGUNDA
+ * pagina aberta. A primeira sempre passa, entao parecia defeito da tela de
+ * destino: o motoboy entrava, aparecia "Entrando…", e o app fechava.
+ *
+ * Provado no aparelho: bloqueando so estes dois arquivos, tres paginas seguidas
+ * carregam; liberando, cai sempre na segunda. Instancias estaticas nao tem eixo
+ * para instanciar, e o desenho na tela e o mesmo.
+ */
 const sans = Instrument_Sans({
   subsets: ['latin'],
+  weight: ['400', '500', '600'],
   variable: '--font-instrument-sans',
   display: 'swap',
 });
 
+// Mesma armadilha da Instrument: variavel de 100 a 800. Aqui ela so numera
+// valores e horarios, entao dois pesos bastam.
 const mono = JetBrains_Mono({
   subsets: ['latin'],
+  weight: ['400', '500'],
   variable: '--font-jetbrains-mono',
   display: 'swap',
 });

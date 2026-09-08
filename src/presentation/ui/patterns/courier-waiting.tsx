@@ -48,7 +48,9 @@ function primeiroNome(nome: string): string {
 
 const tela: CSSProperties = {
   display: 'grid',
-  minHeight: '100dvh',
+  // `vh`, e nao `dvh`: unidade de 2022, e o WebView do tablet e de 2020.
+  // Estilo embutido nao passa pelo PostCSS, entao aqui nao ha rede de baixo.
+  minHeight: '100vh',
   placeItems: 'center',
   padding: '40px 20px',
   background: '#faf9f7',

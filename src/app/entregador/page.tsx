@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { getCourierSession } from '@/presentation/http/courier-session';
 import { rotaAtualDoMotoboy } from '@/presentation/courier-login';
-import { CourierHardNav } from '@/presentation/ui/patterns/courier-hard-nav';
 import { CourierLoginScreen } from '@/presentation/ui/patterns/courier-login-screen';
 import { CourierWaiting } from '@/presentation/ui/patterns/courier-waiting';
 
@@ -13,9 +13,16 @@ export default async function EntregadorHomePage() {
   if (!session) return <CourierLoginScreen />;
 
   const rota = await rotaDoMotoboy();
-  if (rota) {
-    return <CourierHardNav href={`/m/${rota.accessToken}`} label="Abrindo sua rota…" />;
-  }
+
+  /*
+   * Redirecionamento da rede, e nao salto da pagina.
+   *
+   * Quem manda o WebView para outro lugar aqui e o servidor, num 307 que o
+   * proprio carregamento segue. A versao anterior desenhava uma tela e mandava
+   * ela se substituir — e era ai que o renderizador do Chromium 87 morria, sem
+   * chegar a pedir /m/. Menos codigo, e um passo a menos para dar errado.
+   */
+  if (rota) redirect(`/m/${rota.accessToken}`);
 
   return <CourierWaiting nome={session.name} />;
 }

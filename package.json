@@ -2,6 +2,15 @@
   "name": "levo",
   "version": "0.1.0",
   "private": true,
+  "browserslist": [
+    "chrome >= 87",
+    "and_chr >= 87",
+    "android >= 87",
+    "edge >= 87",
+    "firefox >= 78",
+    "safari >= 14",
+    "ios_saf >= 14"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
