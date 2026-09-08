@@ -1,12 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Sem `fitsSystemWindows`: quem afasta o conteudo das barras do sistema agora e
+  a MainActivity, na mao. O atributo aqui era o mecanismo de antes da API 35, e
+  de la para ca o sistema forca a janela a desenhar por baixo das barras — a
+  pagina ficava com o cabecalho embaixo do relogio e o botao "Entreguei",
+  que e a tela inteira, embaixo da barra de gestos.
+-->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fitsSystemWindows="true">
+    android:background="@color/fundo">
 
     <WebView
         android:id="@+id/web"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
+
+    <!--
+      O sinal de que alguma coisa esta acontecendo.
+
+      A pagina do motoboy e renderizada no servidor a cada abertura, e na rede
+      da rua isso demora. Sem nada na tela, esse intervalo e indistinguivel de
+      app quebrado — e o motoboy fecha e abre de novo, o que so recomeca a
+      espera.
+    -->
+    <ProgressBar
+        android:id="@+id/carregando"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:indeterminateTint="@color/acento"
+        android:visibility="gone" />
 
 </FrameLayout>

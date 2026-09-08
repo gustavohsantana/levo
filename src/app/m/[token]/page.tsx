@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next';
-import { notFound } from 'next/navigation';
 import { getDriverRoute } from '@/presentation/driver-queries';
-import { CourierApp } from '@/presentation/ui/patterns/courier-app';
+import { CourierApp, CourierEmpty } from '@/presentation/ui/patterns/courier-app';
 
 export const metadata: Metadata = { title: 'Minha rota · Levô' };
 export const dynamic = 'force-dynamic';
@@ -17,7 +16,17 @@ export default async function CourierPage({ params }: { params: Promise<{ token:
   const { token } = await params;
   const route = await getDriverRoute(token);
 
-  if (!route) notFound();
+  /*
+   * Link vencido não é 404, é uma tela.
+   *
+   * O `notFound()` que estava aqui caía no 404 embutido do Next: fundo branco,
+   * letra miúda, em inglês. No navegador isso já era ruim; dentro do app
+   * Android, que guarda o token do último turno e reabre por ele todo dia, é a
+   * tela que o motoboy encontra na manhã seguinte — e o que ele vê é o app
+   * "abrindo em branco". `CourierEmpty` já existia para este caso, escrita e
+   * nunca ligada.
+   */
+  if (!route) return <CourierEmpty />;
 
   return <CourierApp token={token} route={route} exigeCodigo={route.exigeCodigo} />;
 }
