@@ -122,6 +122,16 @@
     border-color: var(--line);
   }
 
+  html {
+    /*
+     * A WebView do Android, sem useWideViewPort, descarta o <meta viewport>
+     * e liga o aumento automático de fonte. Uns blocos incham, outros não:
+     * a tela "zoada" do app. Isto segura a escala mesmo no APK antigo.
+     */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
   body {
     background: var(--canvas);
     color: var(--ink);
