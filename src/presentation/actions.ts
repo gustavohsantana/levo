@@ -8,6 +8,7 @@ import { createOrderSchema, credentialsSchema, planRouteSchema } from '@/applica
 import { createSession, destroySession, requireSession } from './http/session';
 import { toFormError } from './http/error-mapper';
 import { checkRateLimit, clearRateLimit } from './http/rate-limit';
+import { avisarRotaLiberada } from './telegram-rota';
 
 /**
  * Server Actions: as mutações das telas do dono.
@@ -157,12 +158,24 @@ export async function planRouteAction(input: {
 }
 
 export async function startRouteAction(routeId: string): Promise<ActionResult> {
+  let establishmentId: string;
+
   try {
     const session = await requireSession();
-    await containerFor(session.establishmentId).useCases.startRoute.execute(routeId);
+    establishmentId = session.establishmentId;
+    await containerFor(establishmentId).useCases.startRoute.execute(routeId);
   } catch (cause) {
     return { ok: false, error: toFormError(cause) };
   }
+
+  /*
+   * Fora do try acima de proposito: aqui a rota JA saiu.
+   *
+   * `avisarRotaLiberada` engole as proprias falhas, e o await existe porque
+   * em serverless promessa nao esperada morre com a funcao — seria uma mensagem
+   * que some sem deixar rastro nem erro.
+   */
+  await avisarRotaLiberada(routeId, establishmentId);
 
   revalidatePath('/dashboard');
   revalidatePath(`/dashboard/rotas/${routeId}`);
