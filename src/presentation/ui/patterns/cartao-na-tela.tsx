@@ -70,8 +70,16 @@ export function CartaoNaTela({
   const formulario = useRef<CardFormInstancia | null>(null);
   const onPagoRef = useRef(onPago);
   const onRecusadoRef = useRef(onRecusado);
-  onPagoRef.current = onPago;
-  onRecusadoRef.current = onRecusado;
+  /*
+   * As callbacks vão para refs num efeito, não durante o render: escrever em
+   * ref enquanto renderiza quebra sob render concorrente, em que o React pode
+   * descartar e refazer o trabalho. Sem lista de dependências de propósito —
+   * a intenção é justamente guardar sempre a última versão recebida.
+   */
+  useEffect(() => {
+    onPagoRef.current = onPago;
+    onRecusadoRef.current = onRecusado;
+  });
 
   useEffect(() => {
     let cancelado = false;

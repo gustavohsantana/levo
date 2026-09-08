@@ -17,7 +17,7 @@ async function main() {
   for (let i = 0; i < 60; i++) {
     const mp = await (await fetch(`https://api.mercadopago.com/v1/payments/${COBRANCA}`, {
       headers: { Authorization: `Bearer ${token}` },
-    })).json() as any;
+    })).json() as { status?: string; status_detail?: string };
 
     const pg = await p.payment.findFirst({
       where: { establishmentId: EST, orderId: PEDIDO },

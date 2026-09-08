@@ -41,7 +41,12 @@ export function PagamentoPublico({
   const [aviso, setAviso] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
   const [checando, checar] = useTransition();
-  const inicio = useRef<number>(Date.now());
+  /*
+   * Inicializador preguiçoso em vez de `useRef(Date.now())`: chamar Date.now()
+   * no corpo do render é impuro. O valor continua fixo no montar, que é o que
+   * a contagem de tempo desta tela precisa.
+   */
+  const [inicio] = useState(() => Date.now());
 
   /*
    * O código vive no estado, não em `inicial`: quando vence, a tela emite outro
@@ -140,7 +145,7 @@ export function PagamentoPublico({
 
     const intervalo = setInterval(() => {
       const forcar =
-        inicial.metodo === 'cartao' || Date.now() - inicio.current > 20_000;
+        inicial.metodo === 'cartao' || Date.now() - inicio > 20_000;
       void consultar(forcar);
     }, 3000);
 

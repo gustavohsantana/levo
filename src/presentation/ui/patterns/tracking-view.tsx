@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import dynamic from 'next/dynamic';
 import { Check, ChefHat, Bike, TriangleAlert } from 'lucide-react';
 import type { TrackingSnapshot } from '@/application/use-cases/tracking/get-tracking-snapshot';
@@ -8,6 +8,13 @@ import type { MapMarker } from './route-map';
 import { PedidoPassos } from './pedido-passos';
 import { lerLojaDoFluxo } from '@/presentation/menu-session';
 import { clockTime, timeAgo } from '../format';
+
+/*
+ * O slug é gravado no sessionStorage antes desta tela abrir e não muda
+ * enquanto ela vive, então não há a que se inscrever. Precisa morar fora do
+ * componente: criada a cada render, o React reinscreveria sem parar.
+ */
+const semInscricao = () => () => {};
 
 // Leaflet mexe em `window` na importação: só carrega no navegador.
 const RouteMap = dynamic(() => import('./route-map').then((mod) => mod.RouteMap), {
@@ -36,11 +43,13 @@ export function TrackingView({
   initial: TrackingSnapshot;
 }) {
   const [snapshot, setSnapshot] = useState(initial);
-  const [slug, setSlug] = useState<string | null>(null);
-
-  useEffect(() => {
-    setSlug(lerLojaDoFluxo());
-  }, []);
+  /*
+   * `useSyncExternalStore` em vez de efeito com setState: o slug só espelha o
+   * sessionStorage, nunca é editado aqui. O terceiro argumento é o retrato do
+   * servidor, onde sessionStorage não existe — é o que casa a hidratação sem
+   * pagar um render a mais.
+   */
+  const slug = useSyncExternalStore(semInscricao, lerLojaDoFluxo, () => null);
 
   useEffect(() => {
     if (snapshot.status === 'DELIVERED' || snapshot.status === 'FAILED') return;

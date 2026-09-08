@@ -30,7 +30,15 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
     [menu],
   );
 
+  /*
+   * O efeito é o lugar certo aqui, apesar da regra: o carrinho vive no
+   * armazenamento do navegador, que não existe no servidor, e este estado é
+   * editado pelo cliente depois de semeado — então `useSyncExternalStore`, que
+   * serve para espelhar uma fonte externa, não se aplica. O render a mais no
+   * montar é o preço de casar a hidratação, e é pago uma vez só.
+   */
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- semeadura a partir do armazenamento do navegador
     setLinhas(lerCarrinho(slug));
     setPronto(true);
   }, [slug]);
