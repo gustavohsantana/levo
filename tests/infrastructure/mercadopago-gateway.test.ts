@@ -224,6 +224,109 @@ describe('MercadoPagoGateway', () => {
     );
   });
 
+  it('estorna o valor inteiro pedindo /refunds com corpo vazio', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        json: async () => ({
+          id: 1323223,
+          payment_id: 176067700360,
+          amount: 78.9,
+          status: 'approved',
+          date_created: '2026-09-01T03:10:00.000-03:00',
+        }),
+      }),
+    );
+
+    const estorno = await new MercadoPagoGateway().refund({
+      accessToken: 'token-loja',
+      externalId: '176067700360',
+    });
+
+    expect(estorno.status).toBe('APPROVED');
+    expect(estorno.amountCents).toBe(7890);
+    expect(estorno.resolvedExternalId).toBe('176067700360');
+
+    const [url, init] = vi.mocked(fetch).mock.calls[0];
+    expect(url).toBe('https://api.mercadopago.com/v1/payments/176067700360/refunds');
+    expect(init?.method).toBe('POST');
+    // Corpo vazio é como a API do Mercado Pago diz "devolve tudo". Mandar
+    // `amount` daria no mesmo para ela e abriria a porta para o parcial.
+    expect(JSON.parse(String(init?.body))).toEqual({});
+    const headers = init?.headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer token-loja');
+    expect(headers['X-Idempotency-Key']).toBe('refund-176067700360');
+  });
+
+  it('resolve o id numérico antes de estornar um pagamento guardado como preferência', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn()
+        // A busca por external_reference, porque `pref-123` não aceita /refunds.
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ results: [{ id: 176099999001 }] }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 201,
+          json: async () => ({ amount: 45, status: 'approved' }),
+        }),
+    );
+
+    const estorno = await new MercadoPagoGateway().refund({
+      accessToken: 'token-loja',
+      externalId: 'pref-123',
+      orderId: 'pedido-card',
+    });
+
+    expect(estorno.resolvedExternalId).toBe('176099999001');
+    expect(vi.mocked(fetch).mock.calls[1][0]).toBe(
+      'https://api.mercadopago.com/v1/payments/176099999001/refunds',
+    );
+  });
+
+  it('recusa do Mercado Pago sobe com o motivo dele, em português', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: async () => ({
+          message: 'Cannot refund a payment that is already refunded',
+          error: 'bad_request',
+        }),
+      }),
+    );
+
+    await expect(
+      new MercadoPagoGateway().refund({ accessToken: 'token', externalId: '176067700360' }),
+    ).rejects.toThrow('Mercado Pago: este pagamento já foi estornado.');
+  });
+
+  it('saldo sacado: 200 com estorno rejeitado não é sucesso', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: 1323224,
+          amount: 78.9,
+          status: 'rejected',
+          cause: [{ code: 2062, description: 'collector_unavailable_funds' }],
+        }),
+      }),
+    );
+
+    await expect(
+      new MercadoPagoGateway().refund({ accessToken: 'token', externalId: '176067700360' }),
+    ).rejects.toThrow(/não tem saldo/);
+  });
+
   it('cartão recusado vira REJECTED; preferência ainda sem pagamento fica PENDING', async () => {
     vi.stubGlobal(
       'fetch',

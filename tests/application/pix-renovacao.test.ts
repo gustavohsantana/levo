@@ -50,6 +50,9 @@ function gatewayFake(overrides: Partial<PaymentGateway> = {}): PaymentGateway {
     async getCharge() {
       throw new Error('não usado');
     },
+    async refund() {
+      throw new Error('não usado');
+    },
     ...overrides,
   };
 }

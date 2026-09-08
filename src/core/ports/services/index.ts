@@ -291,4 +291,32 @@ export interface PaymentGateway {
     amountCents: number;
     resolvedExternalId: string;
   }>;
+
+  /**
+   * Devolve ao pagador o valor inteiro de um pagamento aprovado.
+   *
+   * Existe porque a alternativa é o dono ligar para o cliente e fazer Pix de
+   * volta na mão — trabalho manual dentro do produto que existe para eliminar
+   * trabalho manual. O dinheiro nunca passou pelo Levô: quem devolve é a conta
+   * da loja, com o token dela, e o gateway é só quem recebe a ordem.
+   *
+   * Valor parcial não entra na assinatura de propósito. Estorno de parte da
+   * comanda é decisão de produto que ninguém tomou ainda, e um parâmetro
+   * opcional convidaria a tela a inventá-la.
+   *
+   * `IN_PROCESS` não é falha: o Pix pode voltar em minutos, e chamar isso de
+   * erro faria o painel dizer que o dinheiro não saiu quando ele já saiu. Quem
+   * chama precisa distinguir os dois para não prometer o que ainda não chegou.
+   */
+  refund(input: {
+    accessToken: string;
+    externalId: string;
+    /** Fallback quando o banco guardou id de preferência ou ORD… da Orders API. */
+    orderId?: string;
+  }): Promise<{
+    status: 'APPROVED' | 'IN_PROCESS';
+    amountCents: number;
+    refundedAt: Date;
+    resolvedExternalId: string;
+  }>;
 }
