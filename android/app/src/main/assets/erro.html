@@ -1,0 +1,33 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Levô</title>
+<!--
+  A tela que substitui o branco.
+
+  Quando a pagina nao carrega — sem sinal no viaduto, certificado recusado,
+  servidor fora do ar — a WebView deixava a janela em branco, sem uma palavra.
+  Do lado de fora isso e igualzinho a app quebrado, e a unica saida que o
+  motoboy conhece e fechar e abrir de novo, o que da no mesmo.
+
+  As cores sao as da tela do motoboy: `--canvas`, `--ink`, `--ink-muted` e
+  `--accent` do tema escuro em src/app/globals.css.
+-->
+<style>
+  :root { color-scheme: dark }
+  body{margin:0;display:grid;place-items:center;min-height:100dvh;
+       font:16px/1.5 system-ui,-apple-system,sans-serif;background:#110F0C;color:#F4F2EE}
+  main{max-width:22rem;padding:2rem;text-align:center}
+  h1{font-size:1.15rem;margin:0 0 .75rem}
+  p{margin:0 0 1.5rem;color:#B2ADA5}
+  button{-webkit-appearance:none;appearance:none;border:0;cursor:pointer;
+         /* 56px: o mesmo alvo dos botoes da rota, para polegar de luva. */
+         min-height:56px;width:100%;padding:0 1.25rem;border-radius:10px;
+         font:inherit;font-weight:600;background:#A0DA3E;color:#1B2708}
+</style>
+<main>
+  <h1>Não consegui carregar a sua rota</h1>
+  <p>Pode ser o sinal. Ande alguns metros e tente de novo — o que você já marcou
+     como entregue continua guardado no celular.</p>
+  <button type="button" onclick="LevoApp.recarregar()">Tentar de novo</button>
+</main>

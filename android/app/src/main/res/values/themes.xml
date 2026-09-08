@@ -1,8 +1,34 @@
 <resources>
     <style name="Theme.Levo" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- O verde da marca, o mesmo do painel. -->
-        <item name="colorPrimary">#476B00</item>
-        <item name="android:statusBarColor">#476B00</item>
+        <item name="colorPrimary">@color/verde_marca</item>
+
+        <!--
+          O fundo da janela e a tela que o motoboy encarara enquanto a pagina
+          carrega.
+
+          A WebView e transparente ate a primeira pintura, e `/m/{token}` e
+          `force-dynamic`: cada abertura e uma renderizacao no servidor, com
+          consulta ao banco, na rede de quem esta na rua. Herdando o fundo claro
+          do Material3 isso era um retangulo BRANCO por segundos — e, quando a
+          rede nao respondia, branco ate o app ser fechado na forca. Era isso o
+          "abre em branco".
+
+          Em @color/fundo o mesmo intervalo passa a ser a propria cor da tela do
+          motoboy: nao ha transicao, so a pagina aparecendo por cima.
+        -->
+        <item name="android:windowBackground">@color/fundo</item>
+
+        <!--
+          As barras acompanham, e nao ha mais verde aqui.
+
+          De cima: a unica tela que este app abre e a do motoboy, que e escura
+          por decisao do produto (roda de noite). Uma faixa verde sobre ela era
+          um corpo estranho. De baixo: a partir da API 35 `statusBarColor` e
+          ignorada de qualquer forma, e o que aparece e o fundo da janela — usar
+          a mesma cor nos dois faz o aparelho novo e o antigo ficarem iguais.
+        -->
+        <item name="android:statusBarColor">@color/fundo</item>
+        <item name="android:navigationBarColor">@color/fundo</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>

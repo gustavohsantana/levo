@@ -14,7 +14,11 @@ import android.webkit.JavascriptInterface
  * Por isso a ponte nao desenha nada nem decide nada: ela liga e desliga o
  * rastreio, e diz que o app existe. Quem sabe quando a rota comecou e a pagina.
  */
-class PonteWeb(private val contexto: Context, private val pedirPermissao: () -> Unit) {
+class PonteWeb(
+    private val contexto: Context,
+    private val pedirPermissao: () -> Unit,
+    private val abrirDeNovo: () -> Unit,
+) {
 
     /**
      * Deixa a pagina saber que esta dentro do app.
@@ -54,4 +58,14 @@ class PonteWeb(private val contexto: Context, private val pedirPermissao: () -> 
     /** Para a pagina poder mostrar o estado real, e nao o que ela supoe. */
     @JavascriptInterface
     fun temPermissao(): Boolean = Permissoes.podeRastrear(contexto)
+
+    /**
+     * Tenta abrir a rota de novo.
+     *
+     * Quem chama e o botao da tela de erro, que e um arquivo local: recarregar
+     * ali recarregaria o proprio erro. Quem sabe qual e o endereco de verdade e
+     * a casca, entao e ela quem refaz a abertura.
+     */
+    @JavascriptInterface
+    fun recarregar() = abrirDeNovo()
 }

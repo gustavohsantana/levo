@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+      A cor que a pagina do motoboy pede para o navegador pintar em volta dela:
+      `themeColor: '#1a1917'`, em src/app/m/[token]/page.tsx. No Chrome ela vira
+      a barra de endereco; aqui ela e o fundo da janela, a barra de status e a
+      de navegacao. E a mesma decisao, tomada no mesmo lugar.
+    -->
+    <color name="fundo">#FF1A1917</color>
+
+    <!-- O lima de `--accent` no tema escuro: oklch(82% 0.19 128). -->
+    <color name="acento">#FFA0DA3E</color>
+
+    <!-- O verde da marca, o mesmo do painel. -->
+    <color name="verde_marca">#FF476B00</color>
+
+</resources>
