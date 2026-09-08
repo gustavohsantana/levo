@@ -1,15 +1,26 @@
 import type { CSSProperties } from 'react';
-import { CourierLoginForm } from './courier-login-form';
 
 /**
  * Login do app do motoboy.
  *
- * Estilos embutidos de proposito: no WebView de tablet Android antigo o CSS
- * do Tailwind as vezes nao entra (arquivo grande, oklch, @layer). Sem classe,
- * o SVG da marca explode a tela e o botao vira o cinza do sistema — exatamente
- * a tela "zoada" da foto.
+ * Estilos embutidos de propósito: se o CSS não entrar — e no WebView de tablet
+ * antigo isso já aconteceu — esta tela ainda precisa ser usável. Sem classe, o
+ * SVG da marca explode a tela e o botão vira o cinza do sistema.
+ *
+ * Pelo mesmo motivo o formulário é um `<form method="post">` comum, e não um
+ * componente com Server Action: ele funciona com o JavaScript morto. É a porta
+ * do turno do motoboy; ela abre mesmo quando o resto não abre.
  */
-export function CourierLoginScreen() {
+
+const RECADOS = {
+  dados: 'Confira o usuário e a senha.',
+  limite: 'Muitas tentativas. Espere alguns minutos e tente de novo.',
+  credenciais: 'Usuário ou senha não conferem.',
+} as const;
+
+export type ErroDeLogin = keyof typeof RECADOS;
+
+export function CourierLoginScreen({ erro }: { erro?: ErroDeLogin }) {
   return (
     <main style={tela}>
       <div style={caixa}>
@@ -36,7 +47,43 @@ export function CourierLoginScreen() {
           <p style={subtitulo}>Entre com o usuário e a senha que o dono da loja te passou.</p>
         </div>
 
-        <CourierLoginForm />
+        <form method="post" action="/entregador/entrar" style={formulario}>
+          <label style={campo}>
+            <span style={rotulo}>Usuário</span>
+            <input
+              name="login"
+              autoComplete="username"
+              required
+              autoFocus
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              placeholder="jefferson"
+              style={input}
+            />
+          </label>
+
+          <label style={campo}>
+            <span style={rotulo}>Senha</span>
+            <input
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              required
+              style={input}
+            />
+          </label>
+
+          {erro ? (
+            <p role="alert" style={aviso}>
+              {RECADOS[erro]}
+            </p>
+          ) : null}
+
+          <button type="submit" style={botao}>
+            Entrar
+          </button>
+        </form>
       </div>
     </main>
   );
@@ -74,4 +121,61 @@ const subtitulo: CSSProperties = {
   fontSize: 14,
   lineHeight: 1.45,
   color: '#6b675f',
+};
+
+const formulario: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 16,
+  width: '100%',
+};
+
+const campo: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 6,
+  width: '100%',
+};
+
+const rotulo: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 500,
+  color: '#6b675f',
+};
+
+const input: CSSProperties = {
+  boxSizing: 'border-box',
+  width: '100%',
+  height: 44,
+  padding: '0 12px',
+  borderRadius: 7,
+  border: '1px solid #e2ded6',
+  background: '#fff',
+  color: '#1c1917',
+  fontSize: 16,
+  fontFamily: 'inherit',
+};
+
+const aviso: CSSProperties = {
+  margin: 0,
+  padding: '8px 12px',
+  borderRadius: 7,
+  background: '#fde8e6',
+  color: '#b42318',
+  fontSize: 12,
+};
+
+const botao: CSSProperties = {
+  boxSizing: 'border-box',
+  marginTop: 4,
+  width: '100%',
+  height: 44,
+  border: 0,
+  borderRadius: 7,
+  background: '#8fd12f',
+  color: '#1b2708',
+  fontSize: 14,
+  fontWeight: 600,
+  fontFamily: 'inherit',
+  cursor: 'pointer',
 };

@@ -1,66 +1,15 @@
 'use server';
 
 import 'server-only';
-import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { env } from '@/env';
 import { getPrismaClient } from '@/infrastructure/persistence/prisma/client';
 import { hashPassword, requireSession } from './http/session';
-import { createCourierSession, getCourierSession } from './http/courier-session';
+import { getCourierSession } from './http/courier-session';
 import { toFormError } from './http/error-mapper';
-import { checkRateLimit, clearRateLimit } from './http/rate-limit';
 import { gerarSenhaDoApp, loginFromName } from './courier-login-id';
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
-
-const loginSchema = z.object({
-  login: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .min(3, 'Usuário inválido')
-    .regex(/^[a-z0-9._-]+$/, 'Use só letras, números, ponto ou hífen'),
-  password: z.string().min(8, 'Senha de no mínimo 8 caracteres'),
-});
-
-export async function courierLoginAction(
-  _prev: unknown,
-  formData: FormData,
-): Promise<ActionResult> {
-  const parsed = loginSchema.safeParse({
-    login: formData.get('login'),
-    password: formData.get('password'),
-  });
-
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos' };
-  }
-
-  const limitKey = `courier-login:${parsed.data.login}`;
-  const limit = checkRateLimit(limitKey, { max: 10, windowMs: 15 * 60_000 });
-
-  if (!limit.allowed) {
-    const minutos = Math.ceil(limit.retryAfterSeconds / 60);
-    return {
-      ok: false,
-      error: `Muitas tentativas. Tente de novo em ${minutos} ${minutos === 1 ? 'minuto' : 'minutos'}.`,
-    };
-  }
-
-  try {
-    await createCourierSession(parsed.data.login, parsed.data.password);
-    clearRateLimit(limitKey);
-  } catch (cause) {
-    return { ok: false, error: toFormError(cause) };
-  }
-
-  /*
-   * Sem `redirect()` aqui. No WebView do Android o redirect de Server Action
-   * muitas vezes deixa a tela branca — o cookie já foi gravado, então o
-   * cliente navega com `location.assign`.
-   */
-  return { ok: true };
-}
 
 /**
  * Gera (ou troca) o usuario e a senha do app deste motoboy.

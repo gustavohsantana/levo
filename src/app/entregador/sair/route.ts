@@ -2,35 +2,17 @@ import { NextResponse } from 'next/server';
 import { destroyCourierSession } from '@/presentation/http/courier-session';
 
 /**
- * Sair sem Server Action e sem redirect do Next.
+ * Sair, com o navegador fazendo a navegação.
  *
- * No WebView do tablet a action de logout travava uns 10s e o app fechava.
- * Aqui a resposta é HTML 200: apaga o cookie e o próprio documento vai para
- * o login, no mesmo host.
+ * Aqui saía um HTML com `meta refresh` e `location.replace` — os dois pedindo
+ * a navegação de dentro da página, que é justamente o que derruba o processo de
+ * renderização do WebView Chromium 87 do tablet do piloto. O sintoma antigo,
+ * "trava uns 10s e o app fecha", era essa queda.
+ *
+ * Um 303 devolve a navegação para quem já a estava fazendo.
  */
-export async function GET() {
+export async function GET(request: Request) {
   await destroyCourierSession();
 
-  return new NextResponse(
-    `<!doctype html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="refresh" content="0;url=/entregador">
-<title>Saindo · Levô</title>
-<style>html,body{margin:0;background:#faf9f7;color:#1c1917;min-height:100%}</style>
-</head>
-<body>
-<script>location.replace('/entregador')</script>
-</body>
-</html>`,
-    {
-      status: 200,
-      headers: {
-        'content-type': 'text/html; charset=utf-8',
-        'cache-control': 'no-store',
-      },
-    },
-  );
+  return NextResponse.redirect(new URL('/entregador', request.url), 303);
 }
