@@ -4,8 +4,11 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.SystemClock
+import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.GeolocationPermissions
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
@@ -28,6 +31,9 @@ import br.com.levo.entregador.databinding.ActivityMainBinding
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+
+    /** A WebView ja foi descartada: `onDestroy` nao deve mexer nela de novo. */
+    private var telaDescartada = false
 
     private val pedirPermissoes = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -93,6 +99,17 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun configurarWebView() {
+        /*
+         * Depuracao remota so no build de depuracao.
+         *
+         * Com ela ligada, `chrome://inspect` na maquina ligada por USB abre a
+         * pagina que roda dentro do app. Foi assim que a queda do renderizador
+         * no tablet do piloto virou uma causa em vez de um chute. No APK de
+         * envio fica desligada: qualquer maquina com USB dirigiria a tela do
+         * motoboy.
+         */
+        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
+
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(binding.web, true)
 
@@ -123,11 +140,16 @@ class MainActivity : AppCompatActivity() {
             textZoom = 100
 
             /*
-             * Cache podre no tablet deixava HTML novo com CSS velho (ou nenhum).
-             * A pagina do login e pequena; buscar fresca e mais barato do que
-             * explicar de novo a tela zoada.
+             * Cache normal, respeitando o que o servidor manda.
+             *
+             * Isto ja foi LOAD_NO_CACHE, posto quando "HTML novo com CSS velho"
+             * parecia cache podre. Nao era: o CSS nao entrava porque o Tailwind
+             * embrulha tudo em `@layer`, que este WebView nao conhece. Com a
+             * causa corrigida, desligar o cache so custa: as paginas do Next tem
+             * nome com hash, entao nunca ficam velhas, e o motoboy rebaixava o
+             * app inteiro de novo a cada abertura, no 3G da rua.
              */
-            cacheMode = WebSettings.LOAD_NO_CACHE
+            cacheMode = WebSettings.LOAD_DEFAULT
             mediaPlaybackRequiresUserGesture = false
             // Zoom so na rota, com os controles escondidos — no login um toque
             // duplo deixava a pagina numa escala torta sem saida.
@@ -191,6 +213,52 @@ class MainActivity : AppCompatActivity() {
                 CookieManager.getInstance().flush()
                 Sessao.tokenDaUrl(url)?.let { Sessao.guardarToken(this@MainActivity, it) }
             }
+
+            /**
+             * O processo que desenha a pagina morreu. O app nao morre junto.
+             *
+             * Sem este metodo o Android mata a Activity inteira quando o
+             * renderizador cai — "o app fechou sozinho" no meio da entrega, e o
+             * rastreio, que vive no mesmo processo, para junto. Devolver true
+             * diz que nos cuidamos disso.
+             *
+             * A WebView morta nao volta a funcionar: e preciso tirar da tela,
+             * destruir, e recriar a Activity — que infla outra e chama `abrir`
+             * de novo. Com o cookie no lugar, `/entregador` devolve o motoboy
+             * para a mesma rota.
+             *
+             * `didCrash` separaria defeito do renderizador de morte por falta
+             * de memoria. Os dois se resolvem igual aqui, entao a distincao so
+             * serviria para log — e nao ha para onde mandar log deste aparelho.
+             */
+            override fun onRenderProcessGone(
+                view: WebView?,
+                detail: RenderProcessGoneDetail?,
+            ): Boolean {
+                val agora = SystemClock.elapsedRealtime()
+                val emSeguida = agora - ultimaQueda < REPETIDA_EM_MS
+                ultimaQueda = agora
+
+                descartar(view)
+
+                /*
+                 * Duas quedas em quinze segundos e a mesma pagina derrubando o
+                 * renderizador de novo. Recarregar sozinho ali vira laco: a
+                 * tela pisca sem parar e o motoboy nao consegue nem sair.
+                 */
+                if (emSeguida) {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle(R.string.queda_titulo)
+                        .setMessage(R.string.queda_texto)
+                        .setPositiveButton(R.string.queda_tentar) { _, _ -> recreate() }
+                        .setCancelable(false)
+                        .show()
+                } else {
+                    recreate()
+                }
+
+                return true
+            }
         }
     }
 
@@ -241,9 +309,26 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun descartar(morta: WebView?) {
+        val web = morta ?: return
+        (web.parent as? ViewGroup)?.removeView(web)
+        web.destroy()
+        telaDescartada = true
+    }
+
     override fun onDestroy() {
         // A WebView segura a Activity se nao for destruida na mao.
-        binding.web.destroy()
+        if (!telaDescartada) binding.web.destroy()
         super.onDestroy()
+    }
+
+    private companion object {
+        const val REPETIDA_EM_MS = 15_000L
+
+        /**
+         * Fora da instancia de proposito: `recreate` cria outra Activity, e o
+         * contador precisa atravessar a queda para reconhecer a segunda.
+         */
+        var ultimaQueda = 0L
     }
 }

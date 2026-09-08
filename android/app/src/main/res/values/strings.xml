@@ -10,4 +10,8 @@
     <string name="fundo_texto">Para a loja continuar te vendo no mapa com a tela apagada, escolha \"Permitir o tempo todo\" na permissão de localização.\n\nSem isso o rastreio para toda vez que o celular vai para o bolso.</string>
     <string name="fundo_abrir">Abrir ajustes</string>
     <string name="fundo_depois">Agora não</string>
+
+    <string name="queda_titulo">A tela travou</string>
+    <string name="queda_texto">A página parou de responder no aparelho. Toque para abrir de novo — a sua rota continua onde estava.</string>
+    <string name="queda_tentar">Abrir de novo</string>
 </resources>
