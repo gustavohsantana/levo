@@ -602,7 +602,8 @@ não morrer num log.
   sandbox" de "conectado de verdade".
 - **Pedido pago com a loja fechada.** Alguém vai pagar às 3h da manhã. É preciso
   ter estorno (`refund`) acessível no painel desde a primeira versão, senão a
-  solução vira ligar para o cliente e fazer Pix de volta na mão.
+  solução vira ligar para o cliente e fazer Pix de volta na mão. ✅ Feito — ver
+  a fase 4.
 - **`npm audit` e a cadeia do Prisma.** Já registrado no README como conhecido;
   com pagamento no escopo, isso vira conversa de auditoria, não de conveniência.
 
@@ -650,9 +651,29 @@ não morrer num log.
    `CreatePayment`, tela de QR no cardápio, polling. Pedido nasce `PENDING`.
 3. **Confirmar.** Webhook assinado, `ConfirmPayment` idempotente com consulta à
    API, liberação do pedido no painel, expiração preguiçosa.
-4. **Operar.** Estorno no painel, faixa "aguardando pagamento", pedido pago
+4. **Operar.** Estorno no painel ✅, faixa "aguardando pagamento", pedido pago
    destacado para o motoboy (não cobrar de novo na porta é o erro óbvio a
    evitar), e o valor recebido no `/admin/piloto`.
+
+   O estorno é `POST /v1/payments/{id}/refunds` com corpo vazio — devolução
+   integral, com o token da loja, na conta dela. Três decisões que valem estar
+   escritas, porque as três são o tipo de coisa que alguém "conserta" depois:
+
+   - **Só pedido do cardápio da loja.** iFood e aiqfome cobraram na conta
+     deles; estornar por aqui não devolveria nada ao cliente do aplicativo, e o
+     caminho de lá continua sendo o cancelamento na plataforma.
+   - **O estado local muda depois do "sim" do Mercado Pago, nunca antes.** A
+     recusa dele — já estornado, saldo já sacado, prazo vencido — sobe inteira
+     para a tela do dono. Marcar `REFUNDED` sem o estorno ter acontecido seria
+     dinheiro parado na conta da loja com o painel dizendo o contrário.
+   - **O pedido morre com o estorno.** `paymentStatus = REFUNDED` sozinho o
+     tirava da fila da cozinha e o deixava `NEW` — vivo o bastante para alguém
+     achar e despachar depois. Agora ele também vai para `CANCELLED` e solta a
+     rota, o que valeu para o estorno feito pelo painel do Mercado Pago
+     também: `ConfirmPayment` usa a mesma transição.
+
+   Parcial não entra: estorno de parte da comanda é decisão de produto que
+   ninguém tomou, e um parâmetro opcional convidaria a tela a inventá-la.
 5. **Cartão, se pedirem.** Chave por estabelecimento, tokenização no navegador,
    device ID, 3DS em iframe, e os estados `IN_REVIEW` / `REJECTED` /
    `CHARGED_BACK` no painel. Sem conexão nova: a credencial é a mesma da fase 1.
