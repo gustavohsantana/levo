@@ -93,7 +93,13 @@ async function main() {
   });
 
   await prisma.courier.createMany({
-    data: COURIERS.map((courier) => ({ ...courier, establishmentId: establishment.id })),
+    data: COURIERS.map((courier, index) => ({
+      ...courier,
+      establishmentId: establishment.id,
+      ...(index === 0
+        ? { login: 'jefferson', passwordHash: bcrypt.hashSync('motoboy123', 10) }
+        : {}),
+    })),
   });
 
   const now = Date.now();
@@ -143,6 +149,8 @@ async function main() {
   console.log('  Entre em http://localhost:3000');
   console.log('  E-mail : ze@pizzaria.com.br');
   console.log('  Senha  : pizzaria123');
+  console.log('');
+  console.log('  App do motoboy : jefferson / motoboy123');
   console.log('');
 }
 

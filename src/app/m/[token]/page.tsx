@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next';
-import { notFound } from 'next/navigation';
 import { getDriverRoute } from '@/presentation/driver-queries';
-import { CourierApp } from '@/presentation/ui/patterns/courier-app';
+import { CourierApp, CourierEmpty } from '@/presentation/ui/patterns/courier-app';
 
 export const metadata: Metadata = { title: 'Minha rota · Levô' };
 export const dynamic = 'force-dynamic';
@@ -17,7 +16,7 @@ export default async function CourierPage({ params }: { params: Promise<{ token:
   const { token } = await params;
   const route = await getDriverRoute(token);
 
-  if (!route) notFound();
+  if (!route) return <CourierEmpty />;
 
   return <CourierApp token={token} route={route} exigeCodigo={route.exigeCodigo} />;
 }

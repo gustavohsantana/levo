@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getCourierMonth } from '@/presentation/queries';
+import { acessoDoMotoboy } from '@/presentation/courier-login';
+import { CourierAppAccess } from '@/presentation/ui/patterns/courier-app-access';
 import { CourierMonth } from '@/presentation/ui/patterns/courier-month';
 import { CourierPayForm } from '@/presentation/ui/patterns/courier-pay-form';
 import { CourierTelegram } from '@/presentation/ui/patterns/courier-telegram';
@@ -27,6 +29,7 @@ export default async function EntregadorPage({
 
   const dados = await getCourierMonth(id, new Date(Date.UTC(ano, numero - 1, 1)));
   if (!dados.courier) notFound();
+  const acesso = await acessoDoMotoboy(id);
 
   return (
     <div className="flex flex-col gap-6">
@@ -36,6 +39,8 @@ export default async function EntregadorPage({
         days={dados.days}
         routes={dados.routes}
       />
+
+      <CourierAppAccess courierId={dados.courier.id} login={acesso.login} />
 
       {/*
         O acordo fica embaixo do mês, e não numa tela à parte: quem vem conferir

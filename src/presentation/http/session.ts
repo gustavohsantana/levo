@@ -26,8 +26,8 @@ function secret(): Uint8Array {
  * um peso de configuração e de conceitos que nada aqui usa — e mesmo assim
  * precisaríamos escrever o provider de credenciais.
  *
- * Motoboy e cliente final não passam por aqui: entram por link com token, que é
- * o que sobrevive à realidade de campo.
+ * Motoboy tem cookie próprio (`levo_courier`): o app entra com usuário e senha
+ * gerados pelo dono. Cliente final continua no link com token.
  */
 export async function createSession(email: string, password: string): Promise<Session> {
   const prisma = getPrismaClient(env().DATABASE_URL);

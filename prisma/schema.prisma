@@ -181,6 +181,9 @@ model Courier {
   name            String
   phone           String
   active          Boolean  @default(true)
+  /// Usuario do app do motoboy. Nulo ate o dono gerar o acesso.
+  login           String?  @unique
+  passwordHash    String?
   /// O acordo combinado com este motoboy.
   ///
   /// Fica no motoboy, e nao no estabelecimento, porque acordo e pessoal: o

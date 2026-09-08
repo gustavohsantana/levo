@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.webkit.CookieManager
 import android.webkit.GeolocationPermissions
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -53,6 +54,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         configurarWebView()
+        binding.web.setBackgroundColor(0xFFFAF9F7.toInt())
         abrir(intent)
         cuidarDoBotaoVoltar()
     }
@@ -72,20 +74,28 @@ class MainActivity : AppCompatActivity() {
 
     private fun abrir(intent: Intent?) {
         val doLink = Sessao.tokenDaUrl(intent?.dataString)
-        val token = doLink ?: Sessao.token(this)
 
-        if (doLink != null) Sessao.guardarToken(this, doLink)
-
-        if (token == null) {
-            binding.web.loadUrl("file:///android_asset/sem_link.html")
+        if (doLink != null) {
+            Sessao.guardarToken(this, doLink)
+            binding.web.loadUrl("${BuildConfig.BASE_URL}/m/$doLink")
             return
         }
 
-        binding.web.loadUrl("${BuildConfig.BASE_URL}/m/$token")
+        /*
+         * Sem link do WhatsApp: a porta e o login.
+         *
+         * `/entregador` manda para o formulario se nao houver sessao, e para a
+         * rota atual se o motoboy ja entrou. Guardar o token antigo e abrir
+         * `/m/` direto deixaria ele preso numa rota de ontem.
+         */
+        binding.web.loadUrl("${BuildConfig.BASE_URL}/entregador/login")
     }
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun configurarWebView() {
+        CookieManager.getInstance().setAcceptCookie(true)
+        CookieManager.getInstance().setAcceptThirdPartyCookies(binding.web, true)
+
         binding.web.settings.apply {
             javaScriptEnabled = true
 
@@ -104,12 +114,30 @@ class MainActivity : AppCompatActivity() {
              */
             setGeolocationEnabled(true)
 
-            cacheMode = WebSettings.LOAD_DEFAULT
+            /*
+             * Sem estas duas, a WebView joga fora o <meta viewport> e o
+             * Chromium infla a fonte sozinho — a tela "zoada" do app.
+             */
+            useWideViewPort = true
+            loadWithOverviewMode = true
+            textZoom = 100
+
+            /*
+             * Cache podre no tablet deixava HTML novo com CSS velho (ou nenhum).
+             * A pagina do login e pequena; buscar fresca e mais barato do que
+             * explicar de novo a tela zoada.
+             */
+            cacheMode = WebSettings.LOAD_NO_CACHE
             mediaPlaybackRequiresUserGesture = false
-            // O motoboy vai dar zoom no endereco. Sem barra de controle na tela.
+            // Zoom so na rota, com os controles escondidos — no login um toque
+            // duplo deixava a pagina numa escala torta sem saida.
+            setSupportZoom(true)
             builtInZoomControls = true
             displayZoomControls = false
         }
+
+        // 100 = escala do aparelho. Sem isto o WebView as vezes abre em 75%.
+        binding.web.setInitialScale(100)
 
         binding.web.addJavascriptInterface(
             PonteWeb(this) { pedirPermissoes.launch(Permissoes.ESSENCIAIS) },
@@ -128,7 +156,7 @@ class MainActivity : AppCompatActivity() {
                 origem: String?,
                 callback: GeolocationPermissions.Callback?,
             ) {
-                val nosso = origem?.startsWith(BuildConfig.BASE_URL) == true
+                val nosso = eDoLevo(origem)
                 callback?.invoke(origem, nosso && Permissoes.temLocalizacao(this@MainActivity), false)
             }
         }
@@ -146,12 +174,22 @@ class MainActivity : AppCompatActivity() {
                 request: WebResourceRequest?,
             ): Boolean {
                 val url = request?.url ?: return false
-                if (url.toString().startsWith(BuildConfig.BASE_URL)) return false
+                if (eDoLevo(url)) return false
 
                 return runCatching {
                     startActivity(Intent(Intent.ACTION_VIEW, url).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                     true
                 }.getOrDefault(true)
+            }
+
+            /**
+             * Quando o login cai na rota, o token precisa ir para o servico
+             * nativo. Sem isto o rastreio com a tela apagada nao liga — a pagina
+             * chama `rastrear`, mas so depois que a rota comeca.
+             */
+            override fun onPageFinished(view: WebView?, url: String?) {
+                CookieManager.getInstance().flush()
+                Sessao.tokenDaUrl(url)?.let { Sessao.guardarToken(this@MainActivity, it) }
             }
         }
     }
@@ -174,6 +212,24 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         })
+    }
+
+    /**
+     * O site do Levô, em qualquer domínio que a Vercel estiver usando.
+     *
+     * O app abre `levoentregas.vercel.app`. Um redirect do Next às vezes aponta
+     * para o alias `levo-nine.vercel.app`. Tratar isso como site de terceiros
+     * manda o WebView para o Chrome — ou para lugar nenhum, tela branca.
+     */
+    private fun eDoLevo(url: Uri): Boolean {
+        if (url.toString().startsWith(BuildConfig.BASE_URL)) return true
+        val host = url.host ?: return false
+        return host == "levoentregas.vercel.app" || host == "levo-nine.vercel.app"
+    }
+
+    private fun eDoLevo(origem: String?): Boolean {
+        if (origem.isNullOrBlank()) return false
+        return runCatching { eDoLevo(Uri.parse(origem)) }.getOrDefault(false)
     }
 
     private fun explicarSegundoPlano() {
