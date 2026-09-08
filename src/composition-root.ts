@@ -21,6 +21,7 @@ import { SaveOptionGroup } from '@/application/use-cases/catalog/save-option-gro
 import { marketplaceCommandsFor } from '@/infrastructure/integrations/marketplace-factory';
 import { CreatePayment } from '@/application/use-cases/payments/create-payment';
 import { ConfirmPayment } from '@/application/use-cases/payments/confirm-payment';
+import { RefundPayment } from '@/application/use-cases/payments/refund-payment';
 import { RenameCategory } from '@/application/use-cases/catalog/rename-category';
 import { SaveProduct } from '@/application/use-cases/catalog/save-product';
 import { ReorderCatalog } from '@/application/use-cases/catalog/reorder-catalog';
@@ -74,6 +75,7 @@ export interface Container {
     saveOptionGroup: SaveOptionGroup;
     createPayment: CreatePayment;
     confirmPayment: ConfirmPayment;
+    refundPayment: RefundPayment;
     saveCourier: SaveCourier;
     setCourierActive: SetCourierActive;
   };
@@ -185,6 +187,14 @@ export function containerFor(establishmentId: string): Container {
         clock,
         establishmentId,
         () => mercadoPagoToken(),
+      ),
+      refundPayment: new RefundPayment(
+        uow,
+        mercadoPagoGateway,
+        clock,
+        establishmentId,
+        () => mercadoPagoToken(),
+        logger,
       ),
       saveCourier: new SaveCourier(uow, ids, establishmentId),
       setCourierActive: new SetCourierActive(uow),

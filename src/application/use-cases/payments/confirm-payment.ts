@@ -161,8 +161,16 @@ export class ConfirmPayment {
 
         const order = await repos.orders.findById(payment.orderId);
         if (order) {
-          order.markPaymentStatus(PaymentStatus.Refunded);
+          /*
+           * Mesma transição do estorno pelo painel: o dono pode ter devolvido
+           * o dinheiro pelo aplicativo do Mercado Pago, e o pedido tem que
+           * morrer igual. Antes daqui só o status de pagamento mudava, e o
+           * pedido seguia `NEW` — fora da fila da cozinha, mas vivo o
+           * bastante para alguém achar depois e despachar.
+           */
+          order.markPaymentRefunded(now);
           await repos.orders.save(order);
+          await repos.events.append(order.pullEvents());
         }
       });
       return 'REFUNDED';
