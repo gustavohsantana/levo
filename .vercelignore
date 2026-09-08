@@ -1,0 +1,4 @@
+# O CLI no Windows às vezes trava ao ler pasta de build aberta.
+android/
+.next/
+node_modules/
