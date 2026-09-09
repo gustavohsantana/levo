@@ -106,11 +106,13 @@ export class AiqfomeOrderSource implements OrderSource {
 
     for (const resumo of resumos) {
       /*
-       * Pedido de retirada não tem entrega. Importá-lo colocaria no painel uma
-       * parada que ninguém vai fazer — e o motoboy descobriria isso na porta.
+       * A retirada entra também, marcada como tal.
+       *
+       * Antes era pulada — mas isso obrigava o dono a vigiar o app do aiqfome
+       * para os pedidos de balcão, e o Levô existe justamente para centralizar
+       * tudo num lugar só. Ela aparece no painel e na cozinha; o que não vira é
+       * rota, porque não há entrega (`Order` já trata `isPickup`).
        */
-      if (resumo.order_is_pickup ?? resumo.is_pickup) continue;
-
       const id = resumo.order_id ?? resumo.id;
       if (id === undefined) continue;
 
@@ -118,7 +120,13 @@ export class AiqfomeOrderSource implements OrderSource {
         new URL(`/api/v2/orders/${id}`, this.baseUrl),
       );
 
-      if (detalhe) pedidos.push(mapAiqfomeOrder(detalhe));
+      if (detalhe) {
+        const pedido = mapAiqfomeOrder(detalhe);
+        // O resumo é a fonte autoritativa da retirada — o detalhe nem sempre
+        // repete o flag. Se o resumo diz balcão, é balcão.
+        if (resumo.order_is_pickup ?? resumo.is_pickup) pedido.pickup = true;
+        pedidos.push(pedido);
+      }
     }
 
     return pedidos;
@@ -228,6 +236,7 @@ export function mapAiqfomeOrder(payload: AiqfomeOrder): ExternalOrder {
         : null,
     amountCents: toCents(payload.payment_method?.total),
     notes: payload.order_observations?.trim() || null,
+    pickup: payload.is_pickup ?? false,
     placedAt: parseDate(
       payload.timeline?.created_at ?? payload.created_at,
       payload.timeline?.timezone,

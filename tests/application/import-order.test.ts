@@ -241,3 +241,49 @@ describe('ImportOrderFromSource — mudanças de estado na plataforma', () => {
     expect([...db.orders.values()].find((o) => o.externalId === 'IF-4')!.status).toBe('CANCELLED');
   });
 });
+
+describe('pedido de retirada importado', () => {
+  it('entra no painel, marcado como retirada', async () => {
+    /*
+     * A ideia do Levô é centralizar TODOS os pedidos das plataformas — o dono
+     * não pode ter que vigiar o app do aiqfome para os de balcão. Então a
+     * retirada entra também, só que sem virar rota.
+     */
+    const retirada = { ...externalOrder('AIQ-PICKUP'), address: '', pickup: true };
+    const source = new FakeOrderSource([retirada]);
+
+    const result = await importOrders.execute(source);
+
+    expect(result.imported).toBe(1);
+    const order = [...db.orders.values()].find((o) => o.externalId === 'AIQ-PICKUP');
+    expect(order?.isPickup).toBe(true);
+  });
+
+  it('não paga taxa de entrega e não bloqueia por endereço sem pino', async () => {
+    const retirada = {
+      ...externalOrder('AIQ-PICKUP-2'),
+      address: '',
+      deliveryFeeCents: 800, // o marketplace mandou uma taxa; retirada ignora
+      pickup: true,
+    };
+
+    await importOrders.execute(new FakeOrderSource([retirada]));
+
+    const order = [...db.orders.values()].find((o) => o.externalId === 'AIQ-PICKUP-2');
+    expect(order?.deliveryFee.cents).toBe(0);
+    // Sem endereço e sem pino, uma entrega ficaria marcada como "sem localização";
+    // a retirada não, porque não vai virar rota.
+    expect(order?.isGeocoded).toBe(false);
+  });
+
+  it('a entrega comum segue geocodificando e cobrando normalmente', async () => {
+    // A mudança não pode contaminar o caso comum, que é a maioria.
+    const entrega = { ...externalOrder('AIQ-ENTREGA'), deliveryFeeCents: 700 };
+
+    await importOrders.execute(new FakeOrderSource([entrega]));
+
+    const order = [...db.orders.values()].find((o) => o.externalId === 'AIQ-ENTREGA');
+    expect(order?.isPickup).toBe(false);
+    expect(order?.deliveryFee.cents).toBe(700);
+  });
+});

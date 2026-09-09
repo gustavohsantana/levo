@@ -201,8 +201,20 @@ export class ImportOrderFromSource {
     );
     if (existing) return 'duplicate';
 
-    const address = Address.create(external.address, external.reference);
-    const coordinates = await this.geocoder.geocode(address).catch(() => null);
+    /*
+     * Retirada não tem endereço de entrega, e não precisa.
+     *
+     * O marketplace manda o endereço vazio na retirada — `Address.create` de uma
+     * string vazia estouraria. Um rótulo fixo resolve: o pedido aparece na
+     * cozinha marcado como balcão, ninguém geocodifica o que não vai virar rota,
+     * e o motoboy nunca vê uma parada que não existe.
+     */
+    const ehRetirada = external.pickup === true;
+    const address = ehRetirada && external.address.trim().length < 8
+      ? Address.create('Retirada no balcão')
+      : Address.create(external.address, external.reference);
+
+    const coordinates = ehRetirada ? null : await this.geocoder.geocode(address).catch(() => null);
 
     return this.uow.run(async (repos) => {
       // Recheca dentro da transação: entre a leitura acima e agora, outro ciclo
@@ -243,17 +255,22 @@ export class ImportOrderFromSource {
          * o total da plataforma, para a conta fechar no centavo.
          */
         amount: Money.fromCents(external.amountCents),
+        fulfillment: ehRetirada ? 'PICKUP' : 'DELIVERY',
+        // Retirada não paga entrega — o cliente busca. A taxa que o marketplace
+        // mandou, se mandou, é de outro pedido; aqui ela é zero.
         deliveryFee:
-          external.deliveryFeeCents !== undefined
-            ? Money.fromCents(external.deliveryFeeCents)
-            : undefined,
+          ehRetirada || external.deliveryFeeCents === undefined
+            ? undefined
+            : Money.fromCents(external.deliveryFeeCents),
         paymentMethod: external.paymentMethod ?? null,
         items: itens,
         notes: external.notes,
         now: external.placedAt ?? this.clock.now(),
       });
 
-      if (!coordinates) order.markGeocodingFailed('endereço não localizado', this.clock.now());
+      // Retirada não vira rota, então geocodificação ausente não é falha dela.
+      if (!coordinates && !ehRetirada)
+        order.markGeocodingFailed('endereço não localizado', this.clock.now());
 
       /*
        * ⭐ Aceite automático, dentro da transação da importação.

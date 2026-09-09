@@ -64,13 +64,24 @@ describe('AiqfomeOrderSource.fetchPending', () => {
     expect(chamadas[1]).toContain('/api/v2/orders/140036851');
   });
 
-  it('ignora pedido de retirada sem nem buscar o detalhe', async () => {
-    // O campo na lista é `order_is_pickup`, não `is_pickup`: ler o nome errado
-    // fazia retirada virar entrega e gerar uma parada que ninguém faria.
+  it('importa a retirada marcada como pickup', async () => {
+    /*
+     * Antes a retirada era pulada — mas isso obrigava o dono a vigiar o app do
+     * aiqfome para os pedidos de balcão, e o Levô existe para centralizar tudo.
+     * Agora ela entra, com `pickup: true`; quem a mantém fora da rota é o
+     * domínio (`Order.isPickup`), não o adapter.
+     *
+     * O flag autoritativo é o `order_is_pickup` do RESUMO — o detalhe nem sempre
+     * repete, então o resumo manda.
+     */
     const chamadas = servidor([{ order_id: 140036851, order_is_pickup: true }]);
 
-    expect(await source().fetchPending()).toEqual([]);
-    expect(chamadas).toHaveLength(1);
+    const pedidos = await source().fetchPending();
+
+    expect(pedidos).toHaveLength(1);
+    expect(pedidos[0]?.pickup).toBe(true);
+    // Busca o detalhe também: lista + detalhe.
+    expect(chamadas).toHaveLength(2);
   });
 
   it('aceita também os nomes do detalhe na lista', async () => {

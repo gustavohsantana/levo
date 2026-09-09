@@ -109,6 +109,15 @@ export interface ExternalOrder {
    * que cobrar na porta, e é o que o motoboy precisa saber.
    */
   paymentMethod?: 'CASH' | 'CREDIT' | 'DEBIT' | 'PIX' | 'ONLINE';
+  /**
+   * Retirada no balcão: o cliente busca, não há entrega.
+   *
+   * Importado do mesmo jeito que os outros — a ideia do Levô é centralizar TODOS
+   * os pedidos das plataformas, para o dono não ter que vigiar o app de cada
+   * marketplace. O que muda é só que a retirada aparece marcada e fica fora da
+   * rota: não tem endereço para geocodificar nem parada para o motoboy fazer.
+   */
+  pickup?: boolean;
 }
 
 /**

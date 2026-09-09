@@ -114,7 +114,16 @@ function Cartao({
   return (
     <li className="rounded-lg bg-surface p-3 hairline">
       <div className="flex items-baseline justify-between gap-2">
-        <p className="truncate text-base font-semibold text-ink">{pedido.customerName}</p>
+        <p className="flex min-w-0 items-center gap-2 text-base font-semibold text-ink">
+          <span className="truncate">{pedido.customerName}</span>
+          {/* A cozinha precisa saber que é balcão: o cliente vem buscar, não sai
+              motoboy. */}
+          {pedido.pickup ? (
+            <span className="shrink-0 rounded bg-moving-soft px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-moving">
+              Retirada
+            </span>
+          ) : null}
+        </p>
         {/*
           Há quanto tempo, não a que horas: quem está na cozinha precisa saber
           se está atrasando, e converter horário para tempo é conta que ninguém

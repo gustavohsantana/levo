@@ -35,6 +35,8 @@ export interface OrderView {
   readyAt: string | null;
   /** Marcado pelo dono porque o cliente ligou cobrando. */
   urgente: boolean;
+  /** Retirada no balcão: o cliente busca, não vai para rota. */
+  pickup: boolean;
   items: Array<{
     name: string;
     /** Complementos, como o marketplace os descreve. Vazio no pedido manual. */
@@ -102,6 +104,7 @@ function toOrderView(order: Order, whatsapp: string | null, trackingUrl: string)
     coordinates: order.coordinates?.toJSON() ?? null,
     stage: order.stage,
     urgente: order.urgente,
+    pickup: order.isPickup,
     items: order.items.map((item) => ({
       name: item.name,
       options: item.options ?? [],

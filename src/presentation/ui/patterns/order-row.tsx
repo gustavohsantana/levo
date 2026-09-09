@@ -54,10 +54,18 @@ export function OrderRow({
             <Flame className="size-3.5 shrink-0 text-danger" aria-label="Urgente" />
           ) : null}
           {order.customerName}
+          {order.pickup ? (
+            <span className="shrink-0 rounded-sm bg-moving-soft px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-moving">
+              Retirada
+            </span>
+          ) : null}
         </p>
         <p className="truncate text-xs text-ink-muted">
-          {order.address}
-          {order.reference ? <span className="text-ink-faint"> · {order.reference}</span> : null}
+          {/* Retirada não tem endereço de entrega — o cliente busca no balcão. */}
+          {order.pickup ? 'Retira no balcão' : order.address}
+          {!order.pickup && order.reference ? (
+            <span className="text-ink-faint"> · {order.reference}</span>
+          ) : null}
         </p>
       </div>
 
