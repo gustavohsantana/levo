@@ -61,8 +61,15 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
   const [retirada, setRetirada] = useState(false);
   /** A rua que o CEP aponta, quando difere da que a pessoa escreveu. */
   const [sugestaoRua, setSugestaoRua] = useState<string | null>(null);
-  /** O ponto que o cliente marcou, quando o endereço não foi encontrado. */
-  const [, setPin] = useState<{ lat: number; lng: number } | null>(null);
+  /**
+   * O ponto que o cliente marcou, quando o endereço não foi encontrado.
+   *
+   * O valor é usado, não só o setter: sem ele, o pino ficava preso no estado e
+   * nunca chegava ao servidor — o pedido caía sem localização mesmo com o
+   * cliente tendo marcado no mapa. Vai para o formulário como `pinLat`/`pinLng`,
+   * que é o que a action lê.
+   */
+  const [pin, setPin] = useState<{ lat: number; lng: number } | null>(null);
   const [cep, setCep] = useState('');
   const [buscandoCep, setBuscandoCep] = useState(false);
   const [avisoCep, setAvisoCep] = useState<string | null>(null);
@@ -532,6 +539,18 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
             origem={{ lat: menu.establishment.lat, lng: menu.establishment.lng }}
             onPin={setPin}
           />
+        ) : null}
+
+        {/*
+          O pino marcado no mapa vai junto no envio.
+          A action prefere este ponto à geocodificação do texto — é o cliente
+          dizendo onde mora, que é mais confiável que qualquer geocodificador.
+        */}
+        {pin ? (
+          <>
+            <input type="hidden" name="pinLat" value={pin.lat} />
+            <input type="hidden" name="pinLng" value={pin.lng} />
+          </>
         ) : null}
 
         <Field label="Complemento" hint="apartamento, portão, referência">

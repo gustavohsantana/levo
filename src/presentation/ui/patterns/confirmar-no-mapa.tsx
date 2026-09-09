@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import dynamic from 'next/dynamic';
 import { Check, LoaderCircle, MapPin } from 'lucide-react';
 import { localizarEnderecoAction } from '@/presentation/public-menu';
@@ -58,6 +58,32 @@ export function ConfirmarNoMapa({
       }
     });
   }
+
+  /*
+   * Confere sozinho quando o cliente termina de digitar.
+   *
+   * Antes dependia de um clique em "Conferir", e ninguém clica no opcional — o
+   * pedido caía sem localização. Agora, parado de digitar por um instante, a
+   * verificação roda: se acha, mostra o "encontrado" sem atrito; se não acha, o
+   * mapa aparece na hora, com o cliente ainda pensando em onde mora.
+   *
+   * O timer evita disparar a cada tecla (e queimar a cota do geocodificador); só
+   * dispara depois que o texto para de mudar. O `ultimoConferido` impede repetir
+   * a mesma busca quando outro campo do formulário muda sem mexer no endereço.
+   */
+  const ultimoConferido = useRef('');
+  useEffect(() => {
+    const alvo = endereco.trim();
+    if (alvo.length < 8 || alvo === ultimoConferido.current) return;
+
+    const timer = setTimeout(() => {
+      ultimoConferido.current = alvo;
+      conferir();
+    }, 1200);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [endereco]);
 
   return (
     <div className="rounded-lg bg-surface p-3 hairline">
