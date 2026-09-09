@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { candidatosDeBusca } from '@/infrastructure/geocoding/address-query';
+import { candidatosDeBusca, partesDoEndereco } from '@/infrastructure/geocoding/address-query';
 
 /**
  * O caso que motivou isto: "Av Antonio Scodeller, 1296, Faisqueira, Pouso
@@ -93,5 +93,35 @@ describe('separadores brasileiros', () => {
     for (const candidato of candidatos) {
       expect(candidato.match(/Pouso Alegre/g)).toHaveLength(1);
     }
+  });
+});
+
+describe('partesDoEndereco', () => {
+  it('separa o endereço do Bruno em rua, número e bairro', () => {
+    // O formato que `montarEndereco` produz: "rua, número - bairro, cidade".
+    // Este é o caso real que caía sem localização e motivou o IBGE.
+    const { rua, numero, bairro } = partesDoEndereco(
+      'Rua Antônio de Souza Gouveia, 37 - Joaquim José Franco, Pouso Alegre',
+    );
+
+    expect(rua).toBe('Rua Antônio de Souza Gouveia');
+    expect(numero).toBe(37);
+    expect(bairro).toBe('Joaquim José Franco');
+  });
+
+  it('devolve número 0 quando o cliente não informou', () => {
+    const { rua, numero, bairro } = partesDoEndereco('Rua das Flores - Centro, Pouso Alegre');
+
+    expect(rua).toBe('Rua das Flores');
+    expect(numero).toBe(0);
+    expect(bairro).toBe('Centro');
+  });
+
+  it('não inventa bairro quando não há a parte do local', () => {
+    const { rua, numero, bairro } = partesDoEndereco('Rua A, 100');
+
+    expect(rua).toBe('Rua A');
+    expect(numero).toBe(100);
+    expect(bairro).toBe('');
   });
 });

@@ -97,3 +97,31 @@ function expandir(texto: string): string {
     texto,
   );
 }
+
+/**
+ * O caminho inverso: separa rua, número e bairro do endereço montado.
+ *
+ * `montarEndereco` produz "Rua X, 123 - Bairro Y, Cidade". O geocodificador do
+ * IBGE precisa das partes de volta — a rua e o bairro para achar, o número para
+ * interpolar. Best-effort: o que não der para separar volta vazio, e quem chama
+ * decide (o geocodificador cai na cascata se faltar rua).
+ */
+export function partesDoEndereco(raw: string): {
+  rua: string;
+  numero: number;
+  bairro: string;
+} {
+  const [via = '', local = ''] = raw.split(' - ');
+
+  // "Rua X, 123" → o número é o último trecho, se for número.
+  const pedacosVia = via.split(',').map((p) => p.trim());
+  const ultimo = pedacosVia[pedacosVia.length - 1] ?? '';
+  const temNumero = /^\d+/.test(ultimo);
+  const numero = temNumero ? parseInt(ultimo, 10) || 0 : 0;
+  const rua = (temNumero ? pedacosVia.slice(0, -1) : pedacosVia).join(', ').trim();
+
+  // "Bairro Y, Cidade" → o bairro é o primeiro trecho.
+  const bairro = (local.split(',')[0] ?? '').trim();
+
+  return { rua, numero, bairro };
+}

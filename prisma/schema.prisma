@@ -804,3 +804,25 @@ model DeliveryFeeRule {
   @@unique([establishmentId, uptoMeters])
   @@index([establishmentId, uptoMeters])
 }
+
+/// O cadastro de endereços do IBGE (CNEFE), carregado por cidade.
+///
+/// A base do OpenStreetMap não cobre as ruas do interior; o censo do IBGE sim —
+/// cada endereço com rua, bairro, número e coordenada, público e gratuito. O
+/// geocodificador consulta esta tabela antes de recorrer a qualquer API externa.
+model EnderecoIbge {
+  id          String @id @default(uuid())
+  uf          String
+  /// Cidade normalizada (sem acento, minúscula) — a chave, não o nome de exibir.
+  cidadeChave String
+  /// Rua normalizada, sem o tipo ("rua", "av").
+  ruaChave    String
+  /// Bairro normalizado. Entra na chave porque desambigua ruas de mesmo nome.
+  bairroChave String
+  numero      Int    @default(0)
+  lat         Float
+  lng         Float
+
+  @@index([uf, cidadeChave, ruaChave, bairroChave], name: "EnderecoIbge_busca_idx")
+  @@index([uf, cidadeChave, ruaChave], name: "EnderecoIbge_rua_idx")
+}
