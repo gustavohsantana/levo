@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { candidatosDeBusca, partesDoEndereco } from '@/infrastructure/geocoding/address-query';
+import { montarEndereco } from '@/presentation/address-parts';
 
 /**
  * O caso que motivou isto: "Av Antonio Scodeller, 1296, Faisqueira, Pouso
@@ -123,5 +124,42 @@ describe('partesDoEndereco', () => {
     expect(rua).toBe('Rua A');
     expect(numero).toBe(100);
     expect(bairro).toBe('');
+  });
+});
+
+/*
+ * O contrato que quebrou em produção: a prévia do mapa montava o endereço por
+ * vírgula ("rua, bairro, cidade"), mas o IBGE separa por " - ". A prévia dizia
+ * "não achamos" um endereço que o pedido, montado por `montarEndereco`, achava.
+ * Agora as duas usam `montarEndereco` — este teste trava as duas pontas juntas
+ * para que ninguém mude o separador de um lado só.
+ */
+describe('montarEndereco ⇄ partesDoEndereco (o que a prévia monta, o IBGE separa)', () => {
+  it('preserva rua, número e bairro no ida e volta', () => {
+    const texto = montarEndereco({
+      rua: 'Rua Antônio de Souza Gouveia',
+      numero: '37',
+      bairro: 'Joaquim José Franco',
+      cidade: 'Pouso Alegre',
+    });
+
+    const { rua, numero, bairro } = partesDoEndereco(texto);
+    expect(rua).toBe('Rua Antônio de Souza Gouveia');
+    expect(numero).toBe(37);
+    expect(bairro).toBe('Joaquim José Franco');
+  });
+
+  it('sem número, a rua e o bairro ainda voltam certos', () => {
+    const texto = montarEndereco({
+      rua: 'Rua das Flores',
+      numero: '',
+      bairro: 'Centro',
+      cidade: 'Pouso Alegre',
+    });
+
+    const { rua, numero, bairro } = partesDoEndereco(texto);
+    expect(rua).toBe('Rua das Flores');
+    expect(numero).toBe(0);
+    expect(bairro).toBe('Centro');
   });
 });

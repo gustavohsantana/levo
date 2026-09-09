@@ -23,6 +23,7 @@ import { Button, Field, Input, Select, Textarea } from '../primitives';
 import { currency } from '../format';
 import { ConfirmarNoMapa } from './confirmar-no-mapa';
 import { mesmaRua } from '@/core/services/endereco';
+import { montarEndereco } from '@/presentation/address-parts';
 
 /**
  * Segunda etapa: dados, endereço e forma de pagamento.
@@ -51,6 +52,12 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
    */
   const [bairro, setBairro] = useState('');
   const [rua, setRua] = useState('');
+  /*
+   * O número também é controlado — não pelo CEP, mas pela conferência no mapa:
+   * ela precisa do número para mostrar o pino na porta certa, o mesmo que o
+   * pedido vai geocodificar. Sem estado, a prévia ficaria sempre sem número.
+   */
+  const [numero, setNumero] = useState('');
   /*
    * Entrega ou retirada.
    *
@@ -95,6 +102,7 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
     }
     if (rascunhoSalvo?.neighborhood) setBairro(rascunhoSalvo.neighborhood);
     if (rascunhoSalvo?.street) setRua(rascunhoSalvo.street);
+    if (rascunhoSalvo?.number) setNumero(rascunhoSalvo.number);
     setPronto(true);
   }, [slug]);
 
@@ -514,7 +522,8 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
               inputMode="numeric"
               autoComplete="off"
               placeholder="s/n"
-              defaultValue={rascunho?.number}
+              value={numero}
+              onChange={(evento) => setNumero(evento.target.value)}
             />
           </Field>
         </div>
@@ -530,12 +539,17 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
           <ConfirmarNoMapa
             slug={slug}
             /*
-             * Sem o número: o geocodificador brasileiro raramente tem
-             * numeração residencial, e incluí-lo faz a busca falhar em rua que
-             * existe. Quem precisa do número é o motoboy, e ele o tem no
-             * endereço escrito.
+             * O MESMO endereço que o pedido vai geocodificar, montado do mesmo
+             * jeito que o servidor monta no envio. Antes a prévia juntava
+             * "rua, bairro, cidade" por vírgula e sem número — mas a base do
+             * IBGE lê "rua, número - bairro", então a prévia dizia "não achamos"
+             * um endereço que o pedido, logo depois, achava. Agora as duas
+             * concordam, e o número entra: é ele que leva o pino à porta, não ao
+             * meio da rua. Se faltar (o cliente ainda não digitou), a busca cai
+             * no centro da via — o número não trava rua que existe, porque o
+             * geocodificador tenta também sem ele.
              */
-            endereco={[rua, bairro, cidade].filter(Boolean).join(', ')}
+            endereco={montarEndereco({ rua, numero, bairro, cidade })}
             origem={{ lat: menu.establishment.lat, lng: menu.establishment.lng }}
             onPin={setPin}
           />
