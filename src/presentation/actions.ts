@@ -9,6 +9,7 @@ import { createSession, destroySession, requireSession } from './http/session';
 import { toFormError } from './http/error-mapper';
 import { checkRateLimit, clearRateLimit } from './http/rate-limit';
 import { avisarRotaLiberada } from './telegram-rota';
+import { entregasDoEntregador, type EntregaDoEntregador } from './reports';
 
 /**
  * Server Actions: as mutações das telas do dono.
@@ -643,6 +644,27 @@ export async function salvarFaixasAction(bruto: string): Promise<ActionResult> {
     revalidatePath('/dashboard/configuracoes');
     revalidatePath('/dashboard');
     return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+/**
+ * As entregas de um motoboy no período, para o modal do relatório.
+ *
+ * O relatório mostra o resumo por motoboy; ao clicar num, a tela pede aqui a
+ * lista das entregas dele — carregada sob demanda, porque ninguém abre o
+ * detalhe de todos os motoboys, e trazer tudo de antemão pesaria o relatório à
+ * toa.
+ */
+export async function entregasDoEntregadorAction(
+  courierId: string,
+  de: string,
+  ate: string,
+): Promise<{ ok: true; entregas: EntregaDoEntregador[] } | { ok: false; error: string }> {
+  try {
+    const entregas = await entregasDoEntregador(courierId, { de, ate });
+    return { ok: true, entregas };
   } catch (cause) {
     return { ok: false, error: toFormError(cause) };
   }

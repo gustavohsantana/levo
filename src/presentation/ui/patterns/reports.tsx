@@ -3,6 +3,7 @@ import { BarChart3 } from 'lucide-react';
 import { NOME_DA_PLATAFORMA, type Plataforma, type Relatorio } from '@/presentation/reports-core';
 import { EmptyState } from '../primitives';
 import { currency } from '../format';
+import { EntregadorDetalhe } from './entregador-detalhe';
 
 /**
  * O relatório do dono.
@@ -38,7 +39,7 @@ function diaBr(dia: string): string {
 }
 
 export function Reports({ dados, atalhos }: { dados: Relatorio; atalhos: Atalho[] }) {
-  const { resumo, filtro } = dados;
+  const { resumo } = dados;
 
   return (
     <div className="flex flex-col gap-6">
@@ -262,30 +263,17 @@ function PorEntregador({ dados }: { dados: Relatorio }) {
 
       <ul className="mt-3 flex flex-col gap-2.5 text-sm">
         {dados.porEntregador.map((e) => (
-          <li key={e.id} className="flex items-baseline justify-between gap-3">
-            <span className="min-w-0 truncate text-ink">
-              {e.nome}
-              <span className="ml-2 text-xs text-ink-faint">
-                {e.entregas} entregas
-                {e.tempoMedioMinutos !== null ? ` · ${e.tempoMedioMinutos} min` : ''}
-              </span>
-            </span>
-
-            {/*
-              Acordo em branco mostra o aviso, não R$ 0,00: zero pareceria uma
-              conta fechada, e o dono só descobriria o buraco no dia do acerto.
-            */}
-            {e.semAcordo ? (
-              <Link
-                href={`/dashboard/entregadores/${e.id}`}
-                className="shrink-0 text-xs text-ink-muted underline underline-offset-2"
-              >
-                definir acordo
-              </Link>
-            ) : (
-              <span className="numeric shrink-0 text-ink">{currency(e.aPagarCents)}</span>
-            )}
-          </li>
+          <EntregadorDetalhe
+            key={e.id}
+            id={e.id}
+            nome={e.nome}
+            entregas={e.entregas}
+            tempoMedioMinutos={e.tempoMedioMinutos}
+            aPagarCents={e.aPagarCents}
+            semAcordo={e.semAcordo}
+            de={dados.filtro.de}
+            ate={dados.filtro.ate}
+          />
         ))}
         {dados.porEntregador.length === 0 ? (
           <li className="text-ink-faint">Nenhuma entrega atribuída no período.</li>

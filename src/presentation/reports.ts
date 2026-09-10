@@ -281,3 +281,65 @@ export async function getAcertoDoDia(): Promise<AcertoDoDia> {
     totalCents: entregadores.reduce((t, e) => t + e.aPagarCents, 0),
   };
 }
+
+/** Uma entrega concluída, para o detalhe do entregador no relatório. */
+export interface EntregaDoEntregador {
+  quando: string;
+  cliente: string;
+  endereco: string;
+  metros: number | null;
+  totalCents: number;
+  minutos: number | null;
+}
+
+/**
+ * As entregas de um motoboy no período — o detalhe atrás do resumo.
+ *
+ * O relatório mostra "8 entregas · R$ 64" por motoboy; quem clica quer ver
+ * quais foram. Consulta própria, e não a lista paginada do relatório: aqui é
+ * TUDO do motoboy no período, não a página que calhou de estar aberta.
+ */
+export async function entregasDoEntregador(
+  courierId: string,
+  filtro: { de: string; ate: string },
+): Promise<EntregaDoEntregador[]> {
+  const session = await requireSession();
+  const prisma = getPrismaClient(env().DATABASE_URL);
+  const establishmentId = session.establishmentId;
+
+  const rotas = await prisma.route.findMany({
+    where: { establishmentId, courierId },
+    select: { id: true },
+  });
+  const rotaIds = rotas.map((r) => r.id);
+  if (rotaIds.length === 0) return [];
+
+  const pedidos = await prisma.order.findMany({
+    where: {
+      establishmentId,
+      status: 'DELIVERED',
+      routeId: { in: rotaIds },
+      createdAt: { gte: inicioDoDia(filtro.de), lt: fimDoDia(filtro.ate) },
+    },
+    orderBy: { deliveredAt: 'desc' },
+    select: {
+      createdAt: true,
+      deliveredAt: true,
+      customerName: true,
+      address: true,
+      amountCents: true,
+      stop: { select: { legDistanceMeters: true } },
+    },
+  });
+
+  return pedidos.map((p) => ({
+    quando: (p.deliveredAt ?? p.createdAt).toISOString(),
+    cliente: p.customerName,
+    endereco: p.address,
+    metros: p.stop?.legDistanceMeters ?? null,
+    totalCents: p.amountCents,
+    minutos: p.deliveredAt
+      ? Math.round((p.deliveredAt.getTime() - p.createdAt.getTime()) / 60_000)
+      : null,
+  }));
+}
