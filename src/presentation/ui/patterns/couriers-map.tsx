@@ -1,8 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { Bike, Maximize2 } from 'lucide-react';
+import { Bike, ChevronDown, ChevronUp, Maximize2 } from 'lucide-react';
 import type { RotaNoMapa } from '@/presentation/queries';
 import type { MapMarker, MapRoute } from './route-map';
 import { clockTime, timeAgo } from '../format';
@@ -46,6 +47,16 @@ export function CouriersMap({
   /** Em tela cheia some o cabeçalho e o botão de expandir. */
   cheia?: boolean;
 }) {
+  /*
+   * Recolhido por padrão quando ninguém está em rota: aí o mapa é só a loja
+   * parada, e ocupava 320px no topo empurrando a lista de entregadores para
+   * baixo — com dez motoboys, nada cabia. Alguém em rota, abre sozinho, que é
+   * quando ele importa. Recolher DESMONTA o Leaflet: remontar já sai no tamanho
+   * certo, sem o `invalidateSize` que um `display:none` exigiria.
+   */
+  const [recolhido, setRecolhido] = useState(rotas.length === 0);
+  const mostrarMapa = cheia || !recolhido;
+
   const comCor = rotas.map((rota, i) => ({ ...rota, cor: CORES[i % CORES.length] }));
 
   const markers: MapMarker[] = [
@@ -83,39 +94,53 @@ export function CouriersMap({
     <section className={cheia ? 'flex h-dvh flex-col' : 'rounded-lg bg-surface hairline'}>
       {cheia ? null : (
         <div className="flex items-center justify-between gap-3 px-4 py-3">
-          <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setRecolhido((v) => !v)}
+            aria-expanded={!recolhido}
+            className="flex min-w-0 items-center gap-2 text-left"
+          >
             <Bike className="size-4 text-ink-faint" aria-hidden />
             <h2 className="text-sm font-medium text-ink">
               {rotas.length === 0 ? 'Ninguém em rota agora' : `${rotas.length} em rota`}
             </h2>
-          </div>
+            {recolhido ? (
+              <ChevronDown className="size-4 text-ink-faint" aria-hidden />
+            ) : (
+              <ChevronUp className="size-4 text-ink-faint" aria-hidden />
+            )}
+          </button>
 
-          <Link
-            href="/mapa"
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink"
-          >
-            <Maximize2 className="size-3.5" aria-hidden />
-            Abrir em tela cheia
-          </Link>
+          {!recolhido ? (
+            <Link
+              href="/mapa"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink"
+            >
+              <Maximize2 className="size-3.5" aria-hidden />
+              Abrir em tela cheia
+            </Link>
+          ) : null}
         </div>
       )}
 
-      <div className={cheia ? 'flex-1' : 'h-80 overflow-hidden'}>
-        <RouteMap
-          markers={markers}
-          routes={routes}
-          center={{ lat: loja.lat, lng: loja.lng }}
-          className="h-full w-full"
-        />
-      </div>
+      {mostrarMapa ? (
+        <div className={cheia ? 'flex-1' : 'h-80 overflow-hidden'}>
+          <RouteMap
+            markers={markers}
+            routes={routes}
+            center={{ lat: loja.lat, lng: loja.lng }}
+            className="h-full w-full"
+          />
+        </div>
+      ) : null}
 
       {/*
         A legenda não é enredo: o pino mostra o número, não de quem ele é. Sem
         ela, saber que a rota azul é do Jefferson exige clicar num pino.
       */}
-      {comCor.length > 0 ? (
+      {mostrarMapa && comCor.length > 0 ? (
         <ul className="flex flex-wrap gap-x-5 gap-y-1.5 px-4 py-3 text-xs">
           {comCor.map((rota) => {
             const feitas = rota.paradas.filter((p) => p.entregue).length;

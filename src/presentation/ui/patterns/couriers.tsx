@@ -72,7 +72,7 @@ export function Couriers({
           description="Cadastre quem entrega para poder montar rotas e mandar o link pelo WhatsApp."
         />
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {entregadores.map((entregador) => (
             <CourierRow key={entregador.id} entregador={entregador} onEdit={setEditando} />
           ))}
@@ -93,7 +93,7 @@ function CourierRow({
 
   return (
     <li
-      className={`flex flex-col rounded-lg bg-surface p-4 hairline ${
+      className={`flex flex-col rounded-lg bg-surface p-3 hairline ${
         entregador.active ? '' : 'opacity-55'
       }`}
     >
@@ -156,9 +156,14 @@ function CourierRow({
           {entregador.active ? 'Pausar' : 'Ativar'}
         </Button>
 
-        <Button variant="ghost" size="sm" onClick={() => onEdit(entregador)}>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={`Nome e telefone de ${entregador.name}`}
+          title="Nome e telefone"
+          onClick={() => onEdit(entregador)}
+        >
           <Pencil />
-          Nome e telefone
         </Button>
       </div>
     </li>
