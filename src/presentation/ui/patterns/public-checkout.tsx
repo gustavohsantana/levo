@@ -266,7 +266,7 @@ export function PublicCheckout({ menu }: { menu: MenuPublico }) {
   if (itens.length === 0) {
     return (
       <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-3 px-5 text-center">
-        <h1 className="text-xl font-semibold text-ink">Carrinho vazio</h1>
+        <h1 className="text-xl font-semibold text-ink">Sacola vazia</h1>
         <p className="text-sm text-ink-muted">Volte ao cardápio e escolha os itens.</p>
         <Link href={`/cardapio/${slug}`} className="text-sm font-medium text-accent-ink underline">
           Abrir cardápio

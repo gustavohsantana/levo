@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Minus, Plus, ShoppingBag } from 'lucide-react';
 import type { MenuPublico } from '@/presentation/public-menu';
@@ -24,11 +24,8 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
   const [pronto, setPronto] = useState(false);
   /** O produto que o cliente está montando. `null` quando nenhum. */
   const [montando, setMontando] = useState<Produto | null>(null);
-
-  const produtos = useMemo(
-    () => menu.categorias.flatMap((categoria) => categoria.produtos),
-    [menu],
-  );
+  /** Primeiro toque em "esvaziar" pede confirmação; some sozinho se ignorado. */
+  const [confirmandoEsvaziar, setConfirmandoEsvaziar] = useState(false);
 
   /*
    * O efeito é o lugar certo aqui, apesar da regra: o carrinho vive no
@@ -60,6 +57,23 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
 
   const taxa = Math.round(menu.establishment.deliveryFeeReais * 100);
   const total = subtotal + (subtotal > 0 ? taxa : 0);
+
+  /**
+   * Esvazia a sacola inteira, em dois toques.
+   *
+   * A sacola pode ter um açaí montado com dez escolhas — perder isso num toque
+   * errado é raiva de recomeçar. O primeiro toque pede confirmação e se desfaz
+   * sozinho em três segundos; ninguém esvazia sem querer.
+   */
+  function esvaziar() {
+    if (!confirmandoEsvaziar) {
+      setConfirmandoEsvaziar(true);
+      setTimeout(() => setConfirmandoEsvaziar(false), 3000);
+      return;
+    }
+    setLinhas([]);
+    setConfirmandoEsvaziar(false);
+  }
 
   /** Ajusta a quantidade de uma LINHA, não de um produto. */
   function ajustar(linhaId: string, delta: number) {
@@ -319,6 +333,18 @@ export function PublicMenu({ menu }: { menu: MenuPublico }) {
               <p className="text-xs text-ink-faint">
                 {itens.reduce((n, linha) => n + linha.quantity, 0)} item(ns)
                 {taxa > 0 ? ` · entrega ${currency(taxa)}` : ''}
+                {' · '}
+                <button
+                  type="button"
+                  onClick={esvaziar}
+                  className={
+                    confirmandoEsvaziar
+                      ? 'font-medium text-danger underline'
+                      : 'underline underline-offset-2 hover:text-ink'
+                  }
+                >
+                  {confirmandoEsvaziar ? 'confirmar?' : 'esvaziar'}
+                </button>
               </p>
             </div>
 
