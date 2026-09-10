@@ -3,12 +3,31 @@ import { Money } from '../value-objects';
 /**
  * Quanto o motoboy tem a receber no período.
  *
- * Os três acordos aqui são os que o mercado usa de verdade em delivery com frota
+ * Os acordos aqui são os que o mercado usa de verdade em delivery com frota
  * própria. Percentual do pedido ficou de fora de propósito: é praxe de
  * marketplace, e num delivery próprio faz o motoboy torcer pelo pedido caro em
  * vez do trajeto curto — o incentivo aponta para o lado errado.
+ *
+ * A diária é ortogonal ao valor da corrida: acompanha tanto o fixo
+ * (`DIARIA_E_ENTREGA`) quanto as faixas (`DIARIA_E_FAIXA`). Tem motoboy que
+ * combina garantido por dia mais um valor que cresce com a distância — e antes
+ * esse acordo real não cabia em nenhum dos modelos.
  */
-export type CourierPayModel = 'POR_ENTREGA' | 'POR_FAIXA' | 'DIARIA_E_ENTREGA';
+export type CourierPayModel =
+  | 'POR_ENTREGA'
+  | 'POR_FAIXA'
+  | 'DIARIA_E_ENTREGA'
+  | 'DIARIA_E_FAIXA';
+
+/** O valor da corrida vem das faixas de distância, não de um fixo. */
+function pagaPorFaixa(model: CourierPayModel): boolean {
+  return model === 'POR_FAIXA' || model === 'DIARIA_E_FAIXA';
+}
+
+/** O acordo garante uma diária por dia rodado, além do valor da corrida. */
+function temDiaria(model: CourierPayModel): boolean {
+  return model === 'DIARIA_E_ENTREGA' || model === 'DIARIA_E_FAIXA';
+}
 
 export interface CourierPayBand {
   /** Limite superior. A última faixa cobre tudo acima dela. */
@@ -61,25 +80,29 @@ export function fecharPagamento(
 ): Fechamento {
   const diasRodados = new Set(entregas.map((e) => e.dia)).size;
 
-  const porEntregaCents =
-    acordo.model === 'POR_FAIXA'
-      ? entregas.reduce((t, e) => t + valorDaFaixa(e.meters, acordo.bands).cents, 0)
-      : entregas.length * acordo.perDelivery.cents;
+  const porEntregaCents = pagaPorFaixa(acordo.model)
+    ? entregas.reduce((t, e) => t + valorDaFaixa(e.meters, acordo.bands).cents, 0)
+    : entregas.length * acordo.perDelivery.cents;
 
   /*
    * A diária conta por dia em que ele rodou, não por dia do período: motoboy
    * que trabalha três dias na semana não recebe sete diárias, e quem folgou não
    * some da conta dos dias que trabalhou.
    */
-  const diariasCents =
-    acordo.model === 'DIARIA_E_ENTREGA' ? diasRodados * acordo.daily.cents : 0;
+  const diariasCents = temDiaria(acordo.model) ? diasRodados * acordo.daily.cents : 0;
 
-  const semAcordo =
-    acordo.model === 'POR_FAIXA'
-      ? acordo.bands.length === 0
-      : acordo.model === 'DIARIA_E_ENTREGA'
-        ? acordo.perDelivery.cents === 0 && acordo.daily.cents === 0
-        : acordo.perDelivery.cents === 0;
+  /*
+   * "Sem acordo" é quando não há de onde tirar centavo nenhum: o valor da
+   * corrida está zerado E, se houver diária no modelo, ela também. Uma diária
+   * sozinha, sem faixa/fixo, ainda é um acordo — o motoboy recebe o garantido.
+   */
+  const corridaEmBranco = pagaPorFaixa(acordo.model)
+    ? acordo.bands.length === 0
+    : acordo.perDelivery.cents === 0;
+
+  const semAcordo = temDiaria(acordo.model)
+    ? corridaEmBranco && acordo.daily.cents === 0
+    : corridaEmBranco;
 
   return {
     entregas: entregas.length,

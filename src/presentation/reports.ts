@@ -6,12 +6,14 @@ import { requireSession } from './http/session';
 import {
   consolidar,
   fimDoDia,
+  hojeEmBrasilia,
   inicioDoDia,
   type FiltroRelatorio,
   type LinhaRelatorio,
   type Plataforma,
   type Relatorio,
 } from './reports-core';
+import { fecharPagamento, type CourierPayAgreement } from '@/core/services/courier-pay';
 
 export * from './reports-core';
 
@@ -166,5 +168,116 @@ export async function getRelatorio(filtro: FiltroRelatorio): Promise<Relatorio> 
     paginas: Math.max(1, Math.ceil(linhas.length / POR_PAGINA)),
     totalDeLinhas: linhas.length,
     entregadores: entregadores.map((e) => ({ id: e.id, nome: e.name })),
+  };
+}
+
+/** O que o dono precisa acertar com cada motoboy pelas entregas de hoje. */
+export interface AcertoDoDia {
+  entregadores: Array<{
+    id: string;
+    nome: string;
+    entregas: number;
+    aPagarCents: number;
+    /** O acordo ainda não foi combinado — a tela avisa em vez de somar zero. */
+    semAcordo: boolean;
+  }>;
+  totalCents: number;
+}
+
+/**
+ * O acerto de hoje, por motoboy — o número que o dono conta na mão no fim do dia.
+ *
+ * Fica no painel, e não só no relatório, porque é a pergunta do fim do turno:
+ * "quanto pago pra cada um?". Consulta enxuta de propósito — o painel recarrega
+ * a cada dez segundos, então carrega só as entregas de hoje, não o período.
+ *
+ * A base é a mesma do relatório (`fecharPagamento`, o acordo de cada um): a
+ * diária conta uma vez porque é um dia só, e a faixa/fixo soma corrida a corrida.
+ */
+export async function getAcertoDoDia(): Promise<AcertoDoDia> {
+  const session = await requireSession();
+  const prisma = getPrismaClient(env().DATABASE_URL);
+  const establishmentId = session.establishmentId;
+  const hoje = hojeEmBrasilia();
+
+  const entregues = await prisma.order.findMany({
+    where: {
+      establishmentId,
+      status: 'DELIVERED',
+      createdAt: { gte: inicioDoDia(hoje), lt: fimDoDia(hoje) },
+      routeId: { not: null },
+    },
+    // A distância da perna é a base do pagamento por faixa.
+    select: { routeId: true, stop: { select: { legDistanceMeters: true } } },
+  });
+
+  if (entregues.length === 0) return { entregadores: [], totalCents: 0 };
+
+  const rotaIds = [...new Set(entregues.map((p) => p.routeId).filter((x): x is string => !!x))];
+  const rotas = await prisma.route.findMany({
+    where: { establishmentId, id: { in: rotaIds } },
+    select: { id: true, courierId: true, courier: { select: { name: true } } },
+  });
+  const porRota = new Map(rotas.map((r) => [r.id, { id: r.courierId, nome: r.courier.name }]));
+
+  /* Agrupa as entregas de hoje por motoboy — só quem de fato rodou aparece. */
+  const porMotoboy = new Map<string, { nome: string; metros: number[] }>();
+  for (const pedido of entregues) {
+    const dono = pedido.routeId ? porRota.get(pedido.routeId) : null;
+    if (!dono) continue;
+    const atual = porMotoboy.get(dono.id) ?? { nome: dono.nome, metros: [] };
+    atual.metros.push(pedido.stop?.legDistanceMeters ?? 0);
+    porMotoboy.set(dono.id, atual);
+  }
+
+  const ids = [...porMotoboy.keys()];
+  const linhas = ids.length
+    ? await prisma.courier.findMany({
+        where: { establishmentId, id: { in: ids } },
+        select: {
+          id: true,
+          payModel: true,
+          payPerDeliveryCents: true,
+          payDailyCents: true,
+          payBands: { orderBy: { uptoMeters: 'asc' }, select: { uptoMeters: true, amountCents: true } },
+        },
+      })
+    : [];
+  const acordoDe = new Map<string, CourierPayAgreement>(
+    linhas.map((c) => [
+      c.id,
+      {
+        model: c.payModel,
+        perDelivery: Money.fromCents(c.payPerDeliveryCents),
+        daily: Money.fromCents(c.payDailyCents),
+        bands: c.payBands.map((b) => ({ uptoMeters: b.uptoMeters, amount: Money.fromCents(b.amountCents) })),
+      },
+    ]),
+  );
+
+  const entregadores = ids.map((id) => {
+    const grupo = porMotoboy.get(id)!;
+    const acordo = acordoDe.get(id);
+    const fechamento = acordo
+      ? fecharPagamento(
+          grupo.metros.map((meters) => ({ meters, dia: hoje })),
+          acordo,
+        )
+      : null;
+
+    return {
+      id,
+      nome: grupo.nome,
+      entregas: grupo.metros.length,
+      aPagarCents: fechamento?.totalCents ?? 0,
+      semAcordo: fechamento ? fechamento.semAcordo : true,
+    };
+  });
+
+  entregadores.sort((a, b) => b.aPagarCents - a.aPagarCents);
+
+  return {
+    entregadores,
+    totalCents: entregadores.reduce((t, e) => t + e.aPagarCents, 0),
   };
 }

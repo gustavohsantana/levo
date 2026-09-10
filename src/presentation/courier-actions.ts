@@ -63,7 +63,7 @@ export async function alternarEntregadorAction(
 export async function salvarAcordoAction(
   courierId: string,
   acordo: {
-    model: 'POR_ENTREGA' | 'POR_FAIXA' | 'DIARIA_E_ENTREGA';
+    model: 'POR_ENTREGA' | 'POR_FAIXA' | 'DIARIA_E_ENTREGA' | 'DIARIA_E_FAIXA';
     perDeliveryCents: number;
     dailyCents: number;
     bands: Array<{ uptoMeters: number; amountCents: number }>;

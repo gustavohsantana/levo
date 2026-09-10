@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
 import { getCatalog, getDashboard } from '@/presentation/queries';
+import { getAcertoDoDia } from '@/presentation/reports';
 import { WorkQueue } from '@/presentation/ui/patterns/work-queue';
 import { DayLedger } from '@/presentation/ui/patterns/day-ledger';
+import { AcertoDoDia } from '@/presentation/ui/patterns/acerto-do-dia';
 import { FinishedOrders } from '@/presentation/ui/patterns/finished-orders';
 import { AutoRefresh } from '@/presentation/ui/patterns/auto-refresh';
 import { PrimeirosPassos } from '@/presentation/ui/patterns/primeiros-passos';
@@ -11,7 +13,11 @@ export const metadata: Metadata = { title: 'Painel · Levô' };
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
-  const [data, produtos] = await Promise.all([getDashboard(), getCatalog()]);
+  const [data, produtos, acerto] = await Promise.all([
+    getDashboard(),
+    getCatalog(),
+    getAcertoDoDia(),
+  ]);
 
   /*
    * Montado do que o painel já carregou, em vez de consulta nova: são quatro
@@ -37,6 +43,10 @@ export default async function DashboardPage() {
           o espaço nobre é da fila de trabalho, logo abaixo.
         */}
         <DayLedger establishmentName={data.establishment.name} today={data.today} />
+
+        {/* O dinheiro do dia, ao lado dos números do dia. Some quando não há
+            entrega ainda — no começo do turno o espaço é todo da fila. */}
+        <AcertoDoDia acerto={acerto} />
 
       {/*
         Só para quem ainda não configurou o essencial.

@@ -98,6 +98,57 @@ describe('diária mais entrega', () => {
   });
 });
 
+describe('diária mais faixa', () => {
+  const comFaixa = acordo({
+    model: 'DIARIA_E_FAIXA',
+    daily: Money.fromCents(7000),
+    bands: [
+      { uptoMeters: 3000, amount: Money.fromCents(700) },
+      { uptoMeters: 6000, amount: Money.fromCents(1000) },
+    ],
+  });
+
+  it('soma a diária por dia rodado ao valor da faixa de cada corrida', () => {
+    const f = fecharPagamento(
+      [
+        entrega(1000, '2026-09-01'), // faixa de R$ 7
+        entrega(5000, '2026-09-01'), // faixa de R$ 10
+        entrega(30000, '2026-09-03'), // acima de tudo: última faixa, R$ 10
+      ],
+      comFaixa,
+    );
+
+    // Dois dias rodados => duas diárias; as corridas pagam pela distância.
+    expect(f.diasRodados).toBe(2);
+    expect(f.diariasCents).toBe(14000);
+    expect(f.porEntregaCents).toBe(700 + 1000 + 1000);
+    expect(f.totalCents).toBe(14000 + 2700);
+  });
+
+  it('diária garantida sozinha ainda é acordo, mesmo sem faixa cadastrada', () => {
+    // Combinou só o garantido por dia; as faixas ele preenche depois. Não é
+    // "sem acordo" — o motoboy tem, sim, o que receber.
+    const f = fecharPagamento(
+      [entrega(1000, '2026-09-01')],
+      acordo({ model: 'DIARIA_E_FAIXA', daily: Money.fromCents(7000), bands: [] }),
+    );
+
+    expect(f.semAcordo).toBe(false);
+    expect(f.diariasCents).toBe(7000);
+    expect(f.porEntregaCents).toBe(0);
+  });
+
+  it('sem faixa e sem diária é acordo em branco', () => {
+    const f = fecharPagamento(
+      [entrega(1000, '2026-09-01')],
+      acordo({ model: 'DIARIA_E_FAIXA', daily: Money.fromCents(0), bands: [] }),
+    );
+
+    expect(f.semAcordo).toBe(true);
+    expect(f.totalCents).toBe(0);
+  });
+});
+
 describe('acordo não combinado', () => {
   it('avisa em vez de fingir que o motoboy não tem nada a receber', () => {
     const f = fecharPagamento([entrega(1000, '2026-09-01')], acordo({ perDelivery: Money.fromCents(0) }));

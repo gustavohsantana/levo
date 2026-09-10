@@ -13,7 +13,7 @@ import { Button } from '../primitives';
  * motoboy torcer pelo pedido caro em vez do trajeto curto.
  */
 export interface AcordoView {
-  model: 'POR_ENTREGA' | 'POR_FAIXA' | 'DIARIA_E_ENTREGA';
+  model: 'POR_ENTREGA' | 'POR_FAIXA' | 'DIARIA_E_ENTREGA' | 'DIARIA_E_FAIXA';
   perDeliveryCents: number;
   dailyCents: number;
   bands: Array<{ uptoMeters: number; amountCents: number }>;
@@ -40,6 +40,15 @@ export function CourierPayForm({
   const [pendente, salvar] = useTransition();
   const [aviso, setAviso] = useState<string | null>(null);
 
+  /*
+   * A diária é ortogonal ao valor da corrida: `DIARIA_E_FAIXA` mostra a diária
+   * E as faixas ao mesmo tempo. Por isso a visibilidade não é "um campo por
+   * modelo", e sim três perguntas independentes.
+   */
+  const usaFixo = model === 'POR_ENTREGA' || model === 'DIARIA_E_ENTREGA';
+  const usaDiaria = model === 'DIARIA_E_ENTREGA' || model === 'DIARIA_E_FAIXA';
+  const usaFaixa = model === 'POR_FAIXA' || model === 'DIARIA_E_FAIXA';
+
   function submeter() {
     setAviso(null);
     salvar(async () => {
@@ -47,15 +56,14 @@ export function CourierPayForm({
         model,
         perDeliveryCents: paraCents(porEntrega),
         dailyCents: paraCents(diaria),
-        bands:
-          model === 'POR_FAIXA'
-            ? faixas
-                .filter((f) => Number(f.km) > 0)
-                .map((f) => ({
-                  uptoMeters: Math.round(Number(f.km.replace(',', '.')) * 1000),
-                  amountCents: paraCents(f.valor),
-                }))
-            : [],
+        bands: usaFaixa
+          ? faixas
+              .filter((f) => Number(f.km) > 0)
+              .map((f) => ({
+                uptoMeters: Math.round(Number(f.km.replace(',', '.')) * 1000),
+                amountCents: paraCents(f.valor),
+              }))
+          : [],
       });
       setAviso(r.ok ? 'Acordo salvo.' : r.error);
     });
@@ -74,6 +82,7 @@ export function CourierPayForm({
             ['POR_ENTREGA', 'Fixo por entrega'],
             ['POR_FAIXA', 'Por distância'],
             ['DIARIA_E_ENTREGA', 'Diária + entrega'],
+            ['DIARIA_E_FAIXA', 'Diária + distância'],
           ] as const
         ).map(([valor, rotulo]) => (
           <button
@@ -92,7 +101,7 @@ export function CourierPayForm({
       </div>
 
       <div className="mt-4 flex flex-col gap-3">
-        {model !== 'POR_FAIXA' ? (
+        {usaFixo ? (
           <Campo rotulo="Por entrega (R$)">
             <input
               value={porEntrega}
@@ -103,7 +112,7 @@ export function CourierPayForm({
           </Campo>
         ) : null}
 
-        {model === 'DIARIA_E_ENTREGA' ? (
+        {usaDiaria ? (
           <Campo rotulo="Diária (R$)">
             <input
               value={diaria}
@@ -118,7 +127,7 @@ export function CourierPayForm({
           </Campo>
         ) : null}
 
-        {model === 'POR_FAIXA' ? (
+        {usaFaixa ? (
           <div className="flex flex-col gap-2">
             {faixas.map((f, i) => (
               <div key={i} className="flex items-end gap-2">

@@ -173,6 +173,9 @@ enum CourierPayModel {
   /// Diaria garantida mais um valor por corrida. Usado com motoboy fixo, para
   /// ele nao sair no prejuizo em dia fraco.
   DIARIA_E_ENTREGA
+  /// Diaria garantida mais o valor por faixa de distancia. Para o motoboy fixo
+  /// que ainda ganha mais na corrida longa — a diaria nao dependia da faixa.
+  DIARIA_E_FAIXA
 }
 
 model Courier {
