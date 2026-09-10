@@ -864,3 +864,112 @@ export async function getRoute(routeId: string) {
     };
   });
 }
+
+/**
+ * Um pedido, pronto para o papel — comanda e cupom.
+ *
+ * Reaproveita a `OrderView` (já tem itens com opção, endereço, taxa, pagamento);
+ * o troco fica de fora porque não é campo do pedido. O layout de 80mm calcula
+ * subtotal e total a partir das linhas, para bater com o que a cozinha monta.
+ */
+export async function getPedidoParaImpressao(
+  id: string,
+): Promise<{ loja: string; pedido: OrderView } | null> {
+  const { container } = await currentContainer();
+
+  return container.read(async (repos) => {
+    const order = await repos.orders.findById(id);
+    if (!order) return null;
+    const estabelecimento = await repos.establishments.current();
+
+    return {
+      loja: estabelecimento.name,
+      pedido: toOrderView(
+        order,
+        container.whatsapp.dispatchLink(order, estabelecimento.name),
+        container.whatsapp.trackingUrl(order),
+      ),
+    };
+  });
+}
+
+/** Uma parada da rota, pronta para o papel do motoboy. */
+export interface ParadaImpressao {
+  posicao: number;
+  displayId: string | null;
+  cliente: string;
+  telefone: string | null;
+  endereco: string;
+  referencia: string | null;
+  pickup: boolean;
+  /** "2x Pizza · 1x Coca" — o bastante para o motoboy conferir na porta. */
+  itensResumo: string;
+  totalCents: number;
+  pagamento: OrderView['paymentMethod'];
+  /** Já pago (online/Pix confirmado): o motoboy não cobra. */
+  pago: boolean;
+}
+
+export interface RotaImpressao {
+  loja: string;
+  courier: string;
+  criadoEm: string;
+  paradas: ParadaImpressao[];
+}
+
+/**
+ * A rota no papel — o que o motoboy leva na mão.
+ *
+ * As paradas em ordem, cada uma com endereço, telefone, resumo dos itens e
+ * quanto receber (ou "PAGO"). Papel é o plano B do rastreio: bateria acaba, sinal
+ * some, e a rota escrita não depende de nenhum dos dois.
+ */
+export async function getRotaParaImpressao(id: string): Promise<RotaImpressao | null> {
+  const { container } = await currentContainer();
+
+  return container.read(async (repos) => {
+    const route = await repos.routes.findById(id);
+    if (!route) return null;
+
+    const estabelecimento = await repos.establishments.current();
+    const courier = await repos.couriers.findById(route.courierId);
+    const pedidos = await repos.orders.findManyByIds(route.stops.map((s) => s.orderId));
+    const porId = new Map(pedidos.map((p) => [p.id, p]));
+
+    const paradas: ParadaImpressao[] = [...route.stops]
+      .sort((a, b) => a.position - b.position)
+      .flatMap((stop) => {
+        const pedido = porId.get(stop.orderId);
+        if (!pedido) return [];
+
+        const itens = pedido.items.reduce(
+          (t, i) => t + i.unitPrice.cents * i.quantity - i.discount.cents,
+          0,
+        );
+        const total = itens + (pedido.isPickup ? 0 : pedido.deliveryFee.cents);
+
+        return [
+          {
+            posicao: stop.position,
+            displayId: pedido.displayId,
+            cliente: pedido.customerName,
+            telefone: pedido.customerPhone?.value ?? null,
+            endereco: pedido.address.raw,
+            referencia: pedido.address.reference,
+            pickup: pedido.isPickup,
+            itensResumo: pedido.items.map((i) => `${i.quantity}x ${i.name}`).join(' · '),
+            totalCents: total,
+            pagamento: pedido.paymentMethod,
+            pago: pedido.paymentStatus === 'PAID',
+          },
+        ];
+      });
+
+    return {
+      loja: estabelecimento.name,
+      courier: courier?.name ?? '—',
+      criadoEm: route.createdAt.toISOString(),
+      paradas,
+    };
+  });
+}

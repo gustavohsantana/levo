@@ -13,6 +13,7 @@ import {
   MessageCircle,
   MoreVertical,
   Package,
+  Printer,
   Truck,
 } from 'lucide-react';
 import { advanceOrderStageAction } from '@/presentation/actions';
@@ -291,6 +292,14 @@ function RouteCard({ rota }: { rota: RouteView }) {
             <MapPin />
             Mapa
           </Link>
+        </Button>
+
+        {/* A rota no papel, pra mão do motoboy — plano B do rastreio. */}
+        <Button asChild variant="outline" size="sm">
+          <a href={`/imprimir/rota/${rota.id}`} target="_blank" rel="noreferrer">
+            <Printer />
+            Imprimir
+          </a>
         </Button>
 
         {rota.courierWhatsappLink ? (

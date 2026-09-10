@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, ChefHat, Clock, LoaderCircle } from 'lucide-react';
+import { Check, ChefHat, Clock, LoaderCircle, Printer } from 'lucide-react';
 import { advanceOrderStageAction } from '@/presentation/actions';
 import type { OrderView } from '@/presentation/queries';
 import { SinoDePedidos } from './order-bell';
@@ -129,10 +129,23 @@ function Cartao({
           se está atrasando, e converter horário para tempo é conta que ninguém
           faz de cabeça com a chapa ligada.
         */}
-        <span className="numeric flex shrink-0 items-center gap-1 text-sm text-ink-muted">
-          <Clock className="size-3.5" aria-hidden />
-          {minutosDesde(pedido.createdAt)}
-        </span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {/* Imprime a comanda (cozinha) e o cupom (saco) numa aba nova. */}
+          <a
+            href={`/imprimir/pedido/${pedido.id}`}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`Imprimir pedido de ${pedido.customerName}`}
+            title="Imprimir comanda e cupom"
+            className="grid size-7 place-items-center rounded-md text-ink-faint transition-colors hover:bg-raised hover:text-ink"
+          >
+            <Printer className="size-4" aria-hidden />
+          </a>
+          <span className="numeric flex items-center gap-1 text-sm text-ink-muted">
+            <Clock className="size-3.5" aria-hidden />
+            {minutosDesde(pedido.createdAt)}
+          </span>
+        </div>
       </div>
 
       {pedido.displayId ? (
