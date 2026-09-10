@@ -6,7 +6,6 @@ import {
   alternarAceiteAutomaticoAction,
   alternarCodigoDeEntregaAction,
   alternarRetiradaAction,
-  alternarRotaNoWhatsappAction,
   salvarRegiaoAction,
 } from '@/presentation/actions';
 import { DeliveryFeeBands, type Faixa } from './delivery-fee-bands';
@@ -65,7 +64,7 @@ export function Settings({
         dono rolando para achar o que já cabia na tela.
       */}
       <div className="grid gap-4 lg:grid-cols-2">
-      <section className="h-full rounded-lg bg-surface p-5 hairline">
+      <section className="h-full rounded-lg bg-surface p-4 hairline">
         <h2 className="font-semibold text-ink">{establishment.name}</h2>
         <p className="mt-0.5 text-sm text-ink-faint">{establishment.address}</p>
       </section>
@@ -75,7 +74,7 @@ export function Settings({
         virar uma coluna só dentro do form.
       */}
       <form action={handleSubmit} className="contents">
-      <section className="rounded-lg bg-surface p-5 hairline">
+      <section className="rounded-lg bg-surface p-4 hairline">
         <div className="flex items-start gap-3">
           <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-md bg-accent-soft text-accent-ink">
             <Link2 className="size-4" aria-hidden />
@@ -112,7 +111,7 @@ export function Settings({
         </div>
       </section>
 
-      <section className="rounded-lg bg-surface p-5 hairline">
+      <section className="rounded-lg bg-surface p-4 hairline">
         <div className="flex items-start gap-3">
           <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-md bg-accent-soft text-accent-ink">
             <MapPin className="size-4" aria-hidden />
@@ -161,11 +160,11 @@ export function Settings({
       </section>
       </form>
 
-      <AceiteAutomatico inicial={establishment.autoConfirmOrders} />
-
-      <CodigoDeEntrega inicial={establishment.requireDeliveryCode} />
-
-      <RetiradaNoBalcao inicial={establishment.pickupEnabled} />
+      <Preferencias
+        aceiteAutomatico={establishment.autoConfirmOrders}
+        codigoDeEntrega={establishment.requireDeliveryCode}
+        retirada={establishment.pickupEnabled}
+      />
 
       <DeliveryFeeBands inicial={faixas} />
       </div>
@@ -174,165 +173,114 @@ export function Settings({
 }
 
 /**
- * O interruptor do aceite automático.
+ * As preferências do pedido, num card só.
  *
- * Salva no clique, sem botão de confirmar: é um estado só, e um "Salvar" ao
- * lado de um interruptor faz o dono achar que já valeu quando ainda não valeu.
+ * Antes eram três cartões grandes — um interruptor cada, com dois ou três
+ * parágrafos de explicação. Juntos ocupavam metade da tela de configurações.
+ * Agora são três linhas com uma dica curta: fica o que faz e o único cuidado
+ * que importa, o resto sai.
  */
-function AceiteAutomatico({ inicial }: { inicial: boolean }) {
-  const [ligado, setLigado] = useState(inicial);
-  const [erro, setErro] = useState<string | null>(null);
-  const [pendente, startTransition] = useTransition();
-
+function Preferencias({
+  aceiteAutomatico,
+  codigoDeEntrega,
+  retirada,
+}: {
+  aceiteAutomatico: boolean;
+  codigoDeEntrega: boolean;
+  retirada: boolean;
+}) {
   return (
-    <section className="rounded-lg bg-surface p-5 hairline">
-      <h2 className="text-sm font-semibold text-ink">Aceitar pedidos automaticamente</h2>
+    <section className="rounded-lg bg-surface p-4 hairline lg:col-span-2">
+      <h2 className="text-sm font-semibold text-ink">Preferências do pedido</h2>
 
-      <p className="mt-1 text-sm leading-relaxed text-ink-muted">
-        O iFood dá <strong className="text-ink">3 minutos</strong> para você aceitar cada pedido e
-        piora sua posição na plataforma quando passa disso — prazo difícil de cumprir com a cozinha
-        cheia. Com isto ligado, o pedido é aceito assim que chega e já entra na fila de preparo.
-      </p>
-
-      <p className="mt-2 text-xs leading-relaxed text-ink-faint">
-        Aceitar é um compromisso: o pedido vai sair. Se você costuma recusar por falta de item ou
-        por estar fora da área, deixe desligado e aceite na mão.
-      </p>
-
-      <label className="mt-4 flex cursor-pointer items-center gap-2.5 text-sm text-ink">
-        <input
-          type="checkbox"
-          checked={ligado}
-          disabled={pendente}
-          onChange={(evento) => {
-            const novo = evento.target.checked;
-            setLigado(novo);
-            setErro(null);
-            startTransition(async () => {
-              const r = await alternarAceiteAutomaticoAction(novo);
-              if (!r.ok) {
-                setLigado(!novo);
-                setErro(r.error ?? 'Não foi possível salvar.');
-              }
-            });
-          }}
+      <div className="mt-1">
+        <LinhaToggle
+          titulo="Aceitar pedidos automaticamente"
+          hint="Aceita assim que chega e já manda pra cozinha — o iFood só dá 3 minutos. Desligue se costuma recusar por falta de item."
+          inicial={aceiteAutomatico}
+          acao={alternarAceiteAutomaticoAction}
         />
-        {ligado ? 'Ligado' : 'Desligado'}
-        {pendente ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
-      </label>
-
-      {erro ? <p className="mt-2 text-sm text-danger">{erro}</p> : null}
+        <LinhaToggle
+          titulo="Código de confirmação da entrega"
+          hint="O cliente informa 4 dígitos ao entregador na porta, como prova. Avise a equipe antes de ligar."
+          inicial={codigoDeEntrega}
+          acao={alternarCodigoDeEntregaAction}
+        />
+        <LinhaToggle
+          titulo="Retirada no balcão"
+          hint="O cliente pode escolher buscar na loja — sem taxa, sem endereço e fora da rota."
+          inicial={retirada}
+          acao={alternarRetiradaAction}
+        />
+      </div>
     </section>
   );
 }
 
 /**
- * O interruptor do código de confirmação.
+ * Uma linha de preferência: título, dica curta e o interruptor.
  *
- * Desligado por padrão porque ligar muda o trabalho do motoboy no meio do
- * turno — e ele descobriria isso parado no portão de um cliente, sem saber o
- * que digitar. Quem liga precisa avisar a equipe antes.
+ * Salva no clique, sem botão de confirmar — é um estado só, e um "Salvar" ao
+ * lado faria o dono achar que já valeu quando ainda não valeu. Se a gravação
+ * falha, o interruptor volta e o erro aparece na própria linha.
  */
-function CodigoDeEntrega({ inicial }: { inicial: boolean }) {
+function LinhaToggle({
+  titulo,
+  hint,
+  inicial,
+  acao,
+}: {
+  titulo: string;
+  hint: string;
+  inicial: boolean;
+  acao: (ligado: boolean) => Promise<{ ok: boolean; error?: string }>;
+}) {
   const [ligado, setLigado] = useState(inicial);
   const [erro, setErro] = useState<string | null>(null);
   const [pendente, startTransition] = useTransition();
 
-  return (
-    <section className="rounded-lg bg-surface p-5 hairline">
-      <h2 className="text-sm font-semibold text-ink">Código de confirmação da entrega</h2>
-
-      <p className="mt-1 text-sm leading-relaxed text-ink-muted">
-        O cliente recebe quatro dígitos na tela de acompanhamento e informa ao entregador na
-        porta. Sem o código, o entregador não consegue marcar como entregue.
-      </p>
-
-      <p className="mt-2 text-xs leading-relaxed text-ink-faint">
-        Serve para os dois lados: prova que a entrega aconteceu, e evita a discussão de
-        &ldquo;consta entregue mas não recebi&rdquo;. Você continua podendo concluir pelo
-        painel sem código — telefone descarregado e portão sem ninguém existem.
-      </p>
-
-      <p className="mt-2 text-xs leading-relaxed text-ink-faint">
-        Avise seus entregadores antes de ligar: eles vão passar a precisar do código.
-      </p>
-
-      <label className="mt-4 flex cursor-pointer items-center gap-2.5 text-sm text-ink">
-        <input
-          type="checkbox"
-          checked={ligado}
-          disabled={pendente}
-          onChange={(evento) => {
-            const novo = evento.target.checked;
-            setLigado(novo);
-            setErro(null);
-            startTransition(async () => {
-              const r = await alternarCodigoDeEntregaAction(novo);
-              if (!r.ok) {
-                setLigado(!novo);
-                setErro(r.error ?? 'Não foi possível salvar.');
-              }
-            });
-          }}
-        />
-        {ligado ? 'Ligado' : 'Desligado'}
-        {pendente ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
-      </label>
-
-      {erro ? <p className="mt-2 text-sm text-danger">{erro}</p> : null}
-    </section>
-  );
-}
-
-/**
- * O interruptor da retirada no balcão.
- *
- * Desligado por padrão porque nem toda cozinha tem balcão — e oferecer retirada
- * onde ninguém pode buscar gera pedido que o dono vai ter que ligar para
- * desfazer, que é pior do que não oferecer.
- */
-function RetiradaNoBalcao({ inicial }: { inicial: boolean }) {
-  const [ligado, setLigado] = useState(inicial);
-  const [erro, setErro] = useState<string | null>(null);
-  const [pendente, startTransition] = useTransition();
+  function alternar() {
+    const novo = !ligado;
+    setLigado(novo);
+    setErro(null);
+    startTransition(async () => {
+      const r = await acao(novo);
+      if (!r.ok) {
+        setLigado(!novo);
+        setErro(r.error ?? 'Não foi possível salvar.');
+      }
+    });
+  }
 
   return (
-    <section className="rounded-lg bg-surface p-5 hairline">
-      <h2 className="text-sm font-semibold text-ink">Retirada no balcão</h2>
+    <div className="flex items-start justify-between gap-4 border-b py-3 last:border-b-0">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-ink">{titulo}</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-ink-muted">{hint}</p>
+        {erro ? <p className="mt-1 text-xs text-danger">{erro}</p> : null}
+      </div>
 
-      <p className="mt-1 text-sm leading-relaxed text-ink-muted">
-        O cliente escolhe entre entrega e buscar na loja. Quem retira não paga taxa e não
-        preenche endereço.
-      </p>
-
-      <p className="mt-2 text-xs leading-relaxed text-ink-faint">
-        Pedido de retirada não entra em rota nem aparece para o motoboy — você fecha no
-        painel quando o cliente chega.
-      </p>
-
-      <label className="mt-4 flex cursor-pointer items-center gap-2.5 text-sm text-ink">
-        <input
-          type="checkbox"
-          checked={ligado}
-          disabled={pendente}
-          onChange={(evento) => {
-            const novo = evento.target.checked;
-            setLigado(novo);
-            setErro(null);
-            startTransition(async () => {
-              const r = await alternarRetiradaAction(novo);
-              if (!r.ok) {
-                setLigado(!novo);
-                setErro(r.error ?? 'Não foi possível salvar.');
-              }
-            });
-          }}
-        />
-        {ligado ? 'Ligado' : 'Desligado'}
-        {pendente ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
-      </label>
-
-      {erro ? <p className="mt-2 text-sm text-danger">{erro}</p> : null}
-    </section>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={ligado}
+        aria-label={titulo}
+        disabled={pendente}
+        onClick={alternar}
+        className={`relative mt-0.5 h-6 w-10 shrink-0 rounded-full transition-colors disabled:opacity-60 ${
+          ligado ? 'bg-accent' : 'bg-raised hairline'
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 grid size-5 place-items-center rounded-full bg-white shadow-sm transition-all ${
+            ligado ? 'left-[1.125rem]' : 'left-0.5'
+          }`}
+        >
+          {pendente ? (
+            <LoaderCircle className="size-3 animate-spin text-ink-faint" aria-hidden />
+          ) : null}
+        </span>
+      </button>
+    </div>
   );
 }
