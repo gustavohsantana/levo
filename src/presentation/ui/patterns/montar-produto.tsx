@@ -5,9 +5,29 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { Minus, Plus, X } from 'lucide-react';
 import { Button } from '../primitives';
 import { currency } from '../format';
-import type { MenuPublico } from '@/presentation/public-menu';
 
-type Produto = MenuPublico['categorias'][number]['produtos'][number];
+/**
+ * O suficiente para montar um produto: nome, preço base e os grupos de opção.
+ *
+ * Estrutural de propósito — o cardápio público e o pedido manual do balcão
+ * montam o mesmo açaí, cada um com seu tipo de produto. Amarrar isto ao tipo do
+ * cardápio deixava o balcão sem o configurador, que foi justamente o que
+ * faltou: pedido manual de açaí exigia o tamanho sem oferecer onde escolher.
+ */
+export type ProdutoMontavel = {
+  name: string;
+  description?: string | null;
+  priceCents: number;
+  grupos: Array<{
+    id: string;
+    name: string;
+    min: number;
+    max: number;
+    options: Array<{ id: string; name: string; priceCents: number }>;
+  }>;
+};
+
+type Produto = ProdutoMontavel;
 
 /**
  * Onde o cliente monta o produto: tamanho, sabores, borda, adicionais.

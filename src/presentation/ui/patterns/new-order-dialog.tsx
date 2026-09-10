@@ -5,7 +5,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { useRouter } from 'next/navigation';
 import { LoaderCircle, X } from 'lucide-react';
 import { createOrderAction } from '@/presentation/actions';
-import type { ProductView } from '@/presentation/queries';
+import type { OptionGroupView, ProductView } from '@/presentation/queries';
 import type { Faixa } from './delivery-fee-bands';
 import { OrderItemsPicker, type ItemEscolhido } from './order-items-picker';
 import { Button, Field, Input, Select, Textarea } from '../primitives';
@@ -13,11 +13,14 @@ import { Button, Field, Input, Select, Textarea } from '../primitives';
 export function NewOrderDialog({
   trigger,
   produtos = [],
+  grupos = [],
   taxaPadraoReais = 0,
   faixas = [],
 }: {
   trigger: React.ReactNode;
   produtos?: ProductView[];
+  /** Os grupos de opção, para montar o produto que pede tamanho/adicionais. */
+  grupos?: OptionGroupView[];
   faixas?: Faixa[];
   /** Vem das Configurações. O dono muda no pedido quando for diferente. */
   taxaPadraoReais?: number;
@@ -144,6 +147,7 @@ export function NewOrderDialog({
 
             <OrderItemsPicker
               produtos={produtos}
+              grupos={grupos}
               onChange={(escolhidos, total) => {
                 setItens(escolhidos);
                 setTotalCents(total);

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { getCatalog, getDashboard } from '@/presentation/queries';
+import { getCatalog, getDashboard, getOptionGroups } from '@/presentation/queries';
 import { getAcertoDoDia } from '@/presentation/reports';
 import { WorkQueue } from '@/presentation/ui/patterns/work-queue';
 import { DayLedger } from '@/presentation/ui/patterns/day-ledger';
@@ -13,9 +13,10 @@ export const metadata: Metadata = { title: 'Painel · Levô' };
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
-  const [data, produtos, acerto] = await Promise.all([
+  const [data, produtos, grupos, acerto] = await Promise.all([
     getDashboard(),
     getCatalog(),
+    getOptionGroups(),
     getAcertoDoDia(),
   ]);
 
@@ -60,6 +61,7 @@ export default async function DashboardPage() {
           couriers={data.couriers}
           establishment={data.establishment}
           produtos={produtos}
+          grupos={grupos}
           taxaPadraoReais={data.establishment.deliveryFeeReais}
           faixas={data.establishment.feeBands}
           rotasAtivas={data.activeRoutes}

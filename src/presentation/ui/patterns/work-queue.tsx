@@ -17,7 +17,7 @@ import { advanceOrderStageAction, planRouteAction } from '@/presentation/actions
 import type { OrderView, RouteView } from '@/presentation/queries';
 import { Button, EmptyState, Select } from '../primitives';
 import { OrderBoard } from './order-board';
-import type { ProductView } from '@/presentation/queries';
+import type { OptionGroupView, ProductView } from '@/presentation/queries';
 import type { Faixa } from './delivery-fee-bands';
 import { NewOrderDialog } from './new-order-dialog';
 import { VizinhosSugeridos } from './vizinhos-sugeridos';
@@ -45,6 +45,7 @@ export function WorkQueue({
   couriers,
   establishment,
   produtos = [],
+  grupos = [],
   taxaPadraoReais = 0,
   faixas = [],
 }: {
@@ -55,6 +56,8 @@ export function WorkQueue({
   establishment: { name: string; coordinates: { lat: number; lng: number } };
   /** Catálogo, para montar o pedido sem digitar preço. */
   produtos?: ProductView[];
+  /** Grupos de opção, para montar o produto que pede tamanho/adicionais. */
+  grupos?: OptionGroupView[];
   taxaPadraoReais?: number;
   faixas?: Faixa[];
 }) {
@@ -213,6 +216,7 @@ export function WorkQueue({
 
         <NewOrderDialog
           produtos={produtos}
+          grupos={grupos}
           taxaPadraoReais={taxaPadraoReais}
           faixas={faixas}
           trigger={
@@ -275,6 +279,7 @@ export function WorkQueue({
           action={
             <NewOrderDialog
               produtos={produtos}
+              grupos={grupos}
               taxaPadraoReais={taxaPadraoReais}
               faixas={faixas}
               trigger={
