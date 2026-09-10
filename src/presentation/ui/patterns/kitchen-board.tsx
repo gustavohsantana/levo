@@ -144,15 +144,37 @@ function Cartao({
         e cada linha carrega os complementos, que é onde mora o erro caro:
         "sem cebola" perdido é pedido refeito.
       */}
-      <ul className="mt-2 flex flex-col gap-1">
+      <ul className="mt-2 flex flex-col gap-1.5">
         {pedido.items.map((item, i) => (
-          <li key={i} className="text-sm leading-snug text-ink">
-            <span className="numeric font-semibold">{item.quantity}×</span> {item.name}
-            {item.options.length > 0 ? (
-              <span className="block pl-5 text-xs text-ink-muted">
-                {item.options.join(' · ')}
+          <li key={i} className="flex items-start gap-2 text-sm leading-snug text-ink">
+            {/*
+              Ícone pequeno só para bater o olho. Produto sem foto (ou item de
+              marketplace) cai na inicial num quadradinho — mantém o alinhamento
+              e ainda dá uma pista, em vez de deixar a linha torta.
+            */}
+            {item.imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={item.imageUrl}
+                alt=""
+                className="mt-0.5 size-7 shrink-0 rounded object-cover"
+                loading="lazy"
+              />
+            ) : (
+              <span
+                className="mt-0.5 grid size-7 shrink-0 place-items-center rounded bg-raised text-[11px] font-semibold uppercase text-ink-faint"
+                aria-hidden
+              >
+                {item.name.trim().charAt(0)}
               </span>
-            ) : null}
+            )}
+
+            <div className="min-w-0 flex-1">
+              <span className="numeric font-semibold">{item.quantity}×</span> {item.name}
+              {item.options.length > 0 ? (
+                <span className="block text-xs text-ink-muted">{item.options.join(' · ')}</span>
+              ) : null}
+            </div>
           </li>
         ))}
       </ul>

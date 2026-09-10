@@ -44,6 +44,8 @@ export interface OrderView {
     quantity: number;
     unitPriceCents: number;
     discountCents: number;
+    /** Foto do produto, para a cozinha bater o olho. Nulo quando não há. */
+    imageUrl: string | null;
   }>;
   isGeocoded: boolean;
   coordinates: { lat: number; lng: number } | null;
@@ -86,7 +88,13 @@ export async function currentContainer() {
   return { session, container: containerFor(session.establishmentId) };
 }
 
-function toOrderView(order: Order, whatsapp: string | null, trackingUrl: string): OrderView {
+function toOrderView(
+  order: Order,
+  whatsapp: string | null,
+  trackingUrl: string,
+  /** Foto por produto, quando quem chama quer os ícones (a cozinha). */
+  imagensPorProduto?: Map<string, string | null>,
+): OrderView {
   return {
     id: order.id,
     customerName: order.customerName,
@@ -111,6 +119,7 @@ function toOrderView(order: Order, whatsapp: string | null, trackingUrl: string)
       quantity: item.quantity,
       unitPriceCents: item.unitPrice.cents,
       discountCents: item.discount.cents,
+      imageUrl: item.productId ? (imagensPorProduto?.get(item.productId) ?? null) : null,
     })),
     confirmedAt: order.confirmedAt?.toISOString() ?? null,
     readyAt: order.readyAt?.toISOString() ?? null,
@@ -630,12 +639,28 @@ export async function getCozinha(): Promise<OrderView[]> {
     const establishment = await repos.establishments.current();
     const pendentes = await repos.orders.listPending();
 
+    /*
+     * As fotos dos produtos, numa consulta só — a cozinha bate o olho no ícone
+     * e sabe o que é sem ler. Vem por id, não por nome: item de marketplace ou
+     * produto sem foto simplesmente não tem ícone, e tudo bem.
+     */
+    const idsDeProduto = [
+      ...new Set(
+        pendentes.flatMap((o) =>
+          o.items.map((i) => i.productId).filter((id): id is string => Boolean(id)),
+        ),
+      ),
+    ];
+    const produtos = idsDeProduto.length ? await repos.products.findManyByIds(idsDeProduto) : [];
+    const imagens = new Map(produtos.map((p) => [p.id, p.imageUrl]));
+
     return pendentes
       .map((order) =>
         toOrderView(
           order,
           container.whatsapp.dispatchLink(order, establishment.name),
           container.whatsapp.trackingUrl(order),
+          imagens,
         ),
       )
       /*

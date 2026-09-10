@@ -49,7 +49,7 @@ export function WhatsappConnect({ inicial }: { inicial: EstadoWhatsapp }) {
   }
 
   return (
-    <div className="rounded-lg bg-surface p-5 hairline">
+    <div className="rounded-lg bg-surface p-4 hairline">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
@@ -57,8 +57,7 @@ export function WhatsappConnect({ inicial }: { inicial: EstadoWhatsapp }) {
             WhatsApp do motoboy
           </h3>
           <p className="mt-1 text-sm leading-relaxed text-ink-muted">
-            Manda a rota pronta para o entregador, com o link da tela dele — sem você copiar
-            e colar nada.
+            A rota pronta chega pelo WhatsApp, com o link da tela do motoboy.
           </p>
         </div>
 
@@ -106,9 +105,8 @@ export function WhatsappConnect({ inicial }: { inicial: EstadoWhatsapp }) {
       ) : (
         <>
           <p className="mt-3 text-xs leading-relaxed text-ink-faint">
-            Use um número dedicado, não o que recebe pedido. O envio passa por uma ponte que
-            não é canal oficial do WhatsApp, e um número que automatiza mensagem pode ser
-            bloqueado — se isso acontecer, você perde a automação, não a linha da loja.
+            Use um número dedicado, não o que recebe pedido: a ponte não é oficial do WhatsApp
+            e o número pode ser bloqueado. Se acontecer, você perde a automação, não a loja.
           </p>
 
           <Button variant="primary" onClick={conectar} disabled={pedindo || estado.aguardando}>

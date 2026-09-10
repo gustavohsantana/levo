@@ -26,7 +26,7 @@ export function TelegramConnect({
   const [pendente, startTransition] = useTransition();
 
   return (
-    <div className="rounded-lg bg-surface p-5 hairline">
+    <div className="rounded-lg bg-surface p-4 hairline">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
@@ -34,8 +34,7 @@ export function TelegramConnect({
             Telegram
           </h3>
           <p className="mt-1 text-sm leading-relaxed text-ink-muted">
-            Manda a rota pronta para o entregador, que abre a tela dele dentro do próprio
-            Telegram. Cada um autoriza uma vez, pela ficha dele em Entregadores.
+            A rota pronta chega pelo Telegram. Cada motoboy autoriza uma vez, na ficha dele.
           </p>
         </div>
 
@@ -61,12 +60,8 @@ export function TelegramConnect({
               Pedir localização ao vivo
             </p>
             <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-              Junto com a rota, o bot ensina o entregador a compartilhar a posição pelo turno.
-              Aí você acompanha a moto no mapa mesmo com o celular dele no bolso — hoje o
-              rastreio para quando a tela apaga.
-            </p>
-            <p className="mt-2 text-xs leading-relaxed text-ink-faint">
-              Ele continua decidindo se compartilha: o bot pede, nunca liga sozinho.
+              O bot pede a posição do turno para você ver a moto no mapa. Quem decide
+              compartilhar é ele — o bot pede, nunca liga sozinho.
             </p>
 
             <label className="mt-3 flex cursor-pointer items-center gap-2.5 text-sm text-ink">
