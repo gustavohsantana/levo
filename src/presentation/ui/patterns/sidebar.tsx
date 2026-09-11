@@ -10,6 +10,7 @@ import {
   ClipboardList,
   Plug,
   Settings as SettingsIcon,
+  Store,
 } from 'lucide-react';
 import { SinoDaBarra } from './sidebar-bell';
 
@@ -43,6 +44,7 @@ const GRUPOS = [
     itens: [
       { href: '/dashboard/catalogo', rotulo: 'Catálogo', icone: BookOpen },
       { href: '/dashboard/integracoes', rotulo: 'Integrações', icone: Plug },
+      { href: '/dashboard/ifood', rotulo: 'iFood', icone: Store },
       { href: '/dashboard/configuracoes', rotulo: 'Configurações', icone: SettingsIcon },
     ],
   },

@@ -3,6 +3,7 @@ import type { IntegrationProvider } from '@/generated/prisma';
 import { CredentialStore } from './credential-store';
 import { IfoodAuth } from './ifood/auth';
 import { IfoodOrderSource } from './ifood/adapter';
+import { IfoodMerchant } from './ifood/merchant';
 import { AiqfomeOrderSource } from './aiqfome/adapter';
 import { aiqfomeAccessTokenFor } from './aiqfome/factory';
 
@@ -66,4 +67,35 @@ export async function marketplaceCommandsFor(
     baseUrl: config.AIQFOME_BASE_URL,
     logger,
   });
+}
+
+/**
+ * O cliente Merchant do iFood para um lojista, ou `null` se não conectado.
+ *
+ * Mesma decisão de credencial do order source — mesmo app, mesmo token do
+ * `CredentialStore` — mas para gerir a loja (pausa, horário, disponibilidade)
+ * em vez de receber pedido. Reaproveitar a montagem evita os dois divergirem.
+ */
+export async function ifoodMerchantFor(
+  store: CredentialStore,
+  establishmentId: string,
+  config: MarketplaceFactoryConfig,
+  logger?: Logger,
+): Promise<{ merchant: IfoodMerchant; merchantId: string } | null> {
+  const credencial = await store.read(establishmentId, 'IFOOD');
+  if (!credencial?.merchantId) return null;
+  if (!config.IFOOD_CLIENT_ID || !config.IFOOD_CLIENT_SECRET) return null;
+
+  const auth = new IfoodAuth({
+    clientId: config.IFOOD_CLIENT_ID,
+    clientSecret: config.IFOOD_CLIENT_SECRET,
+  });
+
+  return {
+    merchantId: credencial.merchantId,
+    merchant: new IfoodMerchant({
+      accessToken: () => store.accessTokenFor(establishmentId, 'IFOOD', (rt) => auth.refresh(rt)),
+      logger,
+    }),
+  };
 }

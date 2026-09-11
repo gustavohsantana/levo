@@ -20,7 +20,11 @@ import { SetCourierActive } from '@/application/use-cases/couriers/set-courier-a
 import { AdvanceOrderStage } from '@/application/use-cases/orders/advance-order-stage';
 import { CancelOrder } from '@/application/use-cases/orders/cancel-order';
 import { SaveOptionGroup } from '@/application/use-cases/catalog/save-option-group';
-import { marketplaceCommandsFor } from '@/infrastructure/integrations/marketplace-factory';
+import {
+  ifoodMerchantFor,
+  marketplaceCommandsFor,
+} from '@/infrastructure/integrations/marketplace-factory';
+import type { IfoodMerchant } from '@/infrastructure/integrations/ifood/merchant';
 import { CreatePayment } from '@/application/use-cases/payments/create-payment';
 import { ConfirmPayment } from '@/application/use-cases/payments/confirm-payment';
 import { RenameCategory } from '@/application/use-cases/catalog/rename-category';
@@ -55,6 +59,8 @@ export interface Container {
   read: <T>(work: (repos: Repositories) => Promise<T>) => Promise<T>;
   /** Leitura de tela: sem transação, e por isso pode rodar em paralelo. */
   readOnly: <T>(work: (repos: Repositories) => Promise<T>) => Promise<T>;
+  /** O módulo Merchant do iFood, ou `null` se a loja não conectou. */
+  ifoodMerchant: () => Promise<{ merchant: IfoodMerchant; merchantId: string } | null>;
   useCases: {
     createOrder: CreateOrder;
     geocodeOrder: GeocodeOrder;
@@ -138,6 +144,7 @@ export function containerFor(establishmentId: string): Container {
     whatsapp: new WhatsAppLinkBuilder(config.PUBLIC_BASE_URL),
     read: (work) => uow.run(work),
     readOnly: (work) => uow.readOnly(work),
+    ifoodMerchant: () => ifoodMerchantFor(credentialStore, establishmentId, config, logger),
     useCases: {
       createOrder: new CreateOrder(uow, geocoder, ids, clock, establishmentId),
       geocodeOrder: new GeocodeOrder(uow, geocoder, clock),

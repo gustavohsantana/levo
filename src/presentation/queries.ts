@@ -973,3 +973,60 @@ export async function getRotaParaImpressao(id: string): Promise<RotaImpressao | 
     };
   });
 }
+
+/** O status por canal/operação que o iFood devolve. */
+interface StatusIfoodItem {
+  salesChannel?: string;
+  operation?: string;
+  available?: boolean;
+  validations?: Array<{ id: string; state: string; code: string; message?: { title?: string } }>;
+}
+
+export interface LojaIfoodView {
+  merchantId: string;
+  nome: string;
+  /** O objeto cru de detalhes — a tela mostra o que precisar (Cenário 1). */
+  detalhes: Record<string, unknown>;
+  disponivel: boolean;
+  validacoes: Array<{ id: string; ok: boolean; titulo: string }>;
+  pausas: Array<{ id: string; description: string; start: string; end: string }>;
+  horarios: Array<{ dayOfWeek: string; start: string; duration: number }>;
+}
+
+/**
+ * A loja no iFood, para a tela de homologação Merchant.
+ *
+ * Uma consulta por chamada (detalhes, status, pausas, horário), em paralelo.
+ * Status e pausas toleram falha isolada — a tela ainda serve mostrando o resto.
+ * `null` quando a loja não conectou o iFood: aí a tela nem aparece.
+ */
+export async function getLojaIfood(): Promise<LojaIfoodView | null> {
+  const { container } = await currentContainer();
+  const m = await container.ifoodMerchant();
+  if (!m) return null;
+
+  const { merchant, merchantId } = m;
+  const [detalhes, statusRaw, pausas, horarios] = await Promise.all([
+    merchant.detalhes(merchantId),
+    merchant.status(merchantId).catch(() => [] as StatusIfoodItem[]),
+    merchant.listarPausas(merchantId).catch(() => []),
+    merchant.horarios(merchantId).catch(() => ({ shifts: [] })),
+  ]);
+
+  const status = (Array.isArray(statusRaw) ? statusRaw : []) as StatusIfoodItem[];
+  const entrega = status.find((s) => s.operation === 'delivery') ?? status[0];
+
+  return {
+    merchantId,
+    nome: String(detalhes.name ?? '—'),
+    detalhes: detalhes as Record<string, unknown>,
+    disponivel: Boolean(entrega?.available),
+    validacoes: (entrega?.validations ?? []).map((v) => ({
+      id: v.id,
+      ok: v.state === 'OK',
+      titulo: v.message?.title ?? v.code,
+    })),
+    pausas,
+    horarios: horarios.shifts ?? [],
+  };
+}

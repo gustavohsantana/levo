@@ -669,3 +669,53 @@ export async function entregasDoEntregadorAction(
     return { ok: false, error: toFormError(cause) };
   }
 }
+
+/**
+ * Ações do módulo Merchant do iFood, para a tela de homologação.
+ *
+ * Cada uma pega o cliente do lojista e devolve a mensagem do iFood no erro —
+ * é ela que diz, por exemplo, para esperar antes de remover uma pausa recém
+ * criada. Sem loja conectada, devolve um erro claro em vez de estourar.
+ */
+async function merchantDoLojista() {
+  const session = await requireSession();
+  const m = await containerFor(session.establishmentId).ifoodMerchant();
+  if (!m) throw new Error('iFood não conectado nesta loja.');
+  return m;
+}
+
+export async function criarPausaIfoodAction(
+  description: string,
+  start: string,
+  end: string,
+): Promise<ActionResult> {
+  try {
+    const { merchant, merchantId } = await merchantDoLojista();
+    await merchant.criarPausa(merchantId, { description, start, end });
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+export async function removerPausaIfoodAction(interrupcaoId: string): Promise<ActionResult> {
+  try {
+    const { merchant, merchantId } = await merchantDoLojista();
+    await merchant.removerPausa(merchantId, interrupcaoId);
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+export async function definirHorariosIfoodAction(
+  shifts: Array<{ dayOfWeek: string; start: string; duration: number }>,
+): Promise<ActionResult> {
+  try {
+    const { merchant, merchantId } = await merchantDoLojista();
+    await merchant.definirHorarios(merchantId, shifts);
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
