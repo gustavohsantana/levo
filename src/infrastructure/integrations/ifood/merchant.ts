@@ -138,11 +138,31 @@ export class IfoodMerchant {
     if (!response.ok) {
       const detalhe = await response.text().catch(() => '');
       this.opts.logger?.warn({ path, status: response.status, detalhe }, 'ifood.merchant_falhou');
-      throw new ExternalServiceError('iFood', `HTTP ${response.status}`, { path });
+      /*
+       * O motivo vem no corpo, não no status. Foi ele que revelou o
+       * `RecentlyCreatedInterruption`: o iFood recusa remover uma pausa recém
+       * criada (tem um cooldown). Sem carregar essa mensagem, a tela mostraria
+       * só "HTTP 409" e ninguém saberia que é para esperar e tentar de novo.
+       */
+      throw new ExternalServiceError('iFood', mensagemDoErro(detalhe, response.status), {
+        path,
+        status: response.status,
+      });
     }
 
     // 204 (delete/put) e respostas vazias não têm corpo para desserializar.
     const texto = await response.text();
     return (texto ? JSON.parse(texto) : undefined) as T;
   }
+}
+
+/** O erro do iFood vem como `{ error: { code, message } }` — extrai o legível. */
+function mensagemDoErro(corpo: string, status: number): string {
+  try {
+    const erro = JSON.parse(corpo)?.error;
+    if (erro?.message) return erro.code ? `${erro.code}: ${erro.message}` : erro.message;
+  } catch {
+    /* corpo não-JSON: cai no genérico abaixo. */
+  }
+  return `HTTP ${status}`;
 }
