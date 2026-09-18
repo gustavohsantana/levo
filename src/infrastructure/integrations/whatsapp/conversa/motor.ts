@@ -258,9 +258,11 @@ export function avancar(
 
   if (estado.passo === 'confirmando' && msg.texto) {
     if (pareceEndereco(msg.texto)) return receberEndereco(estado, retrato, msg.texto);
-    if (/^(sim|confirmo|confirma|ok|pode|fechou|isso)$/i.test(msg.texto.trim())) {
-      return confirmarPedido(estado, retrato);
+    if (/alterar|mudar|mais item/i.test(msg.texto)) {
+      return abrirCardapio(estado, retrato);
     }
+    if (querConfirmar(msg.texto)) return confirmarPedido(estado, retrato);
+    return fecharPedido(estado, retrato);
   }
 
   return comLojaDefinida(estado, retrato, msg);
@@ -443,6 +445,18 @@ const PEDINDO_CARDAPIO =
 
 function pedindoCardapio(textoDoCliente: string | null): boolean {
   return Boolean(textoDoCliente && PEDINDO_CARDAPIO.test(textoDoCliente));
+}
+
+function querConfirmar(textoDoCliente: string): boolean {
+  const t = textoDoCliente.trim();
+  if (t.length > 80) return false;
+  return (
+    /^(ok|sim|isso|certo|pode|blz|beleza|fechou|valeu|perfeito|confirma(r)?)([,!.\s]+(obrigad\w*|valeu|sim|isso|mesmo|pode|confirmar|perfeito)*)*[.!?]*$/i.test(
+      t,
+    ) ||
+    /s[oó] isso/i.test(t) ||
+    /^obrigad/i.test(t)
+  );
 }
 
 function pareceEndereco(textoDoCliente: string): boolean {

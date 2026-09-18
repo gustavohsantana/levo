@@ -254,20 +254,13 @@ export function aplicarTextoNaMontagem(
 export function aposCarrinho(estado: EstadoDaConversa, retrato: Retrato): Resultado {
   const slug = slugDa(estado, retrato);
   const nome = nomeDa(estado, retrato);
-  const linhas = estado.carrinho
-    .map((i) => {
-      const extras = i.opcoes.length > 0 ? ` (${i.opcoes.join(', ')})` : '';
-      return `• ${i.quantidade}× ${i.nome}${extras} — ${precoEmReais(i.precoUnitarioCents * i.quantidade)}`;
-    })
-    .join('\n');
-
   const total = estado.carrinho.reduce((s, i) => s + i.precoUnitarioCents * i.quantidade, 0);
 
   return {
     estado: { ...estado, passo: 'no_cardapio', itemEmMontagem: undefined, atualizadoEm: iso(retrato) },
     respostas: [
       escolha(
-        `${carimbo(nome)}\n\n${linhas}\n\n*Subtotal ${precoEmReais(total)}*\n\nMais alguma coisa?`,
+        `${carimbo(nome)}\n\n${linhasDoCarrinho(estado.carrinho)}\n\n*Subtotal: ${precoEmReais(total)}*\n\nMais alguma coisa?`,
         [
           { id: idDaOpcao({ acao: 'mais', loja: slug, alvo: '' }), rotulo: 'Mais itens' },
           { id: idDaOpcao({ acao: 'fecha', loja: slug, alvo: '' }), rotulo: 'Fechar pedido' },
@@ -325,10 +318,7 @@ export function confirmarPedido(estado: EstadoDaConversa, retrato: Retrato): Res
   return {
     estado: { ...estado, passo: 'com_atendente', atualizadoEm: iso(retrato) },
     respostas: [
-      texto(
-        `${carimbo(nome)}\n\n` +
-          'Certo! Já chamei a loja com o resumo do pedido. É só aguardar a confirmação. 👍',
-      ),
+      texto(`${carimbo(nome)}\n\nPedido enviado pra loja. É só aguardar.`),
     ],
   };
 }
@@ -491,31 +481,79 @@ function perguntarPagamento(estado: EstadoDaConversa, retrato: Retrato): Resulta
 function mostrarResumo(estado: EstadoDaConversa, retrato: Retrato): Resultado {
   const slug = slugDa(estado, retrato);
   const nome = nomeDa(estado, retrato);
-  const itens = estado.carrinho
-    .map((i) => {
-      const extras = i.opcoes.length > 0 ? ` (${i.opcoes.join(', ')})` : '';
-      return `• ${i.quantidade}× ${i.nome}${extras} — ${precoEmReais(i.precoUnitarioCents * i.quantidade)}`;
-    })
-    .join('\n');
-  const subtotal = estado.carrinho.reduce((s, i) => s + i.precoUnitarioCents * i.quantidade, 0);
-  const modalidade =
-    estado.entrega === 'retirada'
-      ? 'Retirada na loja'
-      : `Entrega em ${estado.endereco}`;
-  const pagamento = estado.pagamento === 'pix' ? 'Pix' : estado.pagamento === 'dinheiro' ? 'Dinheiro' : 'Cartão';
 
   return {
     estado: { ...estado, passo: 'confirmando', atualizadoEm: iso(retrato) },
     respostas: [
-      escolha(
-        `${carimbo(nome)}\n\n*Resumo*\n${itens}\n\n${modalidade}\nPagamento: ${pagamento}\n\n*Total ${precoEmReais(subtotal)}*\n\nConfirma?`,
-        [
-          { id: idDaOpcao({ acao: 'conf', loja: slug, alvo: '' }), rotulo: 'Confirmar' },
-          { id: idDaOpcao({ acao: 'mais', loja: slug, alvo: '' }), rotulo: 'Alterar' },
-        ],
-      ),
+      texto(`${carimbo(nome)}\n\n${blocoDoPedido(estado)}`),
+      escolha('Confirma o pedido?', [
+        { id: idDaOpcao({ acao: 'conf', loja: slug, alvo: '' }), rotulo: 'Confirmar' },
+        { id: idDaOpcao({ acao: 'mais', loja: slug, alvo: '' }), rotulo: 'Alterar' },
+      ]),
     ],
   };
+}
+
+function blocoDoPedido(estado: EstadoDaConversa): string {
+  const total = estado.carrinho.reduce((s, i) => s + i.precoUnitarioCents * i.quantidade, 0);
+  const pagamento =
+    estado.pagamento === 'pix' ? 'Pix' : estado.pagamento === 'dinheiro' ? 'Dinheiro' : 'Cartão';
+  const entrega =
+    estado.entrega === 'retirada'
+      ? '*Entrega*\nRetirada na loja'
+      : `*Entrega*\n${formatarEnderecoExibicao(estado.endereco ?? '')}`;
+
+  return [
+    '*Pedido*',
+    linhasDoCarrinho(estado.carrinho),
+    '',
+    entrega,
+    '',
+    `*Pagamento*\n${pagamento}`,
+    '',
+    `*Total: ${precoEmReais(total)}*`,
+  ].join('\n');
+}
+
+function linhasDoCarrinho(carrinho: EstadoDaConversa['carrinho']): string {
+  return carrinho
+    .map((i) => {
+      const preco = precoEmReais(i.precoUnitarioCents * i.quantidade);
+      const cabeca = `${i.quantidade}× ${i.nome} — ${preco}`;
+      const extras = i.opcoes.length > 0 ? `\n_${i.opcoes.join(' · ')}_` : '';
+      return `${cabeca}${extras}`;
+    })
+    .join('\n\n');
+}
+
+function formatarEnderecoExibicao(endereco: string): string {
+  const cep = endereco.match(/\d{5}-\d{3}/)?.[0];
+  const num = endereco.match(/n[ºo°]\s*(\S+)/i)?.[1];
+  const bairroNome = endereco.match(/bairro\s+([^,\n]+)/i)?.[1]?.trim();
+  const resto = endereco
+    .replace(/\d{5}-\d{3}/g, '')
+    .replace(/,?\s*n[ºo°]\s*\S+/gi, '')
+    .replace(/,?\s*bairro\s+[^,\n]+/i, '')
+    .replace(/,\s*,/g, ',')
+    .replace(/^[\s,]+|[\s,]+$/g, '');
+
+  let rua = resto;
+  let bairro = bairroNome;
+  if (!bairro && resto.includes(',')) {
+    const partes = resto.split(',').map((s) => s.trim()).filter(Boolean);
+    rua = partes[0] ?? resto;
+    bairro = partes.slice(1).join(', ') || undefined;
+  }
+
+  const linhas: string[] = [];
+  if (rua && num) linhas.push(`${rua}, nº ${num}`);
+  else if (rua) linhas.push(rua);
+  else if (num) linhas.push(`nº ${num}`);
+  if (bairro) {
+    linhas.push(/^bairro\b/i.test(bairro) ? bairro : `Bairro ${bairro}`);
+  }
+  if (cep) linhas.push(`CEP ${cep}`);
+  return linhas.join('\n') || endereco;
 }
 
 function iniciarDeNovo(estado: EstadoDaConversa, retrato: Retrato): Resultado {

@@ -439,6 +439,8 @@ describe('fluxo do pedido — açaí até o resumo', () => {
         { cliente: 'Rua Ernani Rezende Vilela, Santa Rita' },
         { cliente: 'pix' },
         { cliente: 'sim' },
+        { cliente: 'Ok, obrigado!' },
+        { cliente: 'Só isso mesmo' },
       ],
       mundo,
     );
@@ -454,20 +456,25 @@ describe('fluxo do pedido — açaí até o resumo', () => {
     expect(transcricao).toContain('Banana');
     expect(transcricao).toContain('Morango');
     expect(transcricao).toContain('Kiwi');
-    expect(transcricao).toContain('Subtotal R$ 20,00');
+    expect(transcricao).toContain('Subtotal: R$ 20,00');
     expect(transcricao).toContain('É para entrega ou retirada?');
     expect(transcricao).toContain('CEP 37558-722. Qual o número da casa?');
     expect(transcricao).toContain('Qual a rua e o bairro?');
     expect(transcricao).toContain('Como vai pagar?');
-    expect(transcricao).toContain('*Resumo*');
-    expect(transcricao).toContain('500ml');
-    expect(transcricao).toContain('Ninho');
-    expect(transcricao).toContain('Entrega em');
+    expect(transcricao).toContain('*Pedido*');
+    expect(transcricao).toContain('*Entrega*');
+    expect(transcricao).toContain('*Pagamento*');
+    expect(transcricao).toContain('Pix');
+    expect(transcricao).toContain('*Total: R$ 20,00*');
+    expect(transcricao).toContain('500ml · Ninho');
+    expect(transcricao).toContain('Banana · Morango · Kiwi');
     expect(transcricao).toContain('Ernani');
     expect(transcricao).toContain('nº 123');
-    expect(transcricao).toContain('Pagamento: Pix');
-    expect(transcricao).toContain('*Total R$ 20,00*');
-    expect(transcricao).toContain('Já chamei a loja');
+    expect(transcricao).toContain('Bairro Santa Rita');
+    expect(transcricao).toContain('CEP 37558-722');
+    expect(transcricao).toContain('Pedido enviado pra loja');
+    expect(transcricao).toContain('(silêncio)');
+    expect((transcricao.match(/Pedido enviado pra loja/g) ?? []).length).toBe(1);
     expect(transcricao).not.toContain('(delegado ao agente)');
     expect(estado.passo).toBe('com_atendente');
     expect(estado.carrinho).toHaveLength(1);
@@ -527,9 +534,9 @@ describe('fluxo do pedido — açaí até o resumo', () => {
 
     expect(delegou).toBe(false);
     expect(transcricao).not.toContain('É para entrega ou retirada?');
-    expect(transcricao).toContain('*Resumo*');
+    expect(transcricao).toContain('*Pedido*');
     expect(transcricao).toContain('Ernani');
-    expect(transcricao).toContain('Pagamento: Pix');
+    expect(transcricao).toContain('*Pagamento*');
   });
 
   it('pronto nas frutas NÃO apaga banana e morango', () => {
@@ -584,8 +591,8 @@ describe('fluxo do pedido — açaí até o resumo', () => {
     expect(transcricao).not.toMatch(/Como vai pagar\?[\s\S]*Qual o bairro\?/);
     expect(transcricao).toContain('Santa Edwirges');
     expect(transcricao).toContain('Como vai pagar?');
-    expect(transcricao).toContain('*Resumo*');
-    expect(transcricao).toContain('*Total');
+    expect(transcricao).toContain('*Pedido*');
+    expect(transcricao).toContain('*Total:');
     expect(estado.passo).toBe('com_atendente');
     expect(estado.endereco).toMatch(/Santa Edwirges/i);
     expect(estado.endereco).toMatch(/300/);
