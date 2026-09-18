@@ -248,58 +248,6 @@ describe('menu clicável do cardápio', () => {
     expect(transcricao).toContain('a partir de R$ 13,00');
   });
 
-  it('produto com foto aparece no menu, produto sem foto não inventa imagem', () => {
-    const { transcricao } = conversar(
-      [
-        { cliente: 'oi' },
-        { cliente: idDaOpcao({ acao: 'cat', loja: 'pizzariadoze', alvo: 'Açaí' }), toque: true },
-      ],
-      retrato({
-        resolucao: { tipo: 'loja', establishmentId: ZE, via: 'memoria' },
-        categorias: [
-          {
-            nome: 'Açaí',
-            produtos: [
-              {
-                id: 'acai-1',
-                nome: 'Açaí',
-                aPartirDeCents: 1300,
-                imageUrl: 'https://cdn.example.com/acai.jpg',
-              },
-              { id: 'acai-2', nome: 'Açaí diet', aPartirDeCents: 1500 },
-            ],
-          },
-        ],
-      }),
-    );
-
-    expect(transcricao).toContain('[foto]');
-    expect((transcricao.match(/\[foto\]/g) ?? []).length).toBe(1);
-  });
-
-  it('"quero um açaí" com foto manda a imagem antes de perguntar o tamanho', () => {
-    const { transcricao } = conversar(
-      [{ cliente: 'Quero um açaí' }],
-      retrato({
-        resolucao: { tipo: 'loja', establishmentId: ZE, via: 'memoria' },
-        categorias: [
-          {
-            nome: 'Açaí',
-            produtos: [
-              {
-                ...CARDAPIO_ACAI.categorias[0].produtos[0],
-                imageUrl: 'https://cdn.example.com/acai.jpg',
-              },
-            ],
-          },
-        ],
-      }),
-    );
-
-    expect(transcricao).toContain('[foto]');
-    expect(transcricao).toContain('Qual tamanho');
-  });
-
   it('"quero um açaí" na primeira fala começa a montar, com preço', () => {
     const { delegou, transcricao } = conversar(
       [{ cliente: 'Quero um açaí' }],

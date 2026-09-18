@@ -332,7 +332,6 @@ function enviarResposta(
   m: MensagemDeSaida,
 ): Promise<{ id: string; para: string }> {
   if (m.tipo === 'texto') return envio.texto(para, m.corpo);
-  if (m.tipo === 'imagem') return envio.imagem(para, m.url, m.corpo || undefined);
   if (m.tipo === 'botoes') return envio.botoes(para, m.corpo, m.opcoes);
   return envio.lista(para, m.corpo, m.rotuloDoBotao, m.opcoes);
 }

@@ -5,7 +5,6 @@ import {
   carimbo,
   escolha,
   idDaOpcao,
-  imagem,
   lista,
   precoEmReais,
   texto,
@@ -40,7 +39,6 @@ export interface ProdutoDoRetrato {
   nome: string;
   aPartirDeCents: number;
   priceCents?: number;
-  imageUrl?: string | null;
   grupos?: GrupoDoRetrato[];
 }
 
@@ -93,8 +91,8 @@ export function iniciarItem(
     atualizadoEm: iso(retrato),
   };
 
-  if (gruposDe(produto).length === 0) return comFoto(fecharItem(comItem, retrato, produto), produto);
-  return comFoto(perguntarGrupo(comItem, retrato, produto), produto);
+  if (gruposDe(produto).length === 0) return fecharItem(comItem, retrato, produto);
+  return perguntarGrupo(comItem, retrato, produto);
 }
 
 /**
@@ -113,8 +111,7 @@ export function iniciarItemComTexto(
   const iniciado = iniciarItem(estado, retrato, produto);
   if (iniciado.estado.passo !== 'montando_item' || !bruto.trim()) return iniciado;
   const extra = aplicarTextoNaMontagem(iniciado.estado, retrato, bruto);
-  if (!extra) return iniciado;
-  return comFoto(extra, produto);
+  return extra ?? iniciado;
 }
 
 export function continuarItem(estado: EstadoDaConversa, retrato: Retrato): Resultado {
@@ -777,15 +774,6 @@ function completar(p: ProdutoDoRetrato): ProdutoDoRetrato {
     priceCents: p.priceCents ?? p.aPartirDeCents,
     grupos: gruposDe(p),
   };
-}
-
-function comFoto(r: Resultado, produto: ProdutoDoRetrato): Resultado {
-  const foto = produto.imageUrl
-    ? imagem(produto.imageUrl, `*${produto.nome}*\na partir de ${precoEmReais(produto.aPartirDeCents)}`)
-    : null;
-  if (!foto) return r;
-  if (r.respostas[0]?.tipo === 'imagem') return r;
-  return { ...r, respostas: [foto, ...r.respostas] };
 }
 
 function gruposDe(p: ProdutoDoRetrato): GrupoDoRetrato[] {

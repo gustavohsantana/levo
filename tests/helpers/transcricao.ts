@@ -75,11 +75,6 @@ export function mensagem(turno: Turno): MensagemRecebida {
 
 /** Desenha a mensagem como ela apareceria no celular. */
 export function renderizar(m: MensagemDeSaida): string {
-  if (m.tipo === 'imagem') {
-    const cap = m.corpo ? m.corpo.split('\n').map((l) => `🤖 ${l}`).join('\n') : '';
-    return cap ? `🤖 [foto]\n${cap}` : '🤖 [foto]';
-  }
-
   const corpo = m.corpo.split('\n').map((l) => `🤖 ${l}`).join('\n');
 
   if (m.tipo === 'texto') return corpo;

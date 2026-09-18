@@ -4,7 +4,6 @@ import {
   carimbo,
   escolha,
   idDaOpcao,
-  imagem,
   lerIntencao,
   lista,
   precoEmReais,
@@ -448,22 +447,9 @@ function listarProdutos(
     descricao: `a partir de ${precoEmReais(p.aPartirDeCents)}`,
   }));
 
-  const fotos = categoria.produtos
-    .slice(0, 10)
-    .flatMap((p) => {
-      const foto = p.imageUrl
-        ? imagem(p.imageUrl, `*${p.nome}*\na partir de ${precoEmReais(p.aPartirDeCents)}`)
-        : null;
-      return foto ? [foto] : [];
-    })
-    .slice(0, 5);
-
   return {
     estado: { ...estado, passo: 'no_cardapio', atualizadoEm: iso(retrato.agora) },
-    respostas: [
-      ...fotos,
-      lista(`${carimbo(nome)}\n\n*${categoria.nome}*`, opcoes, 'Produtos'),
-    ],
+    respostas: [lista(`${carimbo(nome)}\n\n*${categoria.nome}*`, opcoes, 'Produtos')],
   };
 }
 

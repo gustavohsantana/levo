@@ -38,7 +38,6 @@ interface ProdutoRow {
   name: string;
   category: string | null;
   priceCents: number;
-  imageUrl: string | null;
   establishmentId: string;
   optionGroups?: {
     position: number;
@@ -216,7 +215,6 @@ async function categoriasDaLoja(prisma: Cliente, ids: string[]): Promise<Categor
       id: p.id,
       nome: p.name,
       priceCents: p.priceCents,
-      imageUrl: p.imageUrl,
       grupos,
       aPartirDeCents: aPartirDe({ priceCents: p.priceCents, grupos }),
     };
