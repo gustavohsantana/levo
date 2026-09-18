@@ -784,7 +784,7 @@ function comFoto(r: Resultado, produto: ProdutoDoRetrato): Resultado {
     ? imagem(produto.imageUrl, `*${produto.nome}*\na partir de ${precoEmReais(produto.aPartirDeCents)}`)
     : null;
   if (!foto) return r;
-  if (r.respostas.some((m) => m.tipo === 'imagem' && m.url === foto.url)) return r;
+  if (r.respostas[0]?.tipo === 'imagem') return r;
   return { ...r, respostas: [foto, ...r.respostas] };
 }
 

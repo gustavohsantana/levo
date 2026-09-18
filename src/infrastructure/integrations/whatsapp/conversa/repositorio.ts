@@ -38,6 +38,7 @@ interface ProdutoRow {
   name: string;
   category: string | null;
   priceCents: number;
+  imageUrl: string | null;
   establishmentId: string;
   optionGroups?: {
     position: number;
