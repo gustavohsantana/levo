@@ -303,63 +303,17 @@ export function receberEndereco(
   const t = bruto.trim();
   const cep = t.replace(/\D/g, '');
   const soCep = cep.length === 8 && t.length <= 10;
-
-  if (soCep) {
-    return {
-      estado: {
-        ...estado,
-        passo: 'endereco',
-        entrega: 'entrega',
-        endereco: formatarCep(cep),
-        atualizadoEm: iso(retrato),
-      },
-      respostas: [
-        texto(
-          `${carimbo(nomeDa(estado, retrato))}\n\n` +
-            `CEP ${formatarCep(cep)}. Qual o número da casa?`,
-        ),
-      ],
-    };
-  }
-
   const soNumero = /^\d+[a-zA-Z]?$/.test(t);
-  if (soNumero && estado.endereco) {
-    const junto = `${estado.endereco}, nº ${t}`;
-    const com = { ...estado, endereco: junto, entrega: 'entrega' as const, atualizadoEm: iso(retrato) };
-    if (faltaRua(junto) || faltaBairro(junto)) {
-      return pedirRuaOuBairro(com, retrato, junto);
-    }
-    return fecharPedido(com, retrato);
-  }
 
-  if (t.length < 8) {
-    return {
-      estado: { ...estado, passo: 'endereco', entrega: 'entrega', atualizadoEm: iso(retrato) },
-      respostas: [
-        texto(
-          `${carimbo(nomeDa(estado, retrato))}\n\n` +
-            'Preciso de rua, número e bairro — ou o CEP.',
-        ),
-      ],
-    };
-  }
+  let endereco = estado.endereco;
+  if (soCep) endereco = mesclarCep(endereco, formatarCep(cep));
+  else if (soNumero) endereco = mesclarNumero(endereco, t);
+  else if (t.length >= 3) endereco = mesclarEndereco(endereco, t);
 
-  const endereco = mesclarEndereco(estado.endereco, t);
-  const com = { ...estado, endereco, entrega: 'entrega' as const, atualizadoEm: iso(retrato) };
-  if (faltaRua(endereco) || faltaBairro(endereco)) {
-    return pedirRuaOuBairro(com, retrato, endereco);
-  }
-  return fecharPedido(com, retrato);
-}
-
-function pedirRuaOuBairro(estado: EstadoDaConversa, retrato: Retrato, endereco: string): Resultado {
-  const falta = faltaRua(endereco)
-    ? 'Agora a rua e o bairro, pra quem for entregar achar.'
-    : 'E o bairro?';
-  return {
-    estado: { ...estado, passo: 'endereco', atualizadoEm: iso(retrato) },
-    respostas: [texto(`${carimbo(nomeDa(estado, retrato))}\n\n${falta}`)],
-  };
+  return seguirEndereco(
+    { ...estado, endereco, entrega: 'entrega', atualizadoEm: iso(retrato) },
+    retrato,
+  );
 }
 
 export function definirPagamento(estado: EstadoDaConversa, retrato: Retrato, forma: string): Resultado {
@@ -508,14 +462,15 @@ function perguntarModalidade(estado: EstadoDaConversa, retrato: Retrato): Result
 }
 
 function pedirEndereco(estado: EstadoDaConversa, retrato: Retrato): Resultado {
+  return seguirEndereco(estado, retrato);
+}
+
+function seguirEndereco(estado: EstadoDaConversa, retrato: Retrato): Resultado {
+  const pergunta = perguntaFalta(estado.endereco);
+  if (!pergunta) return fecharPedido(estado, retrato);
   return {
     estado: { ...estado, passo: 'endereco', atualizadoEm: iso(retrato) },
-    respostas: [
-      texto(
-        `${carimbo(nomeDa(estado, retrato))}\n\n` +
-          'Me passa rua, número e bairro — ou o CEP.',
-      ),
-    ],
+    respostas: [texto(`${carimbo(nomeDa(estado, retrato))}\n\n${pergunta}`)],
   };
 }
 
@@ -660,57 +615,78 @@ function paraSpec(grupo: GrupoDoRetrato) {
 }
 
 export function enderecoServe(endereco?: string): boolean {
-  if (!endereco || endereco.trim().length < 8) return false;
-  if (faltaRua(endereco) || faltaBairro(endereco)) return false;
-  return /\d/.test(endereco);
-}
-
-function faltaRua(endereco?: string): boolean {
-  if (!endereco) return true;
-  const t = endereco.trim();
-  if (/^\d{5}-?\d{3}$/.test(t)) return true;
-  if (/^\d{5}-\d{3}, nº \S+$/.test(t)) return true;
-  return false;
+  return perguntaFalta(endereco) === null;
 }
 
 /**
- * Sem bairro o motoboy acha a rua e não o quarteirão.
+ * O próximo pedaço que falta, na ordem que o motoboy precisa.
  *
- * Medido em produção: o cliente mandou só a avenida, o motor pulou pro Pix,
- * e "Bairro Parque Real" caiu no agente — que perguntou de novo o que já
- * estava no estado.
+ * Mandou só a rua? Guarda e pede o número. Mandou rua e número? Pede o
+ * bairro. Completo só quando os três estão lá — CEP ajuda, mas não substitui.
  */
-function faltaBairro(endereco?: string): boolean {
-  if (!endereco) return true;
-  if (/\bbairro\b/i.test(endereco)) return false;
+function perguntaFalta(endereco?: string): string | null {
+  if (!endereco?.trim()) return 'Me passa rua, número e bairro — ou o CEP.';
+  const n = temNumero(endereco);
+  const r = temRua(endereco);
+  const b = temBairro(endereco);
+  if (n && r && b) return null;
+  if (!n) {
+    const cep = endereco.match(/\d{5}-\d{3}/);
+    return cep && !r ? `CEP ${cep[0]}. Qual o número da casa?` : 'Qual o número da casa?';
+  }
+  if (!r && !b) return 'Qual a rua e o bairro?';
+  if (!r) return 'Qual a rua?';
+  return 'Qual o bairro?';
+}
+
+function temNumero(endereco: string): boolean {
+  if (/n[ºo°]\s*\S/i.test(endereco)) return true;
+  const semCep = endereco.replace(/\d{5}-?\d{3}/g, '');
+  return /\d/.test(semCep);
+}
+
+function temRua(endereco: string): boolean {
+  const semMeta = endereco
+    .replace(/\d{5}-?\d{3}/g, '')
+    .replace(/n[ºo°]\s*\S+/gi, '')
+    .replace(/\bbairro\b.+/i, '');
+  return /[A-Za-zÀ-ú]{5,}/.test(semMeta);
+}
+
+function temBairro(endereco: string): boolean {
+  if (/\bbairro\b/i.test(endereco)) return true;
   const soLogradouro = endereco
     .replace(/\d{5}-\d{3}/g, '')
     .replace(/,?\s*n[ºo°]?\s*\S+/gi, '')
     .replace(/,\s*,/g, ',')
     .replace(/^,\s*|,\s*$/g, '')
     .trim();
-  return !soLogradouro.includes(',');
+  return soLogradouro.includes(',');
+}
+
+function mesclarCep(atual: string | undefined, cep: string): string {
+  if (!atual) return cep;
+  const sem = atual.replace(/\d{5}-\d{3}/g, '').replace(/,\s*,/g, ',').replace(/^,\s*|,\s*$/g, '').trim();
+  return sem ? `${sem}, ${cep}` : cep;
+}
+
+function mesclarNumero(atual: string | undefined, n: string): string {
+  if (!atual) return `nº ${n}`;
+  if (/n[ºo°]\s*\S+/i.test(atual)) return atual.replace(/n[ºo°]\s*\S+/i, `nº ${n}`);
+  return `${atual}, nº ${n}`;
 }
 
 function mesclarEndereco(atual: string | undefined, t: string): string {
   if (!atual) return t;
 
   const soBairro = /\bbairro\b/i.test(t) && !/\b(rua|avenida|alameda|travessa|estrada)\b/i.test(t);
-  if (soBairro) {
+  if (soBairro || (!temBairro(atual) && temRua(atual) && !/\b(rua|avenida|alameda|travessa)\b/i.test(t))) {
     const sem = atual.replace(/,?\s*bairro\s+[^,]+/i, '').replace(/,\s*$/, '');
     const bairro = /bairro/i.test(t) ? t.trim() : `bairro ${t.trim()}`;
     return `${sem}, ${bairro}`;
   }
 
-  if (faltaRua(atual) || faltaBairro(atual)) {
-    const bairro = faltaBairro(atual) && !/\b(rua|avenida|alameda)\b/i.test(t)
-      ? (/bairro/i.test(t) ? t.trim() : `bairro ${t.trim()}`)
-      : t;
-    if (faltaRua(atual)) return `${t}, ${atual}`;
-    if (faltaBairro(atual) && !/\b(rua|avenida|alameda|travessa)\b/i.test(t)) {
-      return `${atual}, ${bairro}`;
-    }
-  }
+  if (!temRua(atual)) return atual ? `${t}, ${atual}` : t;
 
   const cepNum = atual.match(/\d{5}-\d{3}(?:, nº \S+)?/);
   if (/\b(rua|avenida|alameda|travessa)\b/i.test(t) && cepNum && !t.includes(cepNum[0])) {
