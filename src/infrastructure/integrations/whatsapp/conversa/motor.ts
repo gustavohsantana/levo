@@ -4,6 +4,7 @@ import {
   carimbo,
   escolha,
   idDaOpcao,
+  imagem,
   lerIntencao,
   lista,
   precoEmReais,
@@ -31,6 +32,7 @@ import {
   iniciarItemComTexto,
   pularGrupo,
   receberEndereco,
+  receberTroco,
 } from './pedido';
 
 /**
@@ -124,6 +126,8 @@ export function avancar(
         passo: 'ocioso',
         carrinho: [],
         pagamento: undefined,
+        trocoParaCents: undefined,
+        aguardandoValorTroco: undefined,
         itemEmMontagem: undefined,
         atualizadoEm: iso(retrato.agora),
       };
@@ -219,6 +223,7 @@ export function avancar(
     return definirModalidade(estado, retrato, intencao.alvo);
   }
   if (intencao?.acao === 'pag') return definirPagamento(estado, retrato, intencao.alvo);
+  if (intencao?.acao === 'troco') return receberTroco(estado, retrato, intencao.alvo === 'nao' ? 'não' : 'sim');
   if (intencao?.acao === 'conf') return confirmarPedido(estado, retrato);
 
   if (intencao?.acao === 'novo') {
@@ -232,6 +237,7 @@ export function avancar(
     estado.carrinho.length > 0 &&
     estado.passo !== 'montando_item' &&
     estado.passo !== 'confirmando' &&
+    estado.passo !== 'troco' &&
     msg.texto &&
     /finaliz|fechar pedido|pode (fechar|mandar)|s[oó] isso/i.test(msg.texto)
   ) {
@@ -266,6 +272,10 @@ export function avancar(
     if (/dinheiro|especie|esp[eé]cie/.test(t)) return definirPagamento(estado, retrato, 'dinheiro');
     if (/cart[aã]o|credito|d[eé]bito/.test(t)) return definirPagamento(estado, retrato, 'cartao');
     if (pareceEndereco(msg.texto)) return receberEndereco(estado, retrato, msg.texto);
+  }
+
+  if (estado.passo === 'troco' && msg.texto) {
+    return receberTroco(estado, retrato, msg.texto);
   }
 
   if (estado.passo === 'confirmando' && msg.texto) {
@@ -438,9 +448,22 @@ function listarProdutos(
     descricao: `a partir de ${precoEmReais(p.aPartirDeCents)}`,
   }));
 
+  const fotos = categoria.produtos
+    .slice(0, 10)
+    .flatMap((p) => {
+      const foto = p.imageUrl
+        ? imagem(p.imageUrl, `*${p.nome}*\na partir de ${precoEmReais(p.aPartirDeCents)}`)
+        : null;
+      return foto ? [foto] : [];
+    })
+    .slice(0, 5);
+
   return {
     estado: { ...estado, passo: 'no_cardapio', atualizadoEm: iso(retrato.agora) },
-    respostas: [lista(`${carimbo(nome)}\n\n*${categoria.nome}*`, opcoes, 'Produtos')],
+    respostas: [
+      ...fotos,
+      lista(`${carimbo(nome)}\n\n*${categoria.nome}*`, opcoes, 'Produtos'),
+    ],
   };
 }
 

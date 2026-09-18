@@ -248,6 +248,58 @@ describe('menu clicável do cardápio', () => {
     expect(transcricao).toContain('a partir de R$ 13,00');
   });
 
+  it('produto com foto aparece no menu, produto sem foto não inventa imagem', () => {
+    const { transcricao } = conversar(
+      [
+        { cliente: 'oi' },
+        { cliente: idDaOpcao({ acao: 'cat', loja: 'pizzariadoze', alvo: 'Açaí' }), toque: true },
+      ],
+      retrato({
+        resolucao: { tipo: 'loja', establishmentId: ZE, via: 'memoria' },
+        categorias: [
+          {
+            nome: 'Açaí',
+            produtos: [
+              {
+                id: 'acai-1',
+                nome: 'Açaí',
+                aPartirDeCents: 1300,
+                imageUrl: 'https://cdn.example.com/acai.jpg',
+              },
+              { id: 'acai-2', nome: 'Açaí diet', aPartirDeCents: 1500 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    expect(transcricao).toContain('[foto]');
+    expect((transcricao.match(/\[foto\]/g) ?? []).length).toBe(1);
+  });
+
+  it('"quero um açaí" com foto manda a imagem antes de perguntar o tamanho', () => {
+    const { transcricao } = conversar(
+      [{ cliente: 'Quero um açaí' }],
+      retrato({
+        resolucao: { tipo: 'loja', establishmentId: ZE, via: 'memoria' },
+        categorias: [
+          {
+            nome: 'Açaí',
+            produtos: [
+              {
+                ...CARDAPIO_ACAI.categorias[0].produtos[0],
+                imageUrl: 'https://cdn.example.com/acai.jpg',
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    expect(transcricao).toContain('[foto]');
+    expect(transcricao).toContain('Qual tamanho');
+  });
+
   it('"quero um açaí" na primeira fala começa a montar, com preço', () => {
     const { delegou, transcricao } = conversar(
       [{ cliente: 'Quero um açaí' }],
@@ -491,18 +543,44 @@ describe('fluxo do pedido — açaí até o resumo', () => {
         { cliente: 'Pode finalizar meu pedido' },
         { cliente: 'retirada' },
         { cliente: 'dinheiro' },
+        { cliente: 'não' },
         { cliente: 'sim' },
       ],
       mundo,
     );
 
     expect(delegou).toBe(false);
+    expect(transcricao).toContain('Precisa de troco?');
+    expect(transcricao).toContain('Sem troco');
     expect(transcricao).toMatch(
-      /\*Pedido\*[\s\S]*1× Coca-Cola 2L — R\$ 12,00[\s\S]*1× Coca-Cola 2L — R\$ 12,00[\s\S]*\*Entrega\*[\s\S]*Retirada na loja[\s\S]*\*Pagamento\*[\s\S]*Dinheiro[\s\S]*\*Total: R\$ 24,00\*/,
+      /\*Pedido\*[\s\S]*1× Coca-Cola 2L — R\$ 12,00[\s\S]*1× Coca-Cola 2L — R\$ 12,00[\s\S]*\*Entrega\*[\s\S]*Retirada na loja[\s\S]*\*Pagamento\*[\s\S]*Dinheiro[\s\S]*Sem troco[\s\S]*\*Total: R\$ 24,00\*/,
     );
     expect(transcricao).not.toContain('Qual o número');
     expect(transcricao).toContain('Pedido enviado pra loja');
     expect(estado.carrinho).toHaveLength(0);
+  });
+
+  it('dinheiro pergunta troco, e a nota vai no resumo', () => {
+    const { transcricao, delegou } = conversar(
+      [
+        { cliente: 'quero uma coca' },
+        { cliente: 'Pode finalizar meu pedido' },
+        { cliente: 'retirada' },
+        { cliente: 'dinheiro' },
+        { cliente: 'sim' },
+        { cliente: '10' },
+        { cliente: '50' },
+        { cliente: 'sim' },
+      ],
+      mundo,
+    );
+
+    expect(delegou).toBe(false);
+    expect(transcricao).toContain('Precisa de troco?');
+    expect(transcricao).toContain('Troco pra quanto?');
+    expect(transcricao).toContain('O pedido deu R$ 12,00. Me diz uma nota maior.');
+    expect(transcricao).toContain('Troco para R$ 50,00');
+    expect(transcricao).toContain('Pedido enviado pra loja');
   });
 
   it('endereço completo numa fala vai direto pro pagamento', () => {

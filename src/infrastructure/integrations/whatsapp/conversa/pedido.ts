@@ -5,6 +5,7 @@ import {
   carimbo,
   escolha,
   idDaOpcao,
+  imagem,
   lista,
   precoEmReais,
   texto,
@@ -39,6 +40,7 @@ export interface ProdutoDoRetrato {
   nome: string;
   aPartirDeCents: number;
   priceCents?: number;
+  imageUrl?: string | null;
   grupos?: GrupoDoRetrato[];
 }
 
@@ -91,8 +93,8 @@ export function iniciarItem(
     atualizadoEm: iso(retrato),
   };
 
-  if (gruposDe(produto).length === 0) return fecharItem(comItem, retrato, produto);
-  return perguntarGrupo(comItem, retrato, produto);
+  if (gruposDe(produto).length === 0) return comFoto(fecharItem(comItem, retrato, produto), produto);
+  return comFoto(perguntarGrupo(comItem, retrato, produto), produto);
 }
 
 /**
@@ -111,7 +113,8 @@ export function iniciarItemComTexto(
   const iniciado = iniciarItem(estado, retrato, produto);
   if (iniciado.estado.passo !== 'montando_item' || !bruto.trim()) return iniciado;
   const extra = aplicarTextoNaMontagem(iniciado.estado, retrato, bruto);
-  return extra ?? iniciado;
+  if (!extra) return iniciado;
+  return comFoto(extra, produto);
 }
 
 export function continuarItem(estado: EstadoDaConversa, retrato: Retrato): Resultado {
@@ -277,6 +280,9 @@ export function fecharPedido(estado: EstadoDaConversa, retrato: Retrato): Result
     return pedirEndereco(estado, retrato);
   }
   if (!estado.pagamento) return perguntarPagamento(estado, retrato);
+  if (estado.pagamento === 'dinheiro' && estado.trocoParaCents === undefined) {
+    return perguntarTroco(estado, retrato);
+  }
   return mostrarResumo(estado, retrato);
 }
 
@@ -310,7 +316,51 @@ export function receberEndereco(
 }
 
 export function definirPagamento(estado: EstadoDaConversa, retrato: Retrato, forma: string): Resultado {
-  return fecharPedido({ ...estado, pagamento: forma, atualizadoEm: iso(retrato) }, retrato);
+  const com = {
+    ...estado,
+    pagamento: forma,
+    trocoParaCents: forma === 'dinheiro' ? estado.trocoParaCents : undefined,
+    aguardandoValorTroco: forma === 'dinheiro' ? estado.aguardandoValorTroco : undefined,
+    atualizadoEm: iso(retrato),
+  };
+  if (forma === 'dinheiro' && com.trocoParaCents === undefined) return perguntarTroco(com, retrato);
+  return fecharPedido(com, retrato);
+}
+
+export function receberTroco(estado: EstadoDaConversa, retrato: Retrato, bruto: string): Resultado {
+  const t = bruto.trim().toLowerCase();
+  const semTroco = /^(n[aã]o|nao|sem troco|n[aã]o precisa|dispenso)/i.test(t);
+  const querTroco = /^(sim|preciso|quero|quero troco)$/i.test(t);
+
+  if (!estado.aguardandoValorTroco) {
+    if (semTroco) {
+      return fecharPedido({
+        ...estado,
+        pagamento: 'dinheiro',
+        trocoParaCents: null,
+        aguardandoValorTroco: undefined,
+        atualizadoEm: iso(retrato),
+      }, retrato);
+    }
+    const direto = reaisEmCentavos(bruto);
+    if (direto !== null) return aplicarValorTroco(estado, retrato, direto);
+    if (querTroco) return pedirValorTroco(estado, retrato);
+    return perguntarTroco({ ...estado, pagamento: 'dinheiro' }, retrato);
+  }
+
+  if (semTroco) {
+    return fecharPedido({
+      ...estado,
+      pagamento: 'dinheiro',
+      trocoParaCents: null,
+      aguardandoValorTroco: undefined,
+      atualizadoEm: iso(retrato),
+    }, retrato);
+  }
+
+  const cents = reaisEmCentavos(bruto);
+  if (cents === null) return pedirValorTroco(estado, retrato);
+  return aplicarValorTroco(estado, retrato, cents);
 }
 
 export function confirmarPedido(estado: EstadoDaConversa, retrato: Retrato): Resultado {
@@ -321,6 +371,8 @@ export function confirmarPedido(estado: EstadoDaConversa, retrato: Retrato): Res
       passo: 'com_atendente',
       carrinho: [],
       pagamento: undefined,
+      trocoParaCents: undefined,
+      aguardandoValorTroco: undefined,
       itemEmMontagem: undefined,
       atualizadoEm: iso(retrato),
     },
@@ -483,6 +535,84 @@ function perguntarPagamento(estado: EstadoDaConversa, retrato: Retrato): Resulta
   };
 }
 
+function perguntarTroco(estado: EstadoDaConversa, retrato: Retrato): Resultado {
+  const slug = slugDa(estado, retrato);
+  return {
+    estado: {
+      ...estado,
+      pagamento: 'dinheiro',
+      passo: 'troco',
+      aguardandoValorTroco: false,
+      atualizadoEm: iso(retrato),
+    },
+    respostas: [
+      escolha(`${carimbo(nomeDa(estado, retrato))}\n\nPrecisa de troco?`, [
+        { id: idDaOpcao({ acao: 'troco', loja: slug, alvo: 'sim' }), rotulo: 'Sim' },
+        { id: idDaOpcao({ acao: 'troco', loja: slug, alvo: 'nao' }), rotulo: 'Não' },
+      ]),
+    ],
+  };
+}
+
+function pedirValorTroco(estado: EstadoDaConversa, retrato: Retrato): Resultado {
+  return {
+    estado: {
+      ...estado,
+      pagamento: 'dinheiro',
+      passo: 'troco',
+      aguardandoValorTroco: true,
+      atualizadoEm: iso(retrato),
+    },
+    respostas: [
+      texto(`${carimbo(nomeDa(estado, retrato))}\n\nTroco pra quanto? Ex.: 50`),
+    ],
+  };
+}
+
+function aplicarValorTroco(estado: EstadoDaConversa, retrato: Retrato, cents: number): Resultado {
+  const total = estado.carrinho.reduce((s, i) => s + i.precoUnitarioCents * i.quantidade, 0);
+  if (cents <= total) {
+    return {
+      estado: {
+        ...estado,
+        pagamento: 'dinheiro',
+        passo: 'troco',
+        aguardandoValorTroco: true,
+        atualizadoEm: iso(retrato),
+      },
+      respostas: [
+        texto(
+          `${carimbo(nomeDa(estado, retrato))}\n\nO pedido deu ${precoEmReais(total)}. Me diz uma nota maior.`,
+        ),
+      ],
+    };
+  }
+  return fecharPedido({
+    ...estado,
+    pagamento: 'dinheiro',
+    trocoParaCents: cents,
+    aguardandoValorTroco: undefined,
+    atualizadoEm: iso(retrato),
+  }, retrato);
+}
+
+function reaisEmCentavos(bruto: string): number | null {
+  const t = bruto
+    .trim()
+    .toLowerCase()
+    .replace(/troco\s*(pra|para|de)?/g, '')
+    .replace(/r\$\s*/g, '')
+    .replace(/reais?/g, '')
+    .trim();
+  const so = t.replace(/\s/g, '');
+  const comDecimal = so.match(/^(\d+)[,.](\d{1,2})$/);
+  if (comDecimal) {
+    return Number(comDecimal[1]) * 100 + Number(comDecimal[2].padEnd(2, '0'));
+  }
+  if (/^\d+$/.test(so) && so.length <= 4) return Number(so) * 100;
+  return null;
+}
+
 function mostrarResumo(estado: EstadoDaConversa, retrato: Retrato): Resultado {
   const slug = slugDa(estado, retrato);
   const nome = nomeDa(estado, retrato);
@@ -502,7 +632,13 @@ function mostrarResumo(estado: EstadoDaConversa, retrato: Retrato): Resultado {
 function blocoDoPedido(estado: EstadoDaConversa): string {
   const total = estado.carrinho.reduce((s, i) => s + i.precoUnitarioCents * i.quantidade, 0);
   const pagamento =
-    estado.pagamento === 'pix' ? 'Pix' : estado.pagamento === 'dinheiro' ? 'Dinheiro' : 'Cartão';
+    estado.pagamento === 'pix'
+      ? 'Pix'
+      : estado.pagamento === 'cartao'
+        ? 'Cartão'
+        : estado.trocoParaCents
+          ? `Dinheiro\nTroco para ${precoEmReais(estado.trocoParaCents)}`
+          : 'Dinheiro\nSem troco';
   const entrega =
     estado.entrega === 'retirada'
       ? '*Entrega*\nRetirada na loja'
@@ -641,6 +777,15 @@ function completar(p: ProdutoDoRetrato): ProdutoDoRetrato {
     priceCents: p.priceCents ?? p.aPartirDeCents,
     grupos: gruposDe(p),
   };
+}
+
+function comFoto(r: Resultado, produto: ProdutoDoRetrato): Resultado {
+  const foto = produto.imageUrl
+    ? imagem(produto.imageUrl, `*${produto.nome}*\na partir de ${precoEmReais(produto.aPartirDeCents)}`)
+    : null;
+  if (!foto) return r;
+  if (r.respostas.some((m) => m.tipo === 'imagem' && m.url === foto.url)) return r;
+  return { ...r, respostas: [foto, ...r.respostas] };
 }
 
 function gruposDe(p: ProdutoDoRetrato): GrupoDoRetrato[] {

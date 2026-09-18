@@ -92,6 +92,22 @@ export class WhatsappEnvio {
   }
 
   /**
+   * Foto por link HTTPS. A lista do WhatsApp não aceita miniatura por linha,
+   * então o menu manda a foto antes, quando o produto tem imagem.
+   */
+  imagem(para: string, url: string, caption?: string): Promise<MensagemEnviada> {
+    return this.enviar({
+      messaging_product: 'whatsapp',
+      to: apenasDigitos(para),
+      type: 'image',
+      image: {
+        link: url,
+        ...(caption ? { caption: caption.slice(0, 1024) } : {}),
+      },
+    });
+  }
+
+  /**
    * Lista de até 10 linhas. O `rotuloDoBotao` é o que abre a lista.
    *
    * Categorias do cardápio cabem aqui; botão de resposta só aceita 3.

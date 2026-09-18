@@ -31,6 +31,8 @@ export type Passo =
   | 'endereco'
   /** Escolhendo forma de pagamento. */
   | 'pagamento'
+  /** Dinheiro: se precisa de troco, e pra qual nota. */
+  | 'troco'
   /** Aguardando confirmação final do resumo. */
   | 'confirmando'
   /**
@@ -94,6 +96,13 @@ export interface EstadoDaConversa {
   itemEmMontagem?: ItemEmMontagem;
   /** pix, dinheiro ou cartao — quando o cliente já escolheu. */
   pagamento?: string;
+  /**
+   * Em dinheiro: `null` é sem troco, número é a nota que o cliente vai dar,
+   * em centavos. `undefined` é ainda não perguntou.
+   */
+  trocoParaCents?: number | null;
+  /** Já disse que precisa de troco e estamos esperando o valor. */
+  aguardandoValorTroco?: boolean;
   /** ISO. Governa a expiração do carrinho. */
   atualizadoEm: string;
 }
@@ -148,6 +157,10 @@ export function lerEstado(bruto: unknown): EstadoDaConversa {
       ? { itemEmMontagem: e.itemEmMontagem as ItemEmMontagem }
       : {}),
     ...(typeof e.pagamento === 'string' && e.pagamento ? { pagamento: e.pagamento } : {}),
+    ...(e.trocoParaCents === null || typeof e.trocoParaCents === 'number'
+      ? { trocoParaCents: e.trocoParaCents }
+      : {}),
+    ...(e.aguardandoValorTroco ? { aguardandoValorTroco: true } : {}),
     ...(Array.isArray(e.dialogo) ? { dialogo: e.dialogo } : {}),
   };
 }
@@ -160,6 +173,7 @@ const PASSOS = new Set<Passo>([
   'entrega_ou_retirada',
   'endereco',
   'pagamento',
+  'troco',
   'confirmando',
   'com_atendente',
 ]);

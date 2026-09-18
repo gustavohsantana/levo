@@ -215,6 +215,7 @@ async function categoriasDaLoja(prisma: Cliente, ids: string[]): Promise<Categor
       id: p.id,
       nome: p.name,
       priceCents: p.priceCents,
+      imageUrl: p.imageUrl,
       grupos,
       aPartirDeCents: aPartirDe({ priceCents: p.priceCents, grupos }),
     };

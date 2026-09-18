@@ -21,7 +21,9 @@ export type MensagemDeSaida =
   /** Até 3 opções. Acima disso o WhatsApp recusa, e é preciso lista. */
   | { tipo: 'botoes'; corpo: string; opcoes: Opcao[] }
   /** Até 10 linhas. `rotuloDoBotao` é o texto que abre a lista. */
-  | { tipo: 'lista'; corpo: string; rotuloDoBotao: string; opcoes: Opcao[] };
+  | { tipo: 'lista'; corpo: string; rotuloDoBotao: string; opcoes: Opcao[] }
+  /** Foto com legenda. Lista do WhatsApp não cabe imagem por linha. */
+  | { tipo: 'imagem'; url: string; corpo: string };
 
 /* ---------------------------------------------------------------- */
 /* O id que carrega o contexto                                       */
@@ -74,6 +76,12 @@ export function lerIntencao(id: string | null): Intencao | null {
 
 export function texto(corpo: string): MensagemDeSaida {
   return { tipo: 'texto', corpo };
+}
+
+export function imagem(url: string, corpo = ''): MensagemDeSaida | null {
+  const link = url.trim();
+  if (!/^https:\/\//i.test(link)) return null;
+  return { tipo: 'imagem', url: link, corpo };
 }
 
 /**

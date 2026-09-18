@@ -98,6 +98,18 @@ describe('envio interativo', () => {
     expect(corpo.interactive.action.sections[0].rows[0].title).toHaveLength(24);
     expect(corpo.interactive.action.sections[0].rows[0].description).toHaveLength(72);
   });
+
+  it('foto sai como type image com link HTTPS', async () => {
+    const mock = respondeCom({ contacts: [{ wa_id: '1' }], messages: [{ id: 'x' }] });
+
+    await envio().imagem('553591398956', 'https://cdn.example.com/acai.jpg', '*Açaí*');
+
+    const corpo = JSON.parse(
+      ((mock.mock.calls[0] as unknown as [string, RequestInit])[1]).body as string,
+    );
+    expect(corpo.type).toBe('image');
+    expect(corpo.image).toEqual({ link: 'https://cdn.example.com/acai.jpg', caption: '*Açaí*' });
+  });
 });
 
 describe('erros que a Meta devolve com HTTP 200', () => {
