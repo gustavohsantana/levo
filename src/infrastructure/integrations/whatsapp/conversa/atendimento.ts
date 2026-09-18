@@ -192,7 +192,7 @@ export async function atender(
       return {
         respostas: [texto(CHAMAR_HUMANO)],
         estado: { ...passo.estado, passo: 'com_atendente' },
-        dialogoDoAgente: r.dialogo,
+        dialogoDoAgente: semMemoriaInjetada(r.dialogo),
         custo: r.uso,
       };
     }
@@ -200,7 +200,7 @@ export async function atender(
     return {
       respostas: [texto(r.texto)],
       estado: colherDoDialogo(passo.estado, r.dialogo),
-      dialogoDoAgente: r.dialogo,
+      dialogoDoAgente: semMemoriaInjetada(r.dialogo),
       custo: r.uso,
     };
   } catch (cause) {
@@ -270,6 +270,12 @@ function memoriaDoPedido(estado: EstadoDaConversa): FalaDoDialogo[] {
   ];
 }
 
+function semMemoriaInjetada(dialogo: FalaDoDialogo[]): FalaDoDialogo[] {
+  return dialogo.filter(
+    (f) => !(f.papel === 'usuario' && (f.texto ?? '').includes('[já combinado nesta conversa')),
+  );
+}
+
 /**
  * Puxa carrinho e endereço das ferramentas que o modelo acabou de chamar.
  *
@@ -327,7 +333,7 @@ function colherDoDialogo(estado: EstadoDaConversa, dialogo: FalaDoDialogo[]): Es
  * para o próximo passo.
  */
 function podar(dialogo: FalaDoDialogo[]): FalaDoDialogo[] {
-  const recente = dialogo.slice(-MEMORIA_DE_FALAS);
+  const recente = semMemoriaInjetada(dialogo).slice(-MEMORIA_DE_FALAS);
 
   /*
    * Onde começam as rodadas que mantêm ferramenta.

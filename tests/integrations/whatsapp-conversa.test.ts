@@ -545,4 +545,49 @@ describe('fluxo do pedido — açaí até o resumo', () => {
     expect(transcricao).toContain('Banana, Morango');
     expect(estado.itemEmMontagem?.selecao.frutas).toEqual(['banana', 'morango']);
   });
+
+  it('⭐ conversa real: rua sem bairro não pula pro Pix — e correção no pagamento não cai no agente', () => {
+    /*
+     * 18/09 em produção: montou o açaí nos toques, passou CEP e número, mandou
+     * só a avenida. O motor foi pro Pix. "Bairro Parque Real" caiu no agente,
+     * que perguntou de novo e nunca mostrou o resumo clicável.
+     */
+    const { transcricao, delegou, estado } = conversar(
+      [
+        { cliente: 'Oi' },
+        { cliente: idDaOpcao({ acao: 'cat', loja: 'pizzariadoze', alvo: 'Açaí' }), toque: true },
+        { cliente: idDaOpcao({ acao: 'item', loja: 'pizzariadoze', alvo: 'acai-1' }), toque: true },
+        { cliente: idDaOpcao({ acao: 'opt', loja: 'pizzariadoze', alvo: 'tam:500' }), toque: true },
+        { cliente: idDaOpcao({ acao: 'opt', loja: 'pizzariadoze', alvo: 'base:ninho' }), toque: true },
+        { cliente: idDaOpcao({ acao: 'opt', loja: 'pizzariadoze', alvo: 'frutas:kiwi' }), toque: true },
+        { cliente: idDaOpcao({ acao: 'opt', loja: 'pizzariadoze', alvo: 'frutas:morango' }), toque: true },
+        { cliente: idDaOpcao({ acao: 'okgrp', loja: 'pizzariadoze', alvo: 'frutas' }), toque: true },
+        { cliente: idDaOpcao({ acao: 'opt', loja: 'pizzariadoze', alvo: 'cremes:nutella' }), toque: true },
+        { cliente: idDaOpcao({ acao: 'okgrp', loja: 'pizzariadoze', alvo: 'cremes' }), toque: true },
+        { cliente: idDaOpcao({ acao: 'opt', loja: 'pizzariadoze', alvo: 'cereais:granola' }), toque: true },
+        { cliente: idDaOpcao({ acao: 'okgrp', loja: 'pizzariadoze', alvo: 'cereais' }), toque: true },
+        { cliente: idDaOpcao({ acao: 'fecha', loja: 'pizzariadoze', alvo: '' }), toque: true },
+        { cliente: idDaOpcao({ acao: 'mod', loja: 'pizzariadoze', alvo: 'entrega' }), toque: true },
+        { cliente: '37552475' },
+        { cliente: '300' },
+        { cliente: 'Avenida Waldemar de Azevedo Junqueira' },
+        { cliente: 'Bairro Parque Real' },
+        { cliente: 'Não a rua é Waldemar De Azevedo Junqueira, bairro Santa Edwirges' },
+        { cliente: 'pix' },
+        { cliente: 'sim' },
+      ],
+      mundo,
+    );
+
+    expect(delegou).toBe(false);
+    expect(transcricao).toContain('E o bairro?');
+    expect(transcricao).not.toMatch(/Como vai pagar\?[\s\S]*E o bairro\?/);
+    expect(transcricao).toContain('Santa Edwirges');
+    expect(transcricao).toContain('Como vai pagar?');
+    expect(transcricao).toContain('*Resumo*');
+    expect(transcricao).toContain('*Total');
+    expect(estado.passo).toBe('com_atendente');
+    expect(estado.endereco).toMatch(/Santa Edwirges/i);
+    expect(estado.endereco).toMatch(/300/);
+  });
 });

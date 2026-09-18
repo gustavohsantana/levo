@@ -326,16 +326,8 @@ export function receberEndereco(
   if (soNumero && estado.endereco) {
     const junto = `${estado.endereco}, nº ${t}`;
     const com = { ...estado, endereco: junto, entrega: 'entrega' as const, atualizadoEm: iso(retrato) };
-    if (faltaRua(junto)) {
-      return {
-        estado: { ...com, passo: 'endereco' },
-        respostas: [
-          texto(
-            `${carimbo(nomeDa(estado, retrato))}\n\n` +
-              'Agora a rua e o bairro, pra quem for entregar achar.',
-          ),
-        ],
-      };
+    if (faltaRua(junto) || faltaBairro(junto)) {
+      return pedirRuaOuBairro(com, retrato, junto);
     }
     return fecharPedido(com, retrato);
   }
@@ -352,11 +344,22 @@ export function receberEndereco(
     };
   }
 
-  const endereco = estado.endereco && faltaRua(estado.endereco) ? `${t}, ${estado.endereco}` : t;
-  return fecharPedido(
-    { ...estado, endereco, entrega: 'entrega', atualizadoEm: iso(retrato) },
-    retrato,
-  );
+  const endereco = mesclarEndereco(estado.endereco, t);
+  const com = { ...estado, endereco, entrega: 'entrega' as const, atualizadoEm: iso(retrato) };
+  if (faltaRua(endereco) || faltaBairro(endereco)) {
+    return pedirRuaOuBairro(com, retrato, endereco);
+  }
+  return fecharPedido(com, retrato);
+}
+
+function pedirRuaOuBairro(estado: EstadoDaConversa, retrato: Retrato, endereco: string): Resultado {
+  const falta = faltaRua(endereco)
+    ? 'Agora a rua e o bairro, pra quem for entregar achar.'
+    : 'E o bairro?';
+  return {
+    estado: { ...estado, passo: 'endereco', atualizadoEm: iso(retrato) },
+    respostas: [texto(`${carimbo(nomeDa(estado, retrato))}\n\n${falta}`)],
+  };
 }
 
 export function definirPagamento(estado: EstadoDaConversa, retrato: Retrato, forma: string): Resultado {
@@ -658,7 +661,7 @@ function paraSpec(grupo: GrupoDoRetrato) {
 
 export function enderecoServe(endereco?: string): boolean {
   if (!endereco || endereco.trim().length < 8) return false;
-  if (faltaRua(endereco)) return false;
+  if (faltaRua(endereco) || faltaBairro(endereco)) return false;
   return /\d/.test(endereco);
 }
 
@@ -668,6 +671,52 @@ function faltaRua(endereco?: string): boolean {
   if (/^\d{5}-?\d{3}$/.test(t)) return true;
   if (/^\d{5}-\d{3}, nº \S+$/.test(t)) return true;
   return false;
+}
+
+/**
+ * Sem bairro o motoboy acha a rua e não o quarteirão.
+ *
+ * Medido em produção: o cliente mandou só a avenida, o motor pulou pro Pix,
+ * e "Bairro Parque Real" caiu no agente — que perguntou de novo o que já
+ * estava no estado.
+ */
+function faltaBairro(endereco?: string): boolean {
+  if (!endereco) return true;
+  if (/\bbairro\b/i.test(endereco)) return false;
+  const soLogradouro = endereco
+    .replace(/\d{5}-\d{3}/g, '')
+    .replace(/,?\s*n[ºo°]?\s*\S+/gi, '')
+    .replace(/,\s*,/g, ',')
+    .replace(/^,\s*|,\s*$/g, '')
+    .trim();
+  return !soLogradouro.includes(',');
+}
+
+function mesclarEndereco(atual: string | undefined, t: string): string {
+  if (!atual) return t;
+
+  const soBairro = /\bbairro\b/i.test(t) && !/\b(rua|avenida|alameda|travessa|estrada)\b/i.test(t);
+  if (soBairro) {
+    const sem = atual.replace(/,?\s*bairro\s+[^,]+/i, '').replace(/,\s*$/, '');
+    const bairro = /bairro/i.test(t) ? t.trim() : `bairro ${t.trim()}`;
+    return `${sem}, ${bairro}`;
+  }
+
+  if (faltaRua(atual) || faltaBairro(atual)) {
+    const bairro = faltaBairro(atual) && !/\b(rua|avenida|alameda)\b/i.test(t)
+      ? (/bairro/i.test(t) ? t.trim() : `bairro ${t.trim()}`)
+      : t;
+    if (faltaRua(atual)) return `${t}, ${atual}`;
+    if (faltaBairro(atual) && !/\b(rua|avenida|alameda|travessa)\b/i.test(t)) {
+      return `${atual}, ${bairro}`;
+    }
+  }
+
+  const cepNum = atual.match(/\d{5}-\d{3}(?:, nº \S+)?/);
+  if (/\b(rua|avenida|alameda|travessa)\b/i.test(t) && cepNum && !t.includes(cepNum[0])) {
+    return `${t}, ${cepNum[0]}`;
+  }
+  return t;
 }
 
 function formatarCep(cep: string): string {

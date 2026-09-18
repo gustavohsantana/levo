@@ -221,7 +221,7 @@ export function avancar(
     estado.passo !== 'montando_item' &&
     estado.passo !== 'confirmando' &&
     msg.texto &&
-    /finaliz|fechar pedido|pode (fechar|mandar)/i.test(msg.texto)
+    /finaliz|fechar pedido|pode (fechar|mandar)|s[oó] isso/i.test(msg.texto)
   ) {
     return fecharPedido(estado, retrato);
   }
@@ -253,9 +253,11 @@ export function avancar(
     if (/pix/.test(t)) return definirPagamento(estado, retrato, 'pix');
     if (/dinheiro|especie|esp[eé]cie/.test(t)) return definirPagamento(estado, retrato, 'dinheiro');
     if (/cart[aã]o|credito|d[eé]bito/.test(t)) return definirPagamento(estado, retrato, 'cartao');
+    if (pareceEndereco(msg.texto)) return receberEndereco(estado, retrato, msg.texto);
   }
 
   if (estado.passo === 'confirmando' && msg.texto) {
+    if (pareceEndereco(msg.texto)) return receberEndereco(estado, retrato, msg.texto);
     if (/^(sim|confirmo|confirma|ok|pode|fechou|isso)$/i.test(msg.texto.trim())) {
       return confirmarPedido(estado, retrato);
     }
@@ -441,6 +443,13 @@ const PEDINDO_CARDAPIO =
 
 function pedindoCardapio(textoDoCliente: string | null): boolean {
   return Boolean(textoDoCliente && PEDINDO_CARDAPIO.test(textoDoCliente));
+}
+
+function pareceEndereco(textoDoCliente: string): boolean {
+  return (
+    /\b(rua|r\.|av\.|avenida|alameda|bairro|travessa|estrada)\b/i.test(textoDoCliente) ||
+    /^\d{5}-?\d{3}$/.test(textoDoCliente.trim())
+  );
 }
 
 function saudacao(textoDoCliente: string | null): boolean {
