@@ -53,6 +53,11 @@ export const dynamic = 'force-dynamic';
 /* ---------------------------------------------------------------- */
 
 export async function GET(request: Request) {
+  if (!env().whatsappEnabled) {
+    console.warn('[whatsapp] verificação recusada: canal pausado');
+    return new Response('pausado', { status: 403 });
+  }
+
   const verifyToken = env().WHATSAPP_VERIFY_TOKEN;
 
   if (!verifyToken) {
@@ -88,6 +93,11 @@ export async function GET(request: Request) {
 /* ---------------------------------------------------------------- */
 
 export async function POST(request: Request) {
+  if (!env().whatsappEnabled) {
+    console.info('[whatsapp] evento ignorado: canal pausado');
+    return NextResponse.json({ ok: true, pausado: true }, { status: 200 });
+  }
+
   const appSecret = env().WHATSAPP_APP_SECRET;
   if (!appSecret) {
     console.warn('[whatsapp] evento recebido sem WHATSAPP_APP_SECRET configurado');
@@ -236,6 +246,7 @@ export async function POST(request: Request) {
  */
 async function responder(mensagens: MensagemRecebida[]): Promise<void> {
   const config = env();
+  if (!config.whatsappEnabled) return;
   if (!config.WHATSAPP_ACCESS_TOKEN || !config.WHATSAPP_PHONE_NUMBER_ID) return;
 
   const prisma = getPrismaClient(config.DATABASE_URL);
@@ -261,8 +272,8 @@ async function responder(mensagens: MensagemRecebida[]): Promise<void> {
 
     const fontes = fontesDaLoja(prisma);
     const canal = await fontes.canalPorNumero(msg.paraNumeroId);
-    if (!canal) {
-      console.warn('[whatsapp] número sem canal cadastrado', { numero: msg.paraNumeroId });
+    if (!canal || !canal.active) {
+      console.warn('[whatsapp] número sem canal ativo', { numero: msg.paraNumeroId });
       continue;
     }
 

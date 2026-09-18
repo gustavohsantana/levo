@@ -161,4 +161,15 @@ describe('configuração de ambiente', () => {
     expect(env.mercadoPagoEnabled).toBe(true);
     expect(env.mercadoPagoTestEnabled).toBe(false);
   });
+
+  it('WhatsApp só liga com a flag e o par de verificação', async () => {
+    const env = await loadEnv({
+      ...MINIMO,
+      WHATSAPP_ENABLED: 'false',
+      WHATSAPP_APP_SECRET: 'segredo',
+      WHATSAPP_VERIFY_TOKEN: 'token',
+    });
+
+    expect(env.whatsappEnabled).toBe(false);
+  });
 });
