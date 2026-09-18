@@ -472,16 +472,79 @@ describe('fluxo do pedido — açaí até o resumo', () => {
     expect(transcricao).toContain('nº 123');
     expect(transcricao).toContain('Bairro Santa Rita');
     expect(transcricao).toContain('CEP 37558-722');
+    expect(transcricao).toMatch(
+      /\*Pedido\*[\s\S]*1× Açaí — R\$ 20,00[\s\S]*_500ml · Ninho · Banana · Morango · Kiwi_[\s\S]*\*Entrega\*[\s\S]*Rua Ernani Rezende Vilela, nº 123[\s\S]*Bairro Santa Rita[\s\S]*CEP 37558-722[\s\S]*\*Pagamento\*[\s\S]*Pix[\s\S]*\*Total: R\$ 20,00\*/,
+    );
     expect(transcricao).toContain('Pedido enviado pra loja');
     expect(transcricao).toContain('(silêncio)');
     expect((transcricao.match(/Pedido enviado pra loja/g) ?? []).length).toBe(1);
     expect(transcricao).not.toContain('(delegado ao agente)');
     expect(estado.passo).toBe('com_atendente');
-    expect(estado.carrinho).toHaveLength(1);
-    expect(estado.carrinho[0]).toMatchObject({
-      nome: 'Açaí',
-      precoUnitarioCents: 2000,
-    });
+    expect(estado.carrinho).toHaveLength(0);
+  });
+
+  it('retirada + dinheiro + dois itens: resumo em bloco, sem endereço', () => {
+    const { transcricao, delegou, estado } = conversar(
+      [
+        { cliente: 'quero uma coca' },
+        { cliente: 'quero uma coca' },
+        { cliente: 'Pode finalizar meu pedido' },
+        { cliente: 'retirada' },
+        { cliente: 'dinheiro' },
+        { cliente: 'sim' },
+      ],
+      mundo,
+    );
+
+    expect(delegou).toBe(false);
+    expect(transcricao).toMatch(
+      /\*Pedido\*[\s\S]*1× Coca-Cola 2L — R\$ 12,00[\s\S]*1× Coca-Cola 2L — R\$ 12,00[\s\S]*\*Entrega\*[\s\S]*Retirada na loja[\s\S]*\*Pagamento\*[\s\S]*Dinheiro[\s\S]*\*Total: R\$ 24,00\*/,
+    );
+    expect(transcricao).not.toContain('Qual o número');
+    expect(transcricao).toContain('Pedido enviado pra loja');
+    expect(estado.carrinho).toHaveLength(0);
+  });
+
+  it('endereço completo numa fala vai direto pro pagamento', () => {
+    const { transcricao, delegou, estado } = conversar(
+      [
+        { cliente: 'quero uma coca' },
+        { cliente: 'Pode finalizar meu pedido' },
+        { cliente: 'entrega' },
+        { cliente: 'Rua das Flores, 50, Centro' },
+        { cliente: 'pix' },
+        { cliente: 'sim' },
+      ],
+      mundo,
+    );
+
+    expect(delegou).toBe(false);
+    expect(transcricao).not.toContain('Qual o número');
+    expect(transcricao).not.toContain('Qual o bairro');
+    expect(transcricao).toContain('Rua das Flores, nº 50');
+    expect(transcricao).toContain('Bairro Centro');
+    expect(transcricao).toContain('Pedido enviado pra loja');
+    expect(estado.passo).toBe('com_atendente');
+  });
+
+  it('depois de confirmar, "oi" reabre o cardápio em vez de ficar mudo pra sempre', () => {
+    const { transcricao, delegou, estado } = conversar(
+      [
+        { cliente: 'quero uma coca' },
+        { cliente: 'Pode finalizar meu pedido' },
+        { cliente: 'retirada' },
+        { cliente: 'pix' },
+        { cliente: 'sim' },
+        { cliente: 'Oi' },
+      ],
+      mundo,
+    );
+
+    expect(delegou).toBe(false);
+    expect((transcricao.match(/Pedido enviado pra loja/g) ?? []).length).toBe(1);
+    expect(transcricao).toContain('O que você quer pedir hoje?');
+    expect(estado.passo).toBe('no_cardapio');
+    expect(estado.carrinho).toHaveLength(0);
   });
 
   it('"quero um açaí de 500 de ninho" já pula o que foi dito', () => {

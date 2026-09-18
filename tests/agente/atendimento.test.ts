@@ -264,6 +264,38 @@ describe('com atendente humano', () => {
     expect(p.chamou).toBe(0);
   });
 
+  it('⭐ confirmar o pedido MANDA a despedida — não some no silêncio do atendente', async () => {
+    /*
+     * O orquestrador engolia qualquer resposta cujo estado NOVO fosse
+     * com_atendente. Tocar em Confirmar gravava o passo e não mandava nada.
+     * O cliente via o WhatsApp mudo e o agente, no "ok obrigado", prometia
+     * de novo que ia chamar a loja.
+     */
+    const r = await atender(msg('sim'), {
+      estadoGravado: {
+        passo: 'confirmando',
+        lojaEmFoco: ZE,
+        carrinho: [
+          {
+            productId: 'coca',
+            nome: 'Coca-Cola 2L',
+            quantidade: 1,
+            precoUnitarioCents: 1200,
+            opcoes: [],
+          },
+        ],
+        entrega: 'retirada',
+        pagamento: 'pix',
+        atualizadoEm: new Date('2026-09-17T19:00:00Z').toISOString(),
+      },
+      retrato: retrato(),
+    });
+
+    expect(JSON.stringify(r.respostas)).toContain('Pedido enviado pra loja');
+    expect(r.estado.passo).toBe('com_atendente');
+    expect(r.estado.carrinho).toHaveLength(0);
+  });
+
   it('volta a atender depois do prazo de silêncio', async () => {
     // Remendo enquanto a caixa de entrada do painel não existe: sem prazo,
     // `com_atendente` é uma porta que só abre para dentro.

@@ -101,14 +101,18 @@ export async function atender(
   const passo = avancar(estadoAtual, msg, ctx.retrato);
 
   /*
-   * Com atendente, silêncio de VERDADE.
+   * Já estava com atendente: silêncio de VERDADE.
    *
-   * O motor devolve vazio de propósito aqui. Tratar vazio como "não tenho o
-   * que dizer" e mandar a desculpa fez o bot repetir a mesma frase a cada
-   * mensagem — medido em produção, e é pior que não responder: o cliente vê
-   * que chegou e que não adiantou.
+   * O motor devolve vazio de propósito nestes turnos. Tratar vazio como "não
+   * tenho o que dizer" e mandar a desculpa fez o bot repetir a mesma frase a
+   * cada mensagem — medido em produção, e é pior que não responder.
+   *
+   * Só engole a resposta se a conversa JÁ estava com humano. Confirmar o
+   * pedido e pedir atendente ENTRAM neste passo com uma despedida; se
+   * engolíssemos também esses, o cliente tocaria em Confirmar e o WhatsApp
+   * ficaria mudo.
    */
-  if (passo.estado.passo === 'com_atendente') {
+  if (estadoAtual.passo === 'com_atendente' && passo.estado.passo === 'com_atendente') {
     return {
       respostas: [],
       estado: passo.estado,

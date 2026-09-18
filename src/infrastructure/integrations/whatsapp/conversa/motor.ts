@@ -117,6 +117,18 @@ export function avancar(
    * atendente, pelo painel — nunca o próprio bot.
    */
   if (estado.passo === 'com_atendente') {
+    const t = msg.texto ?? '';
+    if (saudacao(t) || /novo pedido|pedir de novo|quero pedir/i.test(t)) {
+      const limpo: EstadoDaConversa = {
+        ...estado,
+        passo: 'ocioso',
+        carrinho: [],
+        pagamento: undefined,
+        itemEmMontagem: undefined,
+        atualizadoEm: iso(retrato.agora),
+      };
+      if ((retrato.categorias?.length ?? 0) > 0) return abrirCardapio(limpo, retrato);
+    }
     return { estado, respostas: [] };
   }
 

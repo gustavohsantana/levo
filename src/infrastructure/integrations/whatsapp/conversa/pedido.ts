@@ -259,13 +259,13 @@ export function aposCarrinho(estado: EstadoDaConversa, retrato: Retrato): Result
   return {
     estado: { ...estado, passo: 'no_cardapio', itemEmMontagem: undefined, atualizadoEm: iso(retrato) },
     respostas: [
-      escolha(
-        `${carimbo(nome)}\n\n${linhasDoCarrinho(estado.carrinho)}\n\n*Subtotal: ${precoEmReais(total)}*\n\nMais alguma coisa?`,
-        [
-          { id: idDaOpcao({ acao: 'mais', loja: slug, alvo: '' }), rotulo: 'Mais itens' },
-          { id: idDaOpcao({ acao: 'fecha', loja: slug, alvo: '' }), rotulo: 'Fechar pedido' },
-        ],
+      texto(
+        `${carimbo(nome)}\n\n${linhasDoCarrinho(estado.carrinho)}\n\n*Subtotal: ${precoEmReais(total)}*`,
       ),
+      escolha('Mais alguma coisa?', [
+        { id: idDaOpcao({ acao: 'mais', loja: slug, alvo: '' }), rotulo: 'Mais itens' },
+        { id: idDaOpcao({ acao: 'fecha', loja: slug, alvo: '' }), rotulo: 'Fechar pedido' },
+      ]),
     ],
   };
 }
@@ -316,10 +316,15 @@ export function definirPagamento(estado: EstadoDaConversa, retrato: Retrato, for
 export function confirmarPedido(estado: EstadoDaConversa, retrato: Retrato): Resultado {
   const nome = nomeDa(estado, retrato);
   return {
-    estado: { ...estado, passo: 'com_atendente', atualizadoEm: iso(retrato) },
-    respostas: [
-      texto(`${carimbo(nome)}\n\nPedido enviado pra loja. É só aguardar.`),
-    ],
+    estado: {
+      ...estado,
+      passo: 'com_atendente',
+      carrinho: [],
+      pagamento: undefined,
+      itemEmMontagem: undefined,
+      atualizadoEm: iso(retrato),
+    },
+    respostas: [texto(`${carimbo(nome)}\n\nPedido enviado pra loja. É só aguardar.`)],
   };
 }
 
@@ -486,7 +491,7 @@ function mostrarResumo(estado: EstadoDaConversa, retrato: Retrato): Resultado {
     estado: { ...estado, passo: 'confirmando', atualizadoEm: iso(retrato) },
     respostas: [
       texto(`${carimbo(nome)}\n\n${blocoDoPedido(estado)}`),
-      escolha('Confirma o pedido?', [
+      escolha(`${carimbo(nome)}\n\nConfirma o pedido?`, [
         { id: idDaOpcao({ acao: 'conf', loja: slug, alvo: '' }), rotulo: 'Confirmar' },
         { id: idDaOpcao({ acao: 'mais', loja: slug, alvo: '' }), rotulo: 'Alterar' },
       ]),
@@ -528,11 +533,15 @@ function linhasDoCarrinho(carrinho: EstadoDaConversa['carrinho']): string {
 
 function formatarEnderecoExibicao(endereco: string): string {
   const cep = endereco.match(/\d{5}-\d{3}/)?.[0];
-  const num = endereco.match(/n[ºo°]\s*(\S+)/i)?.[1];
+  let num = endereco.match(/n[ºo°]\s*(\S+)/i)?.[1];
+  if (!num) {
+    num = endereco.replace(/\d{5}-\d{3}/g, '').match(/(?:^|,)\s*(\d+[a-zA-Z]?)\s*(?:,|$)/)?.[1];
+  }
   const bairroNome = endereco.match(/bairro\s+([^,\n]+)/i)?.[1]?.trim();
   const resto = endereco
     .replace(/\d{5}-\d{3}/g, '')
     .replace(/,?\s*n[ºo°]\s*\S+/gi, '')
+    .replace(/(?:^|,)\s*\d+[a-zA-Z]?\s*(?=,|$)/g, '')
     .replace(/,?\s*bairro\s+[^,\n]+/i, '')
     .replace(/,\s*,/g, ',')
     .replace(/^[\s,]+|[\s,]+$/g, '');
