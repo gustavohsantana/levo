@@ -468,10 +468,17 @@ function ProductRow({
       </span>
 
       <div className="flex shrink-0 items-center gap-1">
+        {/*
+          O par de ações estáticas (editar, apagar) é ícone com rótulo acessível;
+          o interruptível fica em texto porque a palavra é o próprio estado. Antes
+          o lápis e a lixeira eram ícones mudos — sem título nem `aria-label` —, e
+          apagar não avisava que era destrutivo até o clique.
+        */}
         <Button
           variant="ghost"
           size="sm"
           disabled={pendente}
+          title={produto.active ? 'Pausar — some do cardápio' : 'Ativar — volta ao cardápio'}
           onClick={() =>
             startTransition(async () => void (await alternarProdutoAction(produto.id, !produto.active)))
           }
@@ -479,7 +486,13 @@ function ProductRow({
           {produto.active ? 'Pausar' : 'Ativar'}
         </Button>
 
-        <Button variant="ghost" size="sm" onClick={() => onEdit(produto)}>
+        <Button
+          variant="ghost"
+          size="sm"
+          title="Editar"
+          aria-label={`Editar ${produto.name}`}
+          onClick={() => onEdit(produto)}
+        >
           <Pencil />
         </Button>
 
@@ -487,6 +500,9 @@ function ProductRow({
           variant="ghost"
           size="sm"
           disabled={pendente}
+          title="Apagar"
+          aria-label={`Apagar ${produto.name}`}
+          className="text-ink-faint hover:bg-danger-soft hover:text-danger"
           onClick={() => {
             /*
              * Confirmação só no apagar. Pausar é reversível com um clique, e

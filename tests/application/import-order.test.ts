@@ -249,7 +249,7 @@ describe('pedido de retirada importado', () => {
      * não pode ter que vigiar o app do aiqfome para os de balcão. Então a
      * retirada entra também, só que sem virar rota.
      */
-    const retirada = { ...externalOrder('AIQ-PICKUP'), address: '', pickup: true };
+    const retirada = { ...externalOrder('AIQ-PICKUP'), address: '', fulfillment: 'PICKUP' as const };
     const source = new FakeOrderSource([retirada]);
 
     const result = await importOrders.execute(source);
@@ -264,7 +264,7 @@ describe('pedido de retirada importado', () => {
       ...externalOrder('AIQ-PICKUP-2'),
       address: '',
       deliveryFeeCents: 800, // o marketplace mandou uma taxa; retirada ignora
-      pickup: true,
+      fulfillment: 'PICKUP' as const,
     };
 
     await importOrders.execute(new FakeOrderSource([retirada]));

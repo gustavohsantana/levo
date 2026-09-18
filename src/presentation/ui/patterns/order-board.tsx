@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Ban,
+  Bike,
   Check,
   ChefHat,
   MapPin,
@@ -14,6 +15,7 @@ import {
   MoreVertical,
   Package,
   Printer,
+  ShoppingBag,
   Truck,
 } from 'lucide-react';
 import { advanceOrderStageAction } from '@/presentation/actions';
@@ -119,7 +121,9 @@ export function OrderBoard({
         titulo="Prontos"
         icone={Check}
         pedidos={prontos}
-        vazio="Nada esperando motoboy."
+        /* "Motoboy" era verdade quando só o nosso levava. Agora a coluna também
+           guarda pedido que o entregador da plataforma vem buscar. */
+        vazio="Nada esperando quem leva."
         tom="pronto"
         selected={selected}
         onToggle={onToggle}
@@ -405,6 +409,9 @@ function OrderCard({
   const router = useRouter();
   const [pendente, startTransition] = useTransition();
 
+  /** Retirada e entrega da plataforma: ninguém da casa leva. */
+  const foraDaRota = pedido.pickup || pedido.plataformaLeva;
+
   return (
     <li
       /*
@@ -426,13 +433,48 @@ function OrderCard({
           devolve a pessoa para o caderno. Sem pino, a parada vai ao fim da
           rota, com o endereço escrito.
         */}
-        <input
-          type="checkbox"
-          checked={selecionado}
-          onChange={(evento) => onToggle(pedido.id, evento.nativeEvent instanceof MouseEvent && evento.nativeEvent.shiftKey)}
-          aria-label={`Selecionar pedido de ${pedido.customerName}`}
-          className="mt-0.5 shrink-0"
-        />
+        {/*
+          Quem não ocupa motoboy da casa não tem caixa de seleção — tem um ícone
+          no lugar dela.
+
+          Montar rota com esse pedido seria despachar uma parada que ninguém vai
+          fazer: na retirada quem busca é o cliente; na entrega da plataforma,
+          um entregador que não é nosso.
+
+          O ícone ocupa a casa da caixa em vez de virar mais uma etiqueta na
+          linha do nome. Ali o espaço é disputado com a origem, o número e a
+          hora — e era o nome do cliente, o dado que identifica o pedido, que
+          estava sendo cortado para caber um selo.
+        */}
+        {foraDaRota ? (
+          <span
+            className="mt-0.5 grid size-4 shrink-0 place-items-center text-warning"
+            title={
+              pedido.pickup
+                ? 'Retirada no balcão — o cliente busca, não entra em rota'
+                : 'Entrega da plataforma — quem leva não é o seu motoboy'
+            }
+            aria-label={
+              pedido.pickup
+                ? `${pedido.customerName}: retirada no balcão, fora da rota`
+                : `${pedido.customerName}: entrega da plataforma, fora da rota`
+            }
+          >
+            {pedido.pickup ? (
+              <ShoppingBag className="size-3.5" aria-hidden />
+            ) : (
+              <Bike className="size-3.5" aria-hidden />
+            )}
+          </span>
+        ) : (
+          <input
+            type="checkbox"
+            checked={selecionado}
+            onChange={(evento) => onToggle(pedido.id, evento.nativeEvent instanceof MouseEvent && evento.nativeEvent.shiftKey)}
+            aria-label={`Selecionar pedido de ${pedido.customerName}`}
+            className="mt-0.5 shrink-0"
+          />
+        )}
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">

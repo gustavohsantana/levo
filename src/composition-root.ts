@@ -21,10 +21,16 @@ import { AdvanceOrderStage } from '@/application/use-cases/orders/advance-order-
 import { CancelOrder } from '@/application/use-cases/orders/cancel-order';
 import { SaveOptionGroup } from '@/application/use-cases/catalog/save-option-group';
 import {
+  aiqfomeCatalogoFor,
+  aiqfomeLojaFor,
+  ifoodCatalogFor,
   ifoodMerchantFor,
   marketplaceCommandsFor,
 } from '@/infrastructure/integrations/marketplace-factory';
 import type { IfoodMerchant } from '@/infrastructure/integrations/ifood/merchant';
+import type { IfoodCatalog } from '@/infrastructure/integrations/ifood/catalog';
+import type { AiqfomeLoja } from '@/infrastructure/integrations/aiqfome/loja';
+import type { AiqfomeCatalogo } from '@/infrastructure/integrations/aiqfome/catalogo';
 import { CreatePayment } from '@/application/use-cases/payments/create-payment';
 import { ConfirmPayment } from '@/application/use-cases/payments/confirm-payment';
 import { RenameCategory } from '@/application/use-cases/catalog/rename-category';
@@ -61,6 +67,12 @@ export interface Container {
   readOnly: <T>(work: (repos: Repositories) => Promise<T>) => Promise<T>;
   /** O módulo Merchant do iFood, ou `null` se a loja não conectou. */
   ifoodMerchant: () => Promise<{ merchant: IfoodMerchant; merchantId: string } | null>;
+  /** O módulo Catalog do iFood, ou `null` se a loja não conectou. */
+  ifoodCatalog: () => Promise<{ catalog: IfoodCatalog; merchantId: string } | null>;
+  /** O módulo Loja do aiqfome, ou `null` se a loja não conectou. */
+  aiqfomeLoja: () => Promise<{ loja: AiqfomeLoja; storeId: string } | null>;
+  /** O módulo Cardápio do aiqfome, ou `null` se a loja não conectou. */
+  aiqfomeCatalogo: () => Promise<{ catalogo: AiqfomeCatalogo; storeId: string } | null>;
   useCases: {
     createOrder: CreateOrder;
     geocodeOrder: GeocodeOrder;
@@ -145,6 +157,9 @@ export function containerFor(establishmentId: string): Container {
     read: (work) => uow.run(work),
     readOnly: (work) => uow.readOnly(work),
     ifoodMerchant: () => ifoodMerchantFor(credentialStore, establishmentId, config, logger),
+    ifoodCatalog: () => ifoodCatalogFor(credentialStore, establishmentId, config, logger),
+    aiqfomeLoja: () => aiqfomeLojaFor(credentialStore, establishmentId, config, logger),
+    aiqfomeCatalogo: () => aiqfomeCatalogoFor(credentialStore, establishmentId, config, logger),
     useCases: {
       createOrder: new CreateOrder(uow, geocoder, ids, clock, establishmentId),
       geocodeOrder: new GeocodeOrder(uow, geocoder, clock),

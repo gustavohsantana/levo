@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { Link2, LoaderCircle, MapPin } from 'lucide-react';
+import { Link2, LoaderCircle, MapPin, Store } from 'lucide-react';
 import {
   alternarAceiteAutomaticoAction,
   alternarCodigoDeEntregaAction,
@@ -64,16 +64,41 @@ export function Settings({
         dono rolando para achar o que já cabia na tela.
       */}
       <div className="grid gap-4 lg:grid-cols-2">
-      <section className="h-full rounded-lg bg-surface p-4 hairline">
-        <h2 className="font-semibold text-ink">{establishment.name}</h2>
-        <p className="mt-0.5 text-sm text-ink-faint">{establishment.address}</p>
-      </section>
-
       {/*
-        `contents` faz os dois cartões do form ocuparem a grade de fora, sem
-        virar uma coluna só dentro do form.
+        `contents` faz os cartões do form ocuparem a grade de fora, sem virar
+        uma coluna só dentro do form. Nome e endereço da loja abrem o form;
+        um "Salvar" no fim grava tudo junto.
       */}
       <form action={handleSubmit} className="contents">
+      <section className="rounded-lg bg-surface p-4 hairline">
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-md bg-accent-soft text-accent-ink">
+            <Store className="size-4" aria-hidden />
+          </span>
+          <div>
+            <h2 className="font-semibold text-ink">Dados da loja</h2>
+            <p className="mt-1 text-sm leading-relaxed text-ink-muted">
+              Como sua loja se chama e onde ela fica — usado no painel e como ponto de partida
+              das entregas.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-4">
+          <Field label="Nome da loja">
+            <Input name="name" defaultValue={establishment.name} required />
+          </Field>
+          <Field label="Endereço">
+            <Input
+              name="address"
+              defaultValue={establishment.address}
+              placeholder="Rua, número – bairro"
+              required
+            />
+          </Field>
+        </div>
+      </section>
+
       <section className="rounded-lg bg-surface p-4 hairline">
         <div className="flex items-start gap-3">
           <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-md bg-accent-soft text-accent-ink">
@@ -111,7 +136,7 @@ export function Settings({
         </div>
       </section>
 
-      <section className="rounded-lg bg-surface p-4 hairline">
+      <section className="rounded-lg bg-surface p-4 hairline lg:col-span-2">
         <div className="flex items-start gap-3">
           <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-md bg-accent-soft text-accent-ink">
             <MapPin className="size-4" aria-hidden />
@@ -125,7 +150,7 @@ export function Settings({
           </div>
         </div>
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-[1fr_7rem_9rem]">
+        <div className="mt-4 grid gap-4 sm:max-w-2xl sm:grid-cols-[1fr_7rem_9rem]">
           <Field label="Cidade">
             <Input name="city" defaultValue={establishment.city ?? ''} required />
           </Field>
@@ -144,20 +169,27 @@ export function Settings({
             <Input
               name="deliveryFeeReais"
               inputMode="decimal"
-              defaultValue={establishment.deliveryFeeReais.toFixed(2)}
+              defaultValue={establishment.deliveryFeeReais.toFixed(2).replace('.', ',')}
               placeholder="0,00"
             />
           </Field>
         </div>
 
-        {erro ? <p className="mt-3 text-sm text-danger">{erro}</p> : null}
-        {salvo ? <p className="mt-3 text-sm text-accent-ink">Salvo.</p> : null}
-
-        <Button type="submit" variant="primary" className="mt-4" disabled={pendente}>
-          {pendente ? <LoaderCircle className="animate-spin" /> : null}
-          Salvar
-        </Button>
       </section>
+
+      {/*
+        Um único Salvar para o form inteiro, numa faixa própria no fim — e não
+        dentro do último card, onde parecia gravar só "Onde você entrega". Grava
+        nome, endereço, cardápio e região de uma vez.
+      */}
+      <div className="flex flex-wrap items-center gap-3 lg:col-span-2">
+        <Button type="submit" variant="primary" disabled={pendente}>
+          {pendente ? <LoaderCircle className="animate-spin" /> : null}
+          Salvar dados da loja
+        </Button>
+        {erro ? <p className="text-sm text-danger">{erro}</p> : null}
+        {salvo ? <p className="text-sm text-accent-ink">Salvo.</p> : null}
+      </div>
       </form>
 
       <Preferencias

@@ -72,7 +72,18 @@ export function ComandaCupomPrint({ loja, pedido }: { loja: string; pedido: Orde
             </>
           ) : null}
           <hr className="r-dash" />
-          <div className="r-center r-big">{pedido.pickup ? 'RETIRADA' : 'ENTREGA'}</div>
+          {/*
+            A comanda vai grampeada no saco, e quem a lê precisa saber para quem
+            entregar o pacote no balcão. "ENTREGA" sozinho mandava o pedido do
+            99Food esperar um motoboy da casa que nunca viria buscá-lo.
+          */}
+          <div className="r-center r-big">
+            {pedido.pickup
+              ? 'RETIRADA'
+              : pedido.plataformaLeva
+                ? `${FONTE[pedido.source].toUpperCase()} LEVA`
+                : 'ENTREGA'}
+          </div>
           <div className="r-sp" />
         </div>
 
@@ -149,6 +160,7 @@ const FONTE: Record<OrderView['source'], string> = {
   WEBHOOK: 'Integração',
   IFOOD: 'iFood',
   AIQFOME: 'aiqfome',
+  FOOD99: '99Food',
 };
 
 const PAGAMENTO: Record<string, string> = {

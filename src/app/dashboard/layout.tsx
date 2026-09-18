@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getSession } from '@/presentation/http/session';
+import { getNomeDaLoja } from '@/presentation/queries';
 import { logoutAction } from '@/presentation/actions';
 import { Button } from '@/presentation/ui/primitives';
 import { Logo } from '@/presentation/ui/logo';
@@ -20,6 +21,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const session = await getSession();
   if (!session) redirect('/login');
 
+  const nomeDaLoja = await getNomeDaLoja();
+
   return (
     <div className="min-h-dvh lg:flex">
       <aside className="border-b border-black/10 bg-accent-deep lg:sticky lg:top-0 lg:h-dvh lg:w-56 lg:shrink-0 lg:border-b-0 lg:border-r">
@@ -32,6 +35,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <Sidebar />
 
         <div className="px-4 pb-4 max-lg:hidden">
+          <p className="truncate text-sm font-medium text-white">{nomeDaLoja}</p>
           <p className="truncate text-xs text-white/55">{session.name}</p>
           <form action={logoutAction}>
             <Button
@@ -57,7 +61,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <Link href="/dashboard">
             <Logo />
           </Link>
-          <span className="ml-auto text-sm text-ink-muted">{session.name}</span>
+          <span className="ml-auto truncate text-sm font-medium text-ink">{nomeDaLoja}</span>
           <form action={logoutAction}>
             <Button type="submit" variant="ghost" size="sm">
               Sair

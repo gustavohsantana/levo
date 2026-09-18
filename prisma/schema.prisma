@@ -24,6 +24,9 @@ enum OrderSourceKind {
   WEBHOOK
   IFOOD
   AIQFOME
+  /// 99Food (DiDi Food). Valor não começa com dígito porque enum do Prisma
+  /// exige identificador válido — "99FOOD" seria inválido.
+  FOOD99
 }
 
 /// Como o pedido chega ao cliente.
@@ -33,6 +36,11 @@ enum OrderFulfillment {
   /// O cliente busca no balcao. Nao entra em rota, nao paga taxa, e o
   /// "entregue" acontece quando ele aparece na loja.
   PICKUP
+  /// Quem leva e o entregador da PLATAFORMA (99Food, iFood, aiqfome), nao o
+  /// nosso motoboy. Fica fora da rota pelo mesmo motivo da retirada — nao ha
+  /// motoboy nosso para despachar —, mas quem aparece no balcao nao e o
+  /// cliente, e a cozinha precisa saber disso.
+  PLATFORM
 }
 
 enum OrderStatus {
@@ -58,23 +66,23 @@ enum StopStatus {
 }
 
 model Establishment {
-  id               String   @id @default(uuid())
-  name             String
-  address          String
+  id                  String   @id @default(uuid())
+  name                String
+  address             String
   /// Endereco publico do cardapio: /cardapio/{slug}.
   ///
   /// Legivel de proposito — o dono manda esse link no Instagram e no WhatsApp,
   /// e um uuid ali seria um link que ninguem digita nem confia.
-  slug             String?  @unique
+  slug                String?  @unique
   /// Cidade e estado da operação.
   ///
   /// Entram em toda busca de endereço: sem eles o geocodificador procura no
   /// pais inteiro e "Rua das Flores, 100" casa com a primeira rua homonima que
   /// aparecer. O dono nao digita a cidade dele em cada pedido — nem deveria.
-  city             String?
-  state            String?
+  city                String?
+  state               String?
   /// Taxa de entrega sugerida ao lancar pedido manual. Editavel no pedido.
-  deliveryFeeCents Int      @default(0)
+  deliveryFeeCents    Int      @default(0)
   /// Aceita sozinho o pedido que chega do marketplace.
   ///
   /// O iFood exige confirmacao em ate 3 minutos e penaliza quem passa disso.
@@ -84,7 +92,7 @@ model Establishment {
   /// Desligado por padrao porque aceitar e um compromisso: aceito e pedido que
   /// vai sair. Quem liga isto esta dizendo que aceita tudo o que chegar, e essa
   /// decisao e do dono, nao nossa.
-  autoConfirmOrders Boolean @default(false)
+  autoConfirmOrders   Boolean  @default(false)
   /// Ordem das categorias no cardapio, pelo nome.
   ///
   /// Categoria e texto livre no produto, entao a ordem nao tem onde morar do
@@ -94,7 +102,7 @@ model Establishment {
   ///
   /// Sem isto o cardapio sai em ordem alfabetica, e uma pizzaria abre com
   /// "Acai" porque comeca com A. Ordem de cardapio e decisao comercial.
-  categoryOrder    String[] @default([])
+  categoryOrder       String[] @default([])
   /// Pede ao motoboy a localizacao ao vivo pelo Telegram, junto com a rota.
   ///
   /// Desligado por padrao: e o dono decidindo se quer acompanhar a moto no
@@ -111,32 +119,34 @@ model Establishment {
   /// Desligado por padrao: nem toda cozinha tem balcao, e oferecer retirada
   /// onde ninguem pode buscar gera pedido que o dono vai ter que ligar para
   /// desfazer.
-  pickupEnabled    Boolean @default(false)
-  requireDeliveryCode Boolean @default(false)
-  telegramLocation Boolean @default(false)
+  pickupEnabled       Boolean  @default(false)
+  requireDeliveryCode Boolean  @default(false)
+  telegramLocation    Boolean  @default(false)
   /// Manda a rota para o motoboy no WhatsApp assim que ela e planejada.
   ///
   /// Desligado por padrao, e de proposito: mensagem automatica sai de um numero
   /// que pode ser banido, e ligar isso e uma decisao do dono — nao um padrao que
   /// ele descobre quando o motoboy reclama.
-  whatsappRoutes   Boolean  @default(false)
-  lat              Float
-  lng              Float
-  createdAt        DateTime @default(now())
+  whatsappRoutes      Boolean  @default(false)
+  lat                 Float
+  lng                 Float
+  createdAt           DateTime @default(now())
 
-  users               User[]
-  couriers            Courier[]
-  orders              Order[]
-  payments            Payment[]
-  routes              Route[]
-  events              DomainEventLog[]
-  credentials         IntegrationCredential[]
-  marketplaceCommands MarketplaceCommand[]
-  products            Product[]
-  optionGroups        OptionGroup[]
-  deliveryFeeRules    DeliveryFeeRule[]
-  courierNotifications CourierNotification[]
-  whatsappSession      WhatsappSession?
+  users                 User[]
+  couriers              Courier[]
+  orders                Order[]
+  payments              Payment[]
+  routes                Route[]
+  events                DomainEventLog[]
+  credentials           IntegrationCredential[]
+  marketplaceCommands   MarketplaceCommand[]
+  products              Product[]
+  optionGroups          OptionGroup[]
+  deliveryFeeRules      DeliveryFeeRule[]
+  courierNotifications  CourierNotification[]
+  whatsappChannels      WhatsappChannel[]
+  whatsappConversations WhatsappConversation[]
+  whatsappSession       WhatsappSession?
 }
 
 model User {
@@ -179,14 +189,14 @@ enum CourierPayModel {
 }
 
 model Courier {
-  id              String   @id @default(uuid())
-  establishmentId String
-  name            String
-  phone           String
-  active          Boolean  @default(true)
+  id                  String          @id @default(uuid())
+  establishmentId     String
+  name                String
+  phone               String
+  active              Boolean         @default(true)
   /// Usuario do app do motoboy. Nulo ate o dono gerar o acesso.
-  login           String?  @unique
-  passwordHash    String?
+  login               String?         @unique
+  passwordHash        String?
   /// O acordo combinado com este motoboy.
   ///
   /// Fica no motoboy, e nao no estabelecimento, porque acordo e pessoal: o
@@ -209,8 +219,9 @@ model Courier {
   /// tenant-guard recusa `findFirst` sem escopo, e com razao.
   /// Quanto o sistema acompanha este motoboy. Acordo pessoal, como o pagamento.
   /**
+   * /**
+   * /**
    * Quantos pedidos ele leva por viagem.
-   *
    * Era 15 fixo no código, igual para todo mundo. Quem entrega de carro leva
    * mais, quem entrega de bicicleta leva bem menos — e o baú da marmitaria não
    * comporta o mesmo número de pedidos que o da lanchonete.
@@ -226,7 +237,7 @@ model Courier {
   telegramChatId      String?         @unique
   /// Segredo do convite. Vive no link `t.me/bot?start=<isto>` e some no uso.
   telegramInviteCode  String?         @unique
-  createdAt       DateTime @default(now())
+  createdAt           DateTime        @default(now())
 
   establishment Establishment    @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
   routes        Route[]
@@ -249,7 +260,7 @@ model CourierPayBand {
 }
 
 model Order {
-  id               String          @id @default(uuid())
+  id               String           @id @default(uuid())
   establishmentId  String
   source           OrderSourceKind
   externalId       String?
@@ -266,15 +277,15 @@ model Order {
   reference        String?
   lat              Float?
   lng              Float?
-  amountCents      Int             @default(0)
+  amountCents      Int              @default(0)
   /// Taxa de entrega, ja somada em `amountCents`. Guardada a parte porque o
   /// acerto do dia separa o que e venda do que e frete.
-  deliveryFeeCents Int             @default(0)
+  deliveryFeeCents Int              @default(0)
   paymentMethod    PaymentMethod?
   /// Nulo = pagar na entrega. `PENDING` = Pix online aguardando pagamento.
   paymentStatus    PaymentStatus?
   notes            String?
-  status           OrderStatus     @default(NEW)
+  status           OrderStatus      @default(NEW)
   /// Codigo que o cliente informa ao entregador para fechar a entrega.
   ///
   /// Quatro digitos porque e ditado na porta, muitas vezes com a moto ligada.
@@ -288,7 +299,7 @@ model Order {
   /// dessas telas precise adivinhar pelo endereco.
   fulfillment      OrderFulfillment @default(DELIVERY)
   deliveryCode     String?
-  trackingToken    String          @unique
+  trackingToken    String           @unique
   routeId          String?
   /// Aceito pelo lojista. Antes disso o pedido esta na coluna "novos", que e
   /// onde ele decide se consegue atender.
@@ -298,12 +309,11 @@ model Order {
   readyAt          DateTime?
   /**
    * Quando o dono marcou este pedido como urgente.
-   *
    * Data e não booleano: "há quanto tempo está urgente" é a pergunta que o
    * painel faz, e um `true` não responde. Nulo é o normal.
    */
-  urgentAt        DateTime?
-  createdAt        DateTime        @default(now())
+  urgentAt         DateTime?
+  createdAt        DateTime         @default(now())
   deliveredAt      DateTime?
 
   establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
@@ -422,9 +432,16 @@ model GeocodeCache {
 enum IntegrationProvider {
   IFOOD
   AIQFOME
+  /// 99Food (DiDi Food Open Platform). "FOOD99" e não "99FOOD" porque valor de
+  /// enum do Prisma precisa ser identificador válido, e identificador não
+  /// começa com dígito.
+  FOOD99
   /// Recebimento no cardápio público. Não traz pedido para dentro como os
   /// outros dois — traz dinheiro para a conta do lojista.
   MERCADO_PAGO
+  /// Cloud API do WhatsApp (Meta). Diferente dos marketplaces: aqui não existe
+  /// pedido pronto do outro lado — existe uma conversa, e o pedido nasce dela.
+  WHATSAPP
 }
 
 // Credencial de integração obtida por OAuth, uma por estabelecimento e provedor.
@@ -508,9 +525,9 @@ model IntegrationEvent {
 /// pela tela, isto grava o pedido, o worker ve, busca na WAHA e escreve a
 /// imagem de volta aqui. Nenhuma porta nova aberta para a internet.
 model WhatsappSession {
-  establishmentId String   @id
+  establishmentId String    @id
   /// STARTING, SCAN_QR_CODE, WORKING, FAILED — como a WAHA reporta.
-  status          String   @default("DESCONHECIDO")
+  status          String    @default("DESCONHECIDO")
   /// PNG do QR em base64. Vive minutos: expira e e trocado pelo proximo.
   qrBase64        String?
   qrAt            DateTime?
@@ -518,9 +535,77 @@ model WhatsappSession {
   pairRequestedAt DateTime?
   /// O numero pareado, para a tela dizer qual e.
   connectedAs     String?
-  updatedAt       DateTime @updatedAt
+  updatedAt       DateTime  @updatedAt
 
   establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+}
+
+/// Um número de WhatsApp que atende pelo Levô.
+///
+/// Existem três arranjos, e o que os separa é de quem é o número:
+///
+/// 1. **Número da loja** (`establishmentId` preenchido). A marca é dela, o
+///    histórico é dela, e a conversa já chega resolvida — o número diz a loja.
+/// 2. **Número do Levô, compartilhado** (`establishmentId` nulo). Onboarding em
+///    minutos: o lojista não cria conta na Meta nem cadastra cartão. Em troca,
+///    qual loja é a conversa precisa ser descoberta — ver `WhatsappConversation`.
+/// 3. **Número do Levô, de faixa.** Igual ao 2. Vários números existem não por
+///    capacidade (um aguenta 80 msg/s) mas por ISOLAMENTO: a reputação é por
+///    número, então uma loja que abusa não derruba a base inteira. O teto de
+///    template, esse, é do portfólio e não se divide.
+///
+/// A chave é o `phoneNumberId` porque é o que o webhook entrega. Guardar o
+/// número em si serviria para a tela, não para resolver a conversa.
+model WhatsappChannel {
+  id              String   @id @default(uuid())
+  /// `phone_number_id` da Cloud API — o identificador que vem em todo evento.
+  phoneNumberId   String   @unique
+  /// O número como se lê, só para a tela dizer qual é.
+  displayNumber   String?
+  /// Nulo quando o número é do Levô e atende várias lojas.
+  establishmentId String?
+  /// Apelido operacional: "principal", "quarentena", "volume alto".
+  label           String?
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  establishment         Establishment?         @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+  whatsappConversations WhatsappConversation[]
+
+  @@index([establishmentId])
+}
+
+/// De qual loja é a conversa deste cliente, neste número.
+///
+/// Só faz sentido no número compartilhado: no número da loja a resposta já veio
+/// no canal. Aqui ela precisa ser lembrada, porque o cliente que volta amanhã e
+/// escreve "oi" não repete o código da loja — e responder "de qual loja?" a cada
+/// visita é o tipo de atrito que faz o cliente desistir e ligar.
+///
+/// A chave é o par canal + telefone: o mesmo cliente pode pedir de duas lojas
+/// diferentes pelo mesmo número do Levô, e a última vence.
+model WhatsappConversation {
+  id              String   @id @default(uuid())
+  channelId       String
+  /// Telefone do cliente em E.164 sem o `+`, como a Meta manda.
+  customerPhone   String
+  establishmentId String
+  /// Quando a loja foi resolvida pela última vez. Governa o desempate e a
+  /// expiração: conversa velha demais pergunta de novo em vez de chutar.
+  resolvedAt      DateTime @default(now())
+  /// Onde a conversa parou: passo, carrinho e loja em foco.
+  ///
+  /// JSON e não colunas porque o formato muda a cada passo novo do fluxo, e
+  /// uma migração por passo travaria a evolução. O preço é não dar para
+  /// consultar por dentro — aceitável: ninguém pergunta ao banco "quantos
+  /// carrinhos têm pizza". Quem lê sempre desconfia (ver `lerEstado`).
+  estado          Json?
+
+  channel       WhatsappChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  establishment Establishment   @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, customerPhone])
+  @@index([establishmentId])
 }
 
 /// Caixa de saida das mensagens para o motoboy.
@@ -625,7 +710,7 @@ model Product {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
-  establishment Establishment       @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+  establishment Establishment        @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
   orderItems    OrderItem[]
   optionGroups  ProductOptionGroup[]
 
@@ -669,7 +754,7 @@ model OptionGroup {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  establishment Establishment      @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+  establishment Establishment        @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
   options       Option[]
   products      ProductOptionGroup[]
 
@@ -712,7 +797,7 @@ model ProductOptionGroup {
 }
 
 model OrderItem {
-  id             String  @id @default(uuid())
+  id             String   @id @default(uuid())
   orderId        String
   productId      String?
   /// Cópia no momento do pedido.
@@ -733,7 +818,7 @@ model OrderItem {
   /// Guardamos o valor resultante, nao a porcentagem: e o valor que entra na
   /// conta, e uma porcentagem guardada precisaria ser recalculada a cada
   /// exibicao, com chance de dar um centavo diferente.
-  discountCents  Int     @default(0)
+  discountCents  Int      @default(0)
 
   order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)

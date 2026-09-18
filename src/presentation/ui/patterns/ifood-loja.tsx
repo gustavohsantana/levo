@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, LoaderCircle, Plus, Trash2, X } from 'lucide-react';
+import { Check, LoaderCircle, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import type { LojaIfoodView } from '@/presentation/queries';
 import {
   criarPausaIfoodAction,
@@ -30,7 +30,7 @@ const DIAS: Array<{ key: string; label: string }> = [
  */
 export function IfoodLoja({ loja }: { loja: LojaIfoodView }) {
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex max-w-3xl flex-col gap-5">
       <div>
         <h1 className="text-xl font-semibold tracking-tight text-ink">iFood — sua loja</h1>
         <p className="mt-1 text-sm text-ink-muted">
@@ -109,6 +109,57 @@ function Pausas({ loja }: { loja: LojaIfoodView }) {
   const [inicio, setInicio] = useState('');
   const [fim, setFim] = useState('');
 
+  /*
+   * A lista de pausas do iFood é eventualmente consistente: criar devolve 200 na
+   * hora, mas a pausa só aparece no `listarPausas` alguns segundos depois. Sem
+   * isto, o lojista cria, o refresh relê a lista ainda sem ela, e a tela diz
+   * "nenhuma pausa" — parece que falhou. Guardamos a recém-criada aqui e a
+   * mostramos junto, como PONTE, até a lista do servidor alcançá-la.
+   */
+  type Otimista = LojaIfoodView['pausas'][number] & { criadaEm: number };
+  const [otimistas, setOtimistas] = useState<Otimista[]>([]);
+  const [removidas, setRemovidas] = useState<string[]>([]);
+  const idsDoServidor = loja.pausas.map((p) => p.id);
+  const chaveServidor = [...idsDoServidor].sort().join(',');
+
+  /*
+   * Descarta a cópia otimista assim que o servidor CONFIRMA a criação (o id
+   * entrou na lista). Sem isto, uma pausa criada no Levô e depois excluída pelo
+   * Portal voltaria a aparecer: ela sumia da tela só enquanto estava na lista do
+   * servidor, e ao ser excluída lá fora a ponte otimista a ressuscitava.
+   */
+  useEffect(() => {
+    setOtimistas((a) => a.filter((p) => !idsDoServidor.includes(p.id)));
+    // idsDoServidor deriva de chaveServidor; evita recriar o efeito a cada render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveServidor]);
+
+  const agora = Date.now();
+  // A ponte vale por pouco tempo: se em 15s o servidor não confirmou (ex.: a
+  // pausa foi excluída antes de propagar), paramos de mostrá-la e confiamos no
+  // servidor. Uma vez confirmada, o efeito acima já a removeu daqui.
+  const otimistasVisiveis = otimistas.filter(
+    (p) => !idsDoServidor.includes(p.id) && agora - p.criadaEm < 15_000,
+  );
+  const pausas = [...loja.pausas, ...otimistasVisiveis]
+    .filter((p) => !removidas.includes(p.id))
+    // Pausa vencida não é "ativa" — e a lista do iFood ainda a devolve por um
+    // tempo depois do fim. Escondê-la evita mostrar como atual algo que já passou.
+    .filter((p) => instante(p.end) > agora)
+    .sort((a, b) => instante(a.start) - instante(b.start));
+
+  /*
+   * A lista do iFood é eventualmente consistente: depois de criar ou remover, ela
+   * leva alguns segundos para refletir. Uma releitura única logo após a ação pega
+   * a lista defasada. Reler mais duas vezes, espaçado, deixa a tela alcançar o
+   * estado real sozinha — sem o lojista precisar dar F5.
+   */
+  function relerAteAlcancar() {
+    router.refresh();
+    setTimeout(() => router.refresh(), 3000);
+    setTimeout(() => router.refresh(), 7000);
+  }
+
   function criar() {
     setErro(null);
     if (!inicio || !fim) {
@@ -122,9 +173,10 @@ function Pausas({ loja }: { loja: LojaIfoodView }) {
         new Date(fim).toISOString(),
       );
       if (r.ok) {
+        if (r.pausa) setOtimistas((a) => [...a, { ...r.pausa!, criadaEm: Date.now() }]);
         setInicio('');
         setFim('');
-        router.refresh();
+        relerAteAlcancar();
       } else setErro(r.error);
     });
   }
@@ -133,20 +185,36 @@ function Pausas({ loja }: { loja: LojaIfoodView }) {
     setErro(null);
     submit(async () => {
       const r = await removerPausaIfoodAction(id);
-      if (r.ok) router.refresh();
-      else setErro(r.error);
+      if (r.ok) {
+        setRemovidas((a) => [...a, id]);
+        setOtimistas((a) => a.filter((p) => p.id !== id));
+        relerAteAlcancar();
+      } else setErro(r.error);
     });
   }
 
   return (
     <section className="rounded-lg bg-surface p-4 hairline">
-      <h2 className="text-sm font-semibold text-ink">Pausas na loja</h2>
-      <p className="mt-0.5 text-xs text-ink-muted">
-        Fecha a loja por uma janela de tempo. Some sozinha quando o fim chega.
-      </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-ink">Pausas na loja</h2>
+          <p className="mt-0.5 text-xs text-ink-muted">
+            Fecha a loja por uma janela de tempo. Some sozinha quando o fim chega.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => submit(() => router.refresh())}
+          disabled={pendente}
+          className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs text-ink-muted hover:bg-raised hover:text-ink disabled:opacity-50"
+        >
+          <RefreshCw className={`size-3.5 ${pendente ? 'animate-spin' : ''}`} aria-hidden />
+          Atualizar
+        </button>
+      </div>
 
       <ul className="mt-3 flex flex-col divide-y">
-        {loja.pausas.map((p) => (
+        {pausas.map((p) => (
           <li key={p.id} className="flex items-center justify-between gap-3 py-2">
             <div className="min-w-0">
               <p className="truncate text-sm text-ink">{p.description}</p>
@@ -165,7 +233,7 @@ function Pausas({ loja }: { loja: LojaIfoodView }) {
             </button>
           </li>
         ))}
-        {loja.pausas.length === 0 ? (
+        {pausas.length === 0 ? (
           <li className="py-2 text-sm text-ink-faint">Nenhuma pausa ativa.</li>
         ) : null}
       </ul>
@@ -187,6 +255,9 @@ function Pausas({ loja }: { loja: LojaIfoodView }) {
           {pendente ? <LoaderCircle className="animate-spin" /> : <Plus />}
           Criar pausa
         </Button>
+        <p className="mt-2 text-xs text-ink-faint">
+          A pausa aparece aqui na hora; no iFood pode levar alguns segundos para refletir.
+        </p>
       </div>
     </section>
   );
@@ -201,6 +272,28 @@ function Horarios({ loja }: { loja: LojaIfoodView }) {
   const [porDia, setPorDia] = useState<Record<string, Array<{ inicio: string; fim: string }>>>(() =>
     doHorario(loja.horarios),
   );
+
+  /*
+   * O editor carrega a agenda uma vez, no `useState`. Se o horário mudar no
+   * iFood (ex.: editado pelo Portal) e o servidor reler, o `useState` não roda
+   * o inicializador de novo — o editor ficaria preso na agenda antiga. Aqui,
+   * quando a agenda que veio do servidor de fato muda, recarregamos o editor.
+   * Comparamos por assinatura para não sobrescrever edição em andamento: só as
+   * mudanças vindas do iFood mexem na assinatura do servidor.
+   */
+  const assinaturaServidor = JSON.stringify(loja.horarios);
+  const ultimaAssinatura = useRef(assinaturaServidor);
+  useEffect(() => {
+    if (assinaturaServidor !== ultimaAssinatura.current) {
+      ultimaAssinatura.current = assinaturaServidor;
+      setPorDia(doHorario(loja.horarios));
+    }
+  }, [assinaturaServidor, loja.horarios]);
+
+  function atualizar() {
+    setSalvo(false);
+    submit(() => router.refresh());
+  }
 
   function addTurno(dia: string) {
     setPorDia((a) => ({ ...a, [dia]: [...(a[dia] ?? []), { inicio: '09:00', fim: '18:00' }] }));
@@ -235,10 +328,23 @@ function Horarios({ loja }: { loja: LojaIfoodView }) {
 
   return (
     <section className="rounded-lg bg-surface p-4 hairline">
-      <h2 className="text-sm font-semibold text-ink">Horário de funcionamento</h2>
-      <p className="mt-0.5 text-xs text-ink-muted">
-        Salvar substitui a agenda inteira no iFood — dia sem turno fica fechado.
-      </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-ink">Horário de funcionamento</h2>
+          <p className="mt-0.5 text-xs text-ink-muted">
+            Salvar substitui a agenda inteira no iFood — dia sem turno fica fechado.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={atualizar}
+          disabled={pendente}
+          className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs text-ink-muted hover:bg-raised hover:text-ink disabled:opacity-50"
+        >
+          <RefreshCw className={`size-3.5 ${pendente ? 'animate-spin' : ''}`} aria-hidden />
+          Atualizar
+        </button>
+      </div>
 
       <div className="mt-3 flex flex-col divide-y">
         {DIAS.map((dia) => {
@@ -299,11 +405,31 @@ function Horarios({ loja }: { loja: LojaIfoodView }) {
   );
 }
 
-/** ISO → "sáb 10/09 14:00" (fuso de Brasília). */
+/**
+ * ISO → "10/09 14:00" (fuso de Brasília).
+ *
+ * O iFood devolve o instante em UTC mas SEM o `Z` (ex.: "2026-09-11T23:00:00").
+ * Sem o sufixo, `new Date` interpreta como hora local do navegador — e a pausa
+ * que o lojista marcou às 20:00 aparece como 23:00. Forçamos a leitura em UTC e
+ * só então convertemos para Brasília, para bater com o que ele digitou e com o
+ * que o Portal do iFood mostra.
+ */
 function quando(iso: string): string {
-  const d = new Date(new Date(iso).getTime() - 180 * 60_000);
+  const d = new Date(instante(iso) - 180 * 60_000);
   const p = (n: number) => String(n).padStart(2, '0');
   return `${p(d.getUTCDate())}/${p(d.getUTCMonth() + 1)} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
+}
+
+/**
+ * O instante em ms de um horário do iFood.
+ *
+ * Ele devolve UTC mas às vezes sem o `Z` (ex.: "2026-09-11T23:00:00"). Sem o
+ * sufixo, `new Date` leria como hora local do navegador — deslocando tudo pelo
+ * fuso. Forçamos a leitura em UTC.
+ */
+function instante(iso: string): number {
+  const utc = /[zZ]|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : `${iso}Z`;
+  return new Date(utc).getTime();
 }
 
 /** Os shifts do iFood (dia, início, duração) → o editor (por dia, início/fim). */

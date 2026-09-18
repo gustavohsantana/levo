@@ -111,16 +111,41 @@ function Cartao({
   const [pendente, avancar] = useTransition();
   const [erro, setErro] = useState<string | null>(null);
 
+  /*
+   * A idade do pedido vira cor. Um display de cozinha existe para gritar o que
+   * está atrasando — tempo em cinza neutro obriga a ler número por número. Uma
+   * faixa na lateral (não o cartão inteiro tingido, que apagaria os itens) e o
+   * tempo colorido dizem "esse aqui" a um metro de distância.
+   */
+  const decorrido = minutosCorridos(pedido.createdAt);
+  const idade = tomDaIdade(decorrido);
+
   return (
-    <li className="rounded-lg bg-surface p-3 hairline">
+    <li className="relative overflow-hidden rounded-lg bg-surface p-3 hairline">
+      {idade.barra ? (
+        <span className={`absolute inset-y-0 left-0 w-1 ${idade.barra}`} aria-hidden />
+      ) : null}
       <div className="flex items-baseline justify-between gap-2">
         <p className="flex min-w-0 items-center gap-2 text-base font-semibold text-ink">
           <span className="truncate">{pedido.customerName}</span>
-          {/* A cozinha precisa saber que é balcão: o cliente vem buscar, não sai
-              motoboy. */}
+          {/*
+            Quem vem buscar muda o que a cozinha faz com o pedido pronto, e são
+            três respostas possíveis. Sem selo é o normal — sai com o motoboy da
+            casa. "Retirada" é o cliente. E a entrega da plataforma é um
+            entregador de fora, que aparece no balcão sem avisar: chamar isso de
+            "Retirada" faria a cozinha esperar o cliente.
+
+            O nome da plataforma vai no selo de propósito: aqui não existe a
+            etiqueta de origem que o painel tem, e "plataforma" não diz a
+            ninguém quem vai bater na porta.
+          */}
           {pedido.pickup ? (
             <span className="shrink-0 rounded bg-moving-soft px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-moving">
               Retirada
+            </span>
+          ) : pedido.plataformaLeva ? (
+            <span className="shrink-0 rounded bg-warning-soft px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-warning">
+              {nomeDaPlataforma(pedido.source)} leva
             </span>
           ) : null}
         </p>
@@ -141,9 +166,12 @@ function Cartao({
           >
             <Printer className="size-4" aria-hidden />
           </a>
-          <span className="numeric flex items-center gap-1 text-sm text-ink-muted">
+          <span
+            className={`numeric flex items-center gap-1 text-sm ${idade.texto}`}
+            title={`Há ${formatarDuracao(decorrido)} na fila · ${idade.rotulo}`}
+          >
             <Clock className="size-3.5" aria-hidden />
-            {minutosDesde(pedido.createdAt)}
+            {formatarDuracao(decorrido)}
           </span>
         </div>
       </div>
@@ -227,9 +255,50 @@ function Cartao({
   );
 }
 
+/**
+ * O nome da plataforma como o entregador dela se apresenta no balcão.
+ *
+ * Só as origens que têm entrega própria aparecem aqui; as demais nunca chegam a
+ * este selo, e um rótulo genérico serve de rede para uma plataforma nova entrar
+ * sem quebrar a tela.
+ */
+function nomeDaPlataforma(source: OrderView['source']): string {
+  const nomes: Partial<Record<OrderView['source'], string>> = {
+    FOOD99: '99Food',
+    IFOOD: 'iFood',
+    AIQFOME: 'aiqfome',
+  };
+  return nomes[source] ?? 'A plataforma';
+}
+
+/**
+ * Limiares de envelhecimento, em minutos.
+ *
+ * Ajuste conforme a operação: até ATENCAO é ritmo normal; passar de ATRASO é
+ * pedido que já devia ter saído. Valores conservadores para não pintar tudo de
+ * vermelho num pico e virar ruído.
+ */
+const LIMITE_ATENCAO = 15;
+const LIMITE_ATRASO = 30;
+
+/** Minutos corridos desde que o pedido entrou, nunca negativo. */
+function minutosCorridos(iso: string): number {
+  return Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
+}
+
 /** "12 min" — e nunca um horário, que exigiria conta de cabeça. */
-function minutosDesde(iso: string): string {
-  const min = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
+function formatarDuracao(min: number): string {
   if (min < 60) return `${min} min`;
   return `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}`;
+}
+
+/** A cor da idade: faixa lateral e cor do tempo, mais o rótulo para o `title`. */
+function tomDaIdade(min: number): { barra: string | null; texto: string; rotulo: string } {
+  if (min >= LIMITE_ATRASO) {
+    return { barra: 'bg-danger', texto: 'text-danger font-semibold', rotulo: 'atrasado' };
+  }
+  if (min >= LIMITE_ATENCAO) {
+    return { barra: 'bg-warning', texto: 'text-warning font-medium', rotulo: 'em atenção' };
+  }
+  return { barra: null, texto: 'text-ink-muted', rotulo: 'no tempo' };
 }

@@ -89,9 +89,11 @@ export class PlanRoute {
         /*
          * Retirada não entra em rota: quem busca é o cliente.
          */
-        if (order.isPickup) {
+        if (!order.entraEmRota) {
           throw new ValidationError(
-            `${order.customerName} é retirada no balcão — não entra em rota.`,
+            order.isPickup
+              ? `${order.customerName} é retirada no balcão — não entra em rota.`
+              : `${order.customerName} é entrega da plataforma — quem leva não é o seu motoboy.`,
           );
         }
         return order;
@@ -212,9 +214,11 @@ export class PlanRoute {
          * chegam por caminhos diferentes. Um pedido de balcão no baú do motoboy
          * é uma entrega que ninguém pediu, num endereço que é a própria loja.
          */
-        if (order.isPickup) {
+        if (!order.entraEmRota) {
           throw new ValidationError(
-            `${order.customerName} é retirada no balcão — não entra em rota.`,
+            order.isPickup
+              ? `${order.customerName} é retirada no balcão — não entra em rota.`
+              : `${order.customerName} é entrega da plataforma — quem leva não é o seu motoboy.`,
           );
         }
         return order;

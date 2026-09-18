@@ -8,7 +8,7 @@ import type { PaymentStatus } from './payment';
 import { Address, Coordinates, Money, PhoneNumber, Token } from '../value-objects';
 import { gerarCodigoDeEntrega } from '../services/delivery-code';
 
-export type OrderSourceKind = 'MANUAL' | 'SITE' | 'WEBHOOK' | 'IFOOD' | 'AIQFOME';
+export type OrderSourceKind = 'MANUAL' | 'SITE' | 'WEBHOOK' | 'IFOOD' | 'AIQFOME' | 'FOOD99';
 
 export const OrderStatus = {
   New: 'NEW',
@@ -28,6 +28,19 @@ export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
  * reescrever a cada reajuste, e a conta do dia deixaria de fechar.
  */
 export type PaymentMethod = 'CASH' | 'CREDIT' | 'DEBIT' | 'PIX' | 'ONLINE';
+
+/**
+ * Quem leva o pedido embora.
+ *
+ * `DELIVERY` é o motoboy da casa — o único que entra em rota. `PICKUP` é o
+ * cliente que vem buscar. `PLATFORM` é o entregador da plataforma (99Food,
+ * iFood, aiqfome), que aparece no balcão sem ser nosso.
+ *
+ * Os dois últimos ficam fora da rota pelo mesmo motivo, e é só isso que têm em
+ * comum: quem bate na porta é diferente, e as telas dizem coisas diferentes por
+ * causa disso.
+ */
+export type OrderFulfillment = 'DELIVERY' | 'PICKUP' | 'PLATFORM';
 
 export interface OrderItem {
   /** Procedência. Nulo quando o produto é apagado do catálogo. */
@@ -57,8 +70,7 @@ interface OrderProps {
   customerName: string;
   customerPhone: PhoneNumber | null;
   address: Address;
-  /** Entrega pelo motoboy, ou retirada no balcão pelo próprio cliente. */
-  fulfillment: 'DELIVERY' | 'PICKUP';
+  fulfillment: OrderFulfillment;
   coordinates: Coordinates | null;
   amount: Money;
   deliveryFee: Money;
@@ -96,7 +108,7 @@ export class Order extends AggregateRoot {
     customerName: string;
     customerPhone?: PhoneNumber | null;
     address: Address;
-    fulfillment?: 'DELIVERY' | 'PICKUP';
+    fulfillment?: OrderFulfillment;
     coordinates?: Coordinates | null;
     amount?: Money;
     deliveryFee?: Money;
@@ -301,6 +313,17 @@ export class Order extends AggregateRoot {
   get fulfillment() { return this.props.fulfillment; }
   /** Retirada não entra em rota: quem busca é o cliente. */
   get isPickup() { return this.props.fulfillment === 'PICKUP'; }
+  /** Quem leva é o entregador da plataforma, não o nosso motoboy. */
+  get isPlatformDelivery() { return this.props.fulfillment === 'PLATFORM'; }
+  /**
+   * Se este pedido ocupa um motoboy da casa.
+   *
+   * É a pergunta que a montagem de rota faz — e ela tem três respostas
+   * possíveis desde que existem entregas da própria plataforma. Perguntar
+   * `isPickup` deixava o pedido do 99Food entrar na rota de um motoboy que
+   * nunca vai buscá-lo.
+   */
+  get entraEmRota() { return this.props.fulfillment === 'DELIVERY'; }
   get trackingToken() { return this.props.trackingToken; }
   get deliveryCode() { return this.props.deliveryCode; }
   get routeId() { return this.props.routeId; }

@@ -266,7 +266,7 @@ export function SinoDePedidos({
         className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition hairline ${
           ligado
             ? 'bg-accent-soft text-accent-ink'
-            : 'text-ink-faint hover:bg-raised hover:text-ink-muted'
+            : 'text-ink-muted hover:bg-raised hover:text-ink'
         }`}
       >
         <Icone className="size-3.5 shrink-0" aria-hidden />

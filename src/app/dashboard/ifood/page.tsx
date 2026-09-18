@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { getLojaIfood } from '@/presentation/queries';
 import { IfoodLoja } from '@/presentation/ui/patterns/ifood-loja';
+import { IfoodTabs } from '@/presentation/ui/patterns/ifood-tabs';
 import { EmptyState } from '@/presentation/ui/primitives';
 import { Store } from 'lucide-react';
 
@@ -20,5 +21,10 @@ export default async function IfoodPage() {
     );
   }
 
-  return <IfoodLoja loja={loja} />;
+  return (
+    <div className="flex flex-col gap-4">
+      <IfoodTabs ativo="loja" />
+      <IfoodLoja loja={loja} />
+    </div>
+  );
 }

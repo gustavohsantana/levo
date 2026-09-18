@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { env } from '@/env';
 import { IfoodAuth } from '@/infrastructure/integrations/ifood/auth';
+import { Food99Auth } from '@/infrastructure/integrations/99food/auth';
 import { CredentialStore } from '@/infrastructure/integrations/credential-store';
 import { listarLojasAiqfome } from '@/infrastructure/integrations/aiqfome/stores';
 import {
@@ -401,6 +402,150 @@ export async function desconectarMercadoPago(): Promise<{ ok: boolean; error?: s
 
     await getPrismaClient(env().DATABASE_URL).integrationCredential.deleteMany({
       where: { establishmentId: session.establishmentId, provider: 'MERCADO_PAGO' },
+    });
+
+    revalidatePath('/dashboard/integracoes');
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * 99Food (DiDi Food Open Platform)
+ *
+ * O vínculo aqui não se parece com o do iFood nem com o do aiqfome. Não há
+ * código para transcrever nem redirecionamento de volta: a plataforma devolve
+ * uma URL, o lojista autoriza lá dentro, e do lado de cá não chega aviso
+ * nenhum. Por isso o fluxo tem dois passos separados — gerar o link e, depois,
+ * CONFERIR — em vez de um "conectar" que resolveria tudo sozinho.
+ *
+ * Conferir é pedir o token: se a loja foi autorizada, ele sai; se não, a
+ * plataforma responde 10101. É a única fonte de verdade sobre o vínculo.
+ * ------------------------------------------------------------------------- */
+
+/** O apelido da loja no Levô quando o lojista não escolhe outro. */
+const APP_SHOP_ID_PADRAO = 'lojaprincipal';
+
+function food99Config(): { appId: string; appSecret: string } | null {
+  const { FOOD99_APP_ID: appId, FOOD99_APP_SECRET: appSecret } = env();
+  return appId && appSecret ? { appId, appSecret } : null;
+}
+
+/**
+ * A página onde o lojista autoriza a loja.
+ *
+ * O corpo é montado à mão porque `app_id` é um long de 19 dígitos: passar por
+ * `JSON.stringify` com number o arredondaria, e a plataforma recusaria um app
+ * que não existe.
+ */
+export async function gerarLinkFood99(
+  appShopId: string = APP_SHOP_ID_PADRAO,
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  try {
+    await requireSession();
+    const cfg = food99Config();
+    if (!cfg) return { ok: false, error: '99Food não configurado neste ambiente.' };
+
+    const alvo = appShopId.trim() || APP_SHOP_ID_PADRAO;
+    const resposta = await fetch(
+      'https://openapi.didi-food.com/v1/auth/authorizationpage/getUrl',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: `{"app_id":${cfg.appId},"app_shop_id":${JSON.stringify(alvo)}}`,
+        signal: AbortSignal.timeout(20_000),
+      },
+    );
+
+    const corpo = (await resposta.json()) as {
+      errno: number;
+      errmsg?: string;
+      data?: { url?: string };
+    };
+
+    if (corpo.errno !== 0 || !corpo.data?.url) {
+      return { ok: false, error: corpo.errmsg ?? `99Food respondeu errno ${corpo.errno}` };
+    }
+
+    return { ok: true, url: corpo.data.url };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+/**
+ * Pergunta à plataforma se a loja já foi autorizada e, em caso positivo, grava
+ * o vínculo.
+ *
+ * O token dura cerca de dez minutos e é reemitido a qualquer momento só com as
+ * credenciais do app — então ele é guardado mais como carimbo de "funcionou" do
+ * que como credencial a ser reaproveitada. O que de fato importa guardar é o
+ * `merchantId`: é ele que amarra o pedido que chegar pelo webhook a este
+ * estabelecimento.
+ */
+export async function verificarVinculoFood99(
+  appShopId: string = APP_SHOP_ID_PADRAO,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const session = await requireSession();
+    const cfg = food99Config();
+    if (!cfg) return { ok: false, error: '99Food não configurado neste ambiente.' };
+
+    const alvo = appShopId.trim() || APP_SHOP_ID_PADRAO;
+
+    /*
+     * Passa pelo `Food99Auth` em vez de chamar o `get` na mão: é ele que conhece
+     * a sequência `get → refresh → get`. Autorização apenas vencida (10102) se
+     * cura sozinha aqui, sem o lojista precisar reabrir o link.
+     */
+    const auth = new Food99Auth({ appId: cfg.appId, appSecret: cfg.appSecret });
+
+    let token: { authToken: string; expiraEm: Date | null };
+    try {
+      token = await auth.token(alvo);
+    } catch (cause) {
+      /*
+       * A mensagem nomeia o apelido tentado.
+       *
+       * Sem isso, quem deixou o campo no valor padrão via "a loja ainda não foi
+       * autorizada" e ia reabrir o link — quando o problema era estar
+       * perguntando por outra loja. O erro precisa dizer o que foi perguntado.
+       */
+      const errno = (cause as { details?: { errno?: number } })?.details?.errno;
+      const motivo =
+        errno === 10101
+          ? `Nenhuma loja autorizada com o apelido "${alvo}". Confira se é esse mesmo o apelido usado na autorização, ou abra o link acima e autorize.`
+          : errno === 10102
+            ? `A autorização de "${alvo}" venceu e não foi possível renovar. Abra o link acima e autorize de novo.`
+            : toFormError(cause);
+      return { ok: false, error: motivo };
+    }
+
+    const prisma = getPrismaClient(env().DATABASE_URL);
+    const store = new CredentialStore(prisma, env().AUTH_SECRET);
+
+    await store.save(session.establishmentId, 'FOOD99', {
+      accessToken: token.authToken,
+      refreshToken: null,
+      expiresAt: token.expiraEm,
+      merchantId: alvo,
+    });
+
+    revalidatePath('/dashboard/integracoes');
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+export async function desconectarFood99(): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const session = await requireSession();
+    const prisma = getPrismaClient(env().DATABASE_URL);
+
+    await prisma.integrationCredential.deleteMany({
+      where: { establishmentId: session.establishmentId, provider: 'FOOD99' },
     });
 
     revalidatePath('/dashboard/integracoes');

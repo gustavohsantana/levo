@@ -209,12 +209,19 @@ export class ImportOrderFromSource {
      * cozinha marcado como balcão, ninguém geocodifica o que não vai virar rota,
      * e o motoboy nunca vê uma parada que não existe.
      */
-    const ehRetirada = external.pickup === true;
-    const address = ehRetirada && external.address.trim().length < 8
-      ? Address.create('Retirada no balcão')
+    const fulfillment = external.fulfillment ?? 'DELIVERY';
+    const semRota = fulfillment !== 'DELIVERY';
+    const address = semRota && external.address.trim().length < 8
+      ? Address.create(fulfillment === 'PICKUP' ? 'Retirada no balcão' : 'Entrega da plataforma')
       : Address.create(external.address, external.reference);
 
-    const coordinates = ehRetirada ? null : await this.geocoder.geocode(address).catch(() => null);
+    /*
+     * Geocodificar só o que vira rota. Na entrega da plataforma o endereço às
+     * vezes vem (o 99Food manda), mas o alfinete não serviria para nada: quem
+     * dirige até lá é o motoboy deles, e gastar uma chamada de geocodificação
+     * por pedido que nunca entra em rota é só custo.
+     */
+    const coordinates = semRota ? null : await this.geocoder.geocode(address).catch(() => null);
 
     return this.uow.run(async (repos) => {
       // Recheca dentro da transação: entre a leitura acima e agora, outro ciclo
@@ -255,11 +262,15 @@ export class ImportOrderFromSource {
          * o total da plataforma, para a conta fechar no centavo.
          */
         amount: Money.fromCents(external.amountCents),
-        fulfillment: ehRetirada ? 'PICKUP' : 'DELIVERY',
-        // Retirada não paga entrega — o cliente busca. A taxa que o marketplace
-        // mandou, se mandou, é de outro pedido; aqui ela é zero.
+        fulfillment,
+        /*
+         * Só a nossa entrega tem taxa nossa. Na retirada o cliente busca; na
+         * entrega da plataforma quem cobra (e quem paga) a corrida é ela, e
+         * lançar esse valor aqui inflaria o faturamento do dia com dinheiro que
+         * nunca passou pelo caixa dele.
+         */
         deliveryFee:
-          ehRetirada || external.deliveryFeeCents === undefined
+          semRota || external.deliveryFeeCents === undefined
             ? undefined
             : Money.fromCents(external.deliveryFeeCents),
         paymentMethod: external.paymentMethod ?? null,
@@ -268,8 +279,9 @@ export class ImportOrderFromSource {
         now: external.placedAt ?? this.clock.now(),
       });
 
-      // Retirada não vira rota, então geocodificação ausente não é falha dela.
-      if (!coordinates && !ehRetirada)
+      // O que não vira rota não precisa de alfinete: cobrar geocodificação de
+      // uma retirada ou de uma entrega da plataforma seria inventar um problema.
+      if (!coordinates && !semRota)
         order.markGeocodingFailed('endereço não localizado', this.clock.now());
 
       /*

@@ -5,6 +5,7 @@ import { getPrismaClient } from '@/infrastructure/persistence/prisma/client';
 import { requireSession } from '@/presentation/http/session';
 import { IfoodConnect } from '@/presentation/ui/patterns/ifood-connect';
 import { AiqfomeConnect } from '@/presentation/ui/patterns/aiqfome-connect';
+import { Food99Connect } from '@/presentation/ui/patterns/food99-connect';
 import { WhatsappConnect } from '@/presentation/ui/patterns/whatsapp-connect';
 import { TelegramConnect } from '@/presentation/ui/patterns/telegram-connect';
 import { TelegramSender } from '@/infrastructure/messaging/telegram';
@@ -75,9 +76,10 @@ export default async function IntegracoesPage({
     }),
   ]);
 
-  const [ifood, aiqfome, mercadoPago] = await Promise.all([
+  const [ifood, aiqfome, food99, mercadoPago] = await Promise.all([
     store.read(session.establishmentId, 'IFOOD').catch(ilegivel('IFOOD')),
     store.read(session.establishmentId, 'AIQFOME').catch(ilegivel('AIQFOME')),
+    store.read(session.establishmentId, 'FOOD99').catch(ilegivel('FOOD99')),
     store.read(session.establishmentId, 'MERCADO_PAGO').catch(ilegivel('MERCADO_PAGO')),
   ]);
 
@@ -156,7 +158,7 @@ export default async function IntegracoesPage({
           Plataformas de pedido
         </h2>
         <p className="mt-1 text-sm text-ink-muted">
-          iFood e aiqfome. O pedido chega aqui sozinho.
+          iFood, aiqfome e 99Food. O pedido chega aqui sozinho.
         </p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <IfoodConnect
@@ -168,6 +170,17 @@ export default async function IntegracoesPage({
             conectado={Boolean(aiqfome)}
             lojaAtual={aiqfome ? { id: aiqfome.merchantId ?? '', nome: nomeAiq } : null}
             lojas={lojasAiq}
+          />
+
+          {/*
+            O 99Food não guarda nome de loja como os outros: o que amarra o
+            pedido a este estabelecimento é o `app_shop_id`, escolhido por nós
+            no momento do vínculo. É ele que o cartão mostra.
+          */}
+          <Food99Connect
+            conectado={Boolean(food99?.merchantId)}
+            lojaAtual={food99?.merchantId ?? null}
+            disponivel={env().food99Enabled}
           />
         </div>
       </section>

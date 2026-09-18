@@ -68,8 +68,8 @@ describe('AiqfomeOrderSource.fetchPending', () => {
     /*
      * Antes a retirada era pulada — mas isso obrigava o dono a vigiar o app do
      * aiqfome para os pedidos de balcão, e o Levô existe para centralizar tudo.
-     * Agora ela entra, com `pickup: true`; quem a mantém fora da rota é o
-     * domínio (`Order.isPickup`), não o adapter.
+     * Agora ela entra, com `fulfillment: 'PICKUP'`; quem a mantém fora da rota
+     * é o domínio (`Order.entraEmRota`), não o adapter.
      *
      * O flag autoritativo é o `order_is_pickup` do RESUMO — o detalhe nem sempre
      * repete, então o resumo manda.
@@ -79,7 +79,7 @@ describe('AiqfomeOrderSource.fetchPending', () => {
     const pedidos = await source().fetchPending();
 
     expect(pedidos).toHaveLength(1);
-    expect(pedidos[0]?.pickup).toBe(true);
+    expect(pedidos[0]?.fulfillment).toBe('PICKUP');
     // Busca o detalhe também: lista + detalhe.
     expect(chamadas).toHaveLength(2);
   });

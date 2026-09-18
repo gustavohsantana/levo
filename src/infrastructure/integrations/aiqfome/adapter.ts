@@ -124,7 +124,7 @@ export class AiqfomeOrderSource implements OrderSource {
         const pedido = mapAiqfomeOrder(detalhe);
         // O resumo é a fonte autoritativa da retirada — o detalhe nem sempre
         // repete o flag. Se o resumo diz balcão, é balcão.
-        if (resumo.order_is_pickup ?? resumo.is_pickup) pedido.pickup = true;
+        if (resumo.order_is_pickup ?? resumo.is_pickup) pedido.fulfillment = 'PICKUP';
         pedidos.push(pedido);
       }
     }
@@ -236,7 +236,7 @@ export function mapAiqfomeOrder(payload: AiqfomeOrder): ExternalOrder {
         : null,
     amountCents: toCents(payload.payment_method?.total),
     notes: payload.order_observations?.trim() || null,
-    pickup: payload.is_pickup ?? false,
+    fulfillment: payload.is_pickup ? 'PICKUP' : 'DELIVERY',
     placedAt: parseDate(
       payload.timeline?.created_at ?? payload.created_at,
       payload.timeline?.timezone,

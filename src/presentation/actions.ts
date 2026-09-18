@@ -10,6 +10,8 @@ import { toFormError } from './http/error-mapper';
 import { checkRateLimit, clearRateLimit } from './http/rate-limit';
 import { avisarRotaLiberada } from './telegram-rota';
 import { entregasDoEntregador, type EntregaDoEntregador } from './reports';
+import type { PausaIfood } from '@/infrastructure/integrations/ifood/merchant';
+import type { ItemIfood } from '@/infrastructure/integrations/ifood/catalog';
 
 /**
  * Server Actions: as mutações das telas do dono.
@@ -581,6 +583,8 @@ export async function anexarGrupoNaCategoriaAction(
 }
 
 export async function salvarRegiaoAction(formData: FormData): Promise<ActionResult> {
+  const name = String(formData.get('name') ?? '').trim();
+  const address = String(formData.get('address') ?? '').trim();
   const city = String(formData.get('city') ?? '').trim();
   const state = String(formData.get('state') ?? '').trim().toUpperCase();
   const taxa = Number(String(formData.get('deliveryFeeReais') ?? '0').replace(',', '.'));
@@ -592,6 +596,8 @@ export async function salvarRegiaoAction(formData: FormData): Promise<ActionResu
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
 
+  if (name.length < 2) return { ok: false, error: 'Informe o nome da loja' };
+  if (address.length < 5) return { ok: false, error: 'Informe o endereço da loja' };
   if (city.length < 2) return { ok: false, error: 'Informe a cidade' };
   if (state.length !== 2) return { ok: false, error: 'O estado tem duas letras (ex.: MG)' };
   if (!Number.isFinite(taxa) || taxa < 0) return { ok: false, error: 'Taxa de entrega inválida' };
@@ -600,7 +606,7 @@ export async function salvarRegiaoAction(formData: FormData): Promise<ActionResu
   try {
     const session = await requireSession();
     await containerFor(session.establishmentId).read((repos) =>
-      repos.establishments.saveSettings(city, state, Math.round(taxa * 100), slug),
+      repos.establishments.saveSettings(name, address, city, state, Math.round(taxa * 100), slug),
     );
   } catch (cause) {
     return { ok: false, error: toFormError(cause) };
@@ -684,15 +690,21 @@ async function merchantDoLojista() {
   return m;
 }
 
+/**
+ * A lista de pausas do iFood é eventualmente consistente: o POST devolve 200 na
+ * hora, mas a pausa só entra no `listarPausas` alguns segundos depois. Devolver
+ * a pausa criada aqui deixa a tela mostrá-la na hora, sem esperar a lista pegar
+ * o passo — senão o lojista cria, não vê nada e acha que falhou.
+ */
 export async function criarPausaIfoodAction(
   description: string,
   start: string,
   end: string,
-): Promise<ActionResult> {
+): Promise<ActionResult & { pausa?: PausaIfood }> {
   try {
     const { merchant, merchantId } = await merchantDoLojista();
-    await merchant.criarPausa(merchantId, { description, start, end });
-    return { ok: true };
+    const pausa = await merchant.criarPausa(merchantId, { description, start, end });
+    return { ok: true, pausa };
   } catch (cause) {
     return { ok: false, error: toFormError(cause) };
   }
@@ -714,6 +726,304 @@ export async function definirHorariosIfoodAction(
   try {
     const { merchant, merchantId } = await merchantDoLojista();
     await merchant.definirHorarios(merchantId, shifts);
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+/**
+ * Ações do módulo Loja do aiqfome (paridade com o Merchant do iFood).
+ *
+ * A disponibilidade é um toggle: abrir / pausar (stand-by) / fechar — não há
+ * pausa datada como no iFood. Cada ação devolve a mensagem do aiqfome no erro.
+ */
+async function lojaAiqfomeDoLojista() {
+  const session = await requireSession();
+  const l = await containerFor(session.establishmentId).aiqfomeLoja();
+  if (!l) throw new Error('aiqfome não conectado nesta loja.');
+  return l;
+}
+
+export async function abrirLojaAiqfomeAction(): Promise<ActionResult> {
+  try {
+    const { loja, storeId } = await lojaAiqfomeDoLojista();
+    await loja.abrir(storeId);
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+export async function pausarLojaAiqfomeAction(): Promise<ActionResult> {
+  try {
+    const { loja, storeId } = await lojaAiqfomeDoLojista();
+    await loja.pausar(storeId);
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+export async function fecharLojaAiqfomeAction(): Promise<ActionResult> {
+  try {
+    const { loja, storeId } = await lojaAiqfomeDoLojista();
+    await loja.fechar(storeId);
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+export async function definirHorariosAiqfomeAction(
+  dias: Array<{
+    week_day_number: number;
+    week_day_name: string;
+    status: number;
+    hours: { first_period: string; second_period?: string };
+  }>,
+): Promise<ActionResult> {
+  try {
+    const { loja, storeId } = await lojaAiqfomeDoLojista();
+    await loja.definirHorarios(storeId, dias);
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+/**
+ * Ações do módulo Cardápio do aiqfome (escrita).
+ *
+ * Começando pelos toggles de disponibilidade — item e categoria — que são
+ * `PUT .../toggle-status` sem corpo. Dependem do escopo `aqf:menu:create`.
+ */
+async function catalogoAiqfomeDoLojista() {
+  const session = await requireSession();
+  const c = await containerFor(session.establishmentId).aiqfomeCatalogo();
+  if (!c) throw new Error('aiqfome não conectado nesta loja.');
+  return c;
+}
+
+export async function alternarItemAiqfomeAction(itemUuid: string): Promise<ActionResult> {
+  try {
+    const { catalogo, storeId } = await catalogoAiqfomeDoLojista();
+    await catalogo.alternarItem(storeId, itemUuid);
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+export async function alternarCategoriaAiqfomeAction(
+  categoryId: string,
+): Promise<ActionResult> {
+  try {
+    const { catalogo, storeId } = await catalogoAiqfomeDoLojista();
+    await catalogo.alternarCategoria(storeId, categoryId);
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+// ---- Catalog (cardápio no iFood) ----
+
+async function catalogDoLojista() {
+  const session = await requireSession();
+  const c = await containerFor(session.establishmentId).ifoodCatalog();
+  if (!c) throw new Error('iFood não conectado nesta loja.');
+  return c.catalog;
+}
+
+/** Carrega um item já existente (com seus complementos) para edição na tela. */
+export async function carregarItemCatalogoAction(
+  itemId: string,
+  categoryId: string,
+): Promise<ActionResult & { item?: ItemIfood }> {
+  try {
+    const item = await (await catalogDoLojista()).itemParaEditar(itemId, categoryId);
+    return { ok: true, item };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+/** Exclui um item do catálogo do iFood (apaga o produto que o sustenta). */
+export async function removerItemIfoodAction(productId: string): Promise<ActionResult> {
+  try {
+    await (await catalogDoLojista()).removerItem(productId);
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+/** Cenário 1: criar categoria. */
+export async function criarCategoriaCatalogoAction(
+  catalogId: string,
+  nome: string,
+): Promise<ActionResult & { categoria?: { id: string; name: string } }> {
+  try {
+    const catalog = await catalogDoLojista();
+    const c = await catalog.criarCategoria(catalogId, nome);
+    return { ok: true, categoria: { id: c.id, name: c.name } };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+/** Cenário 1: criar item (com foto opcional). Devolve o item com os ids do iFood. */
+export async function criarItemCatalogoAction(input: {
+  categoryId: string;
+  nome: string;
+  descricao?: string;
+  precoReais: number;
+  ativo: boolean;
+  imagemDataUri?: string;
+}): Promise<ActionResult & { item?: ItemIfood }> {
+  try {
+    const catalog = await catalogDoLojista();
+    const imagePath = input.imagemDataUri ? await catalog.enviarImagem(input.imagemDataUri) : undefined;
+    const item = await catalog.salvarItem({
+      categoryId: input.categoryId,
+      externalCode: `LEVO-${Date.now()}`,
+      status: input.ativo ? 'AVAILABLE' : 'UNAVAILABLE',
+      priceValue: input.precoReais,
+      produto: { name: input.nome, description: input.descricao, imagePath },
+      grupos: [],
+    });
+    return { ok: true, item };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+/** Cenário 2: anexar um grupo de complementos ao item. Reenvia a estrutura inteira. */
+export async function adicionarGrupoCatalogoAction(input: {
+  item: ItemIfood;
+  nomeGrupo: string;
+  min: number;
+  max: number;
+  complementos: Array<{ nome: string; precoReais: number; ativo: boolean; imagemDataUri?: string }>;
+}): Promise<ActionResult & { item?: ItemIfood }> {
+  try {
+    const catalog = await catalogDoLojista();
+    const opcoes = [];
+    for (const c of input.complementos) {
+      const imagePath = c.imagemDataUri ? await catalog.enviarImagem(c.imagemDataUri) : undefined;
+      opcoes.push({
+        name: c.nome,
+        priceValue: c.precoReais,
+        status: (c.ativo ? 'AVAILABLE' : 'UNAVAILABLE') as ItemIfood['status'],
+        imagePath,
+      });
+    }
+    const item = await catalog.salvarItem({
+      ...input.item,
+      grupos: [
+        ...input.item.grupos,
+        { name: input.nomeGrupo, status: 'AVAILABLE', min: input.min, max: input.max, opcoes },
+      ],
+    });
+    return { ok: true, item };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+/** Cenário 3: mudar nome/descrição/foto do item (PUT — não há PATCH para isso). */
+export async function editarItemCatalogoAction(input: {
+  item: ItemIfood;
+  novoNome?: string;
+  descricao?: string;
+  novaImagemDataUri?: string;
+}): Promise<ActionResult & { item?: ItemIfood }> {
+  try {
+    const catalog = await catalogDoLojista();
+    const imagePath = input.novaImagemDataUri
+      ? await catalog.enviarImagem(input.novaImagemDataUri)
+      : input.item.produto.imagePath;
+    const item = await catalog.salvarItem({
+      ...input.item,
+      produto: {
+        ...input.item.produto,
+        name: input.novoNome ?? input.item.produto.name,
+        description: input.descricao ?? input.item.produto.description,
+        imagePath,
+      },
+    });
+    return { ok: true, item };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+/** Cenário 3: mudar nome/foto de um complemento (PUT). */
+export async function editarComplementoCatalogoAction(input: {
+  item: ItemIfood;
+  optionId: string;
+  novoNome?: string;
+  novaImagemDataUri?: string;
+}): Promise<ActionResult & { item?: ItemIfood }> {
+  try {
+    const catalog = await catalogDoLojista();
+    const imagePath = input.novaImagemDataUri ? await catalog.enviarImagem(input.novaImagemDataUri) : undefined;
+    const grupos = input.item.grupos.map((g) => ({
+      ...g,
+      opcoes: g.opcoes.map((o) =>
+        o.id === input.optionId
+          ? { ...o, name: input.novoNome ?? o.name, imagePath: imagePath ?? o.imagePath }
+          : o,
+      ),
+    }));
+    const item = await catalog.salvarItem({ ...input.item, grupos });
+    return { ok: true, item };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+/** Cenário 3: preço do item — PATCH /items/price. */
+export async function precoItemCatalogoAction(itemId: string, precoReais: number): Promise<ActionResult> {
+  try {
+    await (await catalogDoLojista()).precoItem(itemId, precoReais);
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+/** Cenário 3: disponibilidade do item — PATCH /items/status. */
+export async function statusItemCatalogoAction(itemId: string, ativo: boolean): Promise<ActionResult> {
+  try {
+    await (await catalogDoLojista()).statusItem(itemId, ativo ? 'AVAILABLE' : 'UNAVAILABLE');
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+/** Cenário 3: preço do complemento — PATCH /options/price. */
+export async function precoComplementoCatalogoAction(
+  optionId: string,
+  precoReais: number,
+): Promise<ActionResult> {
+  try {
+    await (await catalogDoLojista()).precoOpcao(optionId, precoReais);
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+/** Cenário 3: pausar/ativar o complemento — PATCH /options/status. */
+export async function statusComplementoCatalogoAction(
+  optionId: string,
+  ativo: boolean,
+): Promise<ActionResult> {
+  try {
+    await (await catalogDoLojista()).statusOpcao(optionId, ativo ? 'AVAILABLE' : 'UNAVAILABLE');
     return { ok: true };
   } catch (cause) {
     return { ok: false, error: toFormError(cause) };

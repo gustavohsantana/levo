@@ -1,6 +1,6 @@
 import 'server-only';
 import { containerFor } from '@/composition-root';
-import type { Order, Route } from '@/core';
+import type { Order, OrderSourceKind, Route } from '@/core';
 import { requireSession } from './http/session';
 import { completar } from '@/application/use-cases/catalog/reorder-catalog';
 import { statusDoRastreio, textoDoRastreio } from '@/core/services/tracking-status';
@@ -23,7 +23,14 @@ export interface OrderView {
   reference: string | null;
   amountCents: number;
   notes: string | null;
-  source: 'MANUAL' | 'SITE' | 'WEBHOOK' | 'IFOOD' | 'AIQFOME';
+  /*
+   * O tipo do domínio, e não uma cópia da lista.
+   *
+   * Repetir os valores aqui fazia a união desalinhar toda vez que uma
+   * plataforma nova entrava — foi exatamente o que aconteceu ao acrescentar o
+   * 99Food, e o compilador só reclamou do outro lado do arquivo.
+   */
+  source: OrderSourceKind;
   /** Numero curto na plataforma. Nulo em pedido manual. */
   displayId: string | null;
   deliveryFeeCents: number;
@@ -37,6 +44,14 @@ export interface OrderView {
   urgente: boolean;
   /** Retirada no balcão: o cliente busca, não vai para rota. */
   pickup: boolean;
+  /**
+   * Quem leva é o entregador da plataforma, não o nosso motoboy.
+   *
+   * Separado de `pickup` porque a ação de quem lê é diferente: na retirada quem
+   * aparece no balcão é o cliente; aqui é um entregador de fora. Os dois ficam
+   * fora da rota, e só isso eles têm em comum.
+   */
+  plataformaLeva: boolean;
   items: Array<{
     name: string;
     /** Complementos, como o marketplace os descreve. Vazio no pedido manual. */
@@ -88,6 +103,12 @@ export async function currentContainer() {
   return { session, container: containerFor(session.establishmentId) };
 }
 
+/** O nome da loja atual — para identificar o estabelecimento na barra lateral. */
+export async function getNomeDaLoja(): Promise<string> {
+  const { container } = await currentContainer();
+  return container.readOnly(async (repos) => (await repos.establishments.current()).name);
+}
+
 function toOrderView(
   order: Order,
   whatsapp: string | null,
@@ -113,6 +134,7 @@ function toOrderView(
     stage: order.stage,
     urgente: order.urgente,
     pickup: order.isPickup,
+    plataformaLeva: order.isPlatformDelivery,
     items: order.items.map((item) => ({
       name: item.name,
       options: item.options ?? [],
@@ -1028,5 +1050,191 @@ export async function getLojaIfood(): Promise<LojaIfoodView | null> {
     })),
     pausas,
     horarios: horarios.shifts ?? [],
+  };
+}
+
+export interface LojaAiqfomeView {
+  storeId: string;
+  nome: string;
+  /** O objeto cru de detalhes — a tela mostra o que precisar. */
+  detalhes: Record<string, unknown>;
+  /** Um dia por entrada: week_day_number 1–7, faixa "HH:MM - HH:MM", status. */
+  horarios: Array<{ week_day_number: number; hours: string; status: number }>;
+}
+
+/**
+ * A loja no aiqfome, para a tela de gestão (paridade com a do iFood).
+ *
+ * Detalhes e horário em paralelo; o horário tolera falha isolada — a tela ainda
+ * serve mostrando o resto. `null` quando a loja não conectou o aiqfome: aí a
+ * tela nem aparece. Diferente do iFood, não há "pausas datadas" a listar: a
+ * disponibilidade é um toggle (abrir/pausar/fechar), então nada a ler aqui.
+ */
+export async function getLojaAiqfome(): Promise<LojaAiqfomeView | null> {
+  const { container } = await currentContainer();
+  const l = await container.aiqfomeLoja();
+  if (!l) return null;
+
+  const { loja, storeId } = l;
+  const [detalhes, horarios] = await Promise.all([
+    loja.detalhes(storeId),
+    loja.horarios(storeId).catch(() => []),
+  ]);
+
+  return {
+    storeId,
+    nome: String(detalhes.name ?? '—'),
+    detalhes: detalhes as Record<string, unknown>,
+    horarios: Array.isArray(horarios) ? horarios : [],
+  };
+}
+
+/** O formato cru do cardápio do aiqfome (só os campos que a tela usa). */
+interface MenuAiqfomeCru {
+  id?: number;
+  categories?: Array<{
+    id?: number;
+    name?: string;
+    status?: string;
+    order?: number;
+    items?: Array<{
+      uuid?: string;
+      name?: string;
+      description?: string;
+      status?: string;
+      order?: number;
+      item_sizes?: Array<{ name?: string; value?: string; status?: string }>;
+    }>;
+  }>;
+}
+
+export interface ItemCardapioAiqfomeView {
+  id: string;
+  name: string;
+  descricao: string;
+  status: string;
+  /** Menor preço entre os tamanhos, em centavos (para ordenar/formatar). */
+  precoDesdeCents: number;
+  /** Rótulo pronto: "R$ 10,00" ou "a partir de R$ 10,00" quando há tamanhos. */
+  precoLabel: string;
+  tamanhos: Array<{ nome: string; precoCents: number; status: string }>;
+}
+
+export interface CardapioAiqfomeView {
+  storeId: string;
+  categorias: Array<{
+    id: string;
+    name: string;
+    status: string;
+    itens: ItemCardapioAiqfomeView[];
+  }>;
+}
+
+/**
+ * O cardápio da loja no aiqfome, para a tela de gestão.
+ *
+ * Lê a árvore inteira (`GET /api/v2/menu/:store_id`) e normaliza para
+ * categorias → itens → tamanhos. Preço vem por tamanho como string ("10.00");
+ * convertemos para centavos e montamos um rótulo. `null` quando não conectado.
+ */
+export async function getCardapioAiqfome(): Promise<CardapioAiqfomeView | null> {
+  const { container } = await currentContainer();
+  const c = await container.aiqfomeCatalogo();
+  if (!c) return null;
+
+  const cru = (await c.catalogo.cardapio(c.storeId)) as MenuAiqfomeCru;
+
+  const categorias = (cru?.categories ?? [])
+    .slice()
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    .map((cat) => ({
+      id: String(cat.id ?? ''),
+      name: String(cat.name ?? '—'),
+      status: String(cat.status ?? ''),
+      itens: (cat.items ?? [])
+        .slice()
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+        .map((it) => {
+          const tamanhos = (it.item_sizes ?? []).map((s) => ({
+            nome: String(s.name ?? ''),
+            precoCents: paraCentavos(s.value),
+            status: String(s.status ?? ''),
+          }));
+          const precos = tamanhos.map((t) => t.precoCents).filter((n) => n > 0);
+          const menor = precos.length ? Math.min(...precos) : 0;
+          const varios = new Set(precos).size > 1;
+          return {
+            id: String(it.uuid ?? ''),
+            name: String(it.name ?? '—'),
+            descricao: String(it.description ?? ''),
+            status: String(it.status ?? ''),
+            precoDesdeCents: menor,
+            precoLabel: menor
+              ? `${varios ? 'a partir de ' : ''}${formatarReais(menor)}`
+              : '—',
+            tamanhos,
+          };
+        }),
+    }));
+
+  return { storeId: c.storeId, categorias };
+}
+
+/** "10.00" (reais, string) → 1000 (centavos). Tolera vírgula e vazio. */
+function paraCentavos(valor?: string): number {
+  if (!valor) return 0;
+  const n = Number(String(valor).replace(',', '.'));
+  return Number.isFinite(n) ? Math.round(n * 100) : 0;
+}
+
+function formatarReais(cents: number): string {
+  return `R$ ${(cents / 100).toFixed(2).replace('.', ',')}`;
+}
+
+export interface ItemCatalogoView {
+  id: string;
+  name: string;
+  categoryId: string;
+  priceValue: number;
+  status: string;
+  imageUrl?: string;
+}
+
+export interface CatalogoIfoodView {
+  merchantId: string;
+  catalogId: string;
+  categorias: Array<{ id: string; name: string; itens: ItemCatalogoView[] }>;
+}
+
+/**
+ * O catálogo da loja no iFood, para a tela de homologação Catalog.
+ *
+ * Traz o catálogo DEFAULT e as categorias COM seus itens, para a tela listar o
+ * que já existe e deixar o lojista escolher um item para editar — não só criar.
+ * `null` quando o iFood não conectou.
+ */
+export async function getCatalogoIfood(): Promise<CatalogoIfoodView | null> {
+  const { container } = await currentContainer();
+  const c = await container.ifoodCatalog();
+  if (!c) return null;
+
+  const catalogId = await c.catalog.catalogoPadrao();
+  const categorias = await c.catalog.categorias(catalogId, true).catch(() => []);
+
+  return {
+    merchantId: c.merchantId,
+    catalogId,
+    categorias: categorias.map((cat) => ({
+      id: cat.id,
+      name: cat.name,
+      itens: ((cat.items ?? []) as Array<Record<string, unknown>>).map((it) => ({
+        id: String(it.id),
+        name: String(it.name ?? '—'),
+        categoryId: cat.id,
+        priceValue: Number((it.price as { value?: number } | undefined)?.value ?? 0),
+        status: String(it.status ?? 'AVAILABLE'),
+        imageUrl: it.imagePath ? String(it.imagePath) : undefined,
+      })),
+    })),
   };
 }

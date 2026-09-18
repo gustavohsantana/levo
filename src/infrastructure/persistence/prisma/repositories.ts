@@ -411,6 +411,8 @@ export class PrismaEstablishmentRepository extends TenantScoped implements Estab
     });
   }
   async saveSettings(
+    name: string,
+    address: string,
     city: string | null,
     state: string | null,
     deliveryFeeCents: number,
@@ -418,7 +420,7 @@ export class PrismaEstablishmentRepository extends TenantScoped implements Estab
   ): Promise<void> {
     await this.tx.establishment.update({
       where: { id: this.establishmentId },
-      data: { city, state, deliveryFeeCents, slug },
+      data: { name, address, city, state, deliveryFeeCents, slug },
     });
   }
   async deliveryFeeBands(): Promise<DeliveryFeeBand[]> {

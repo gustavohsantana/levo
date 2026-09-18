@@ -27,6 +27,48 @@ const schema = z.object({
   AIQFOME_API_KEY: z.string().optional(),
   AIQFOME_MERCHANT_ID: z.string().optional(),
 
+  /*
+   * 99Food (DiDi Food Open Platform). O APP ID é um long de 19 dígitos e fica
+   * como string de propósito: number o arredondaria, que é a mesma armadilha
+   * que o webhook precisa evitar ao ler os ids do corpo.
+   *
+   * O APP SECRET tem papel duplo aqui — autentica as chamadas E assina o
+   * webhook (`MD5(corpo + secret)`), então sem ele o recebimento de pedido não
+   * funciona, nem a verificação de origem.
+   */
+  FOOD99_ENABLED: z.enum(['true', 'false']).default('false'),
+  FOOD99_APP_ID: z.string().optional(),
+  FOOD99_APP_SECRET: z.string().optional(),
+  FOOD99_BASE_URL: z.string().url().optional(),
+
+  /*
+   * WhatsApp pela Cloud API da Meta.
+   *
+   * O APP SECRET assina o webhook (`HMAC-SHA256(corpo, secret)`); o VERIFY
+   * TOKEN é uma senha que NÓS escolhemos e cadastramos no painel da Meta, e que
+   * volta no aperto de mão da inscrição. São coisas diferentes e não se
+   * substituem: sem o primeiro não dá para provar origem, sem o segundo a
+   * inscrição nunca é assinada.
+   */
+  WHATSAPP_ENABLED: z.enum(['true', 'false']).default('false'),
+  WHATSAPP_APP_SECRET: z.string().optional(),
+  WHATSAPP_VERIFY_TOKEN: z.string().optional(),
+  WHATSAPP_ACCESS_TOKEN: z.string().optional(),
+  /** O `phone_number_id` do número que FALA. Não é o número de telefone. */
+  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  WHATSAPP_GRAPH_VERSION: z.string().default('v23.0'),
+
+  /*
+   * O agente — a inteligência do bot.
+   *
+   * Desligado por padrão: com `AGENTE_ENABLED=false` a conversa segue pelo
+   * caminho determinístico e não gasta token nenhum. Ligar é uma variável, não
+   * um deploy diferente — e desligar às pressas também.
+   */
+  AGENTE_ENABLED: z.enum(['true', 'false']).default('false'),
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_MODEL: z.string().default('gpt-5-mini'),
+
   // Consentimento OAuth do aiqfome. Os endereços são configuráveis porque quem
   // os fixa é o credenciamento (API V2 / ID Magalu); o `redirect_uri` não entra
   // aqui de propósito — sai do PUBLIC_BASE_URL, para não divergir do cadastro.
@@ -130,6 +172,27 @@ function load() {
     ...parsed.data,
     ifoodEnabled: parsed.data.IFOOD_ENABLED === 'true',
     aiqfomeEnabled: parsed.data.AIQFOME_ENABLED === 'true',
+    /*
+     * Só está ligado com o par completo: o APP ID sozinho autentica nada, e o
+     * segredo sozinho não diz a qual app pertence.
+     */
+    food99Enabled:
+      parsed.data.FOOD99_ENABLED === 'true' &&
+      Boolean(parsed.data.FOOD99_APP_ID && parsed.data.FOOD99_APP_SECRET),
+    /*
+     * Só está ligado com o par completo: o segredo prova a origem do evento, e
+     * o verify token é o que faz a Meta assinar a inscrição. Um sem o outro
+     * deixa o webhook num estado que parece configurado e não recebe nada.
+     */
+    whatsappEnabled:
+      parsed.data.WHATSAPP_ENABLED === 'true' &&
+      Boolean(parsed.data.WHATSAPP_APP_SECRET && parsed.data.WHATSAPP_VERIFY_TOKEN),
+    /*
+     * Só está ligado com a chave presente: a flag sozinha ligaria um agente
+     * que estoura em toda mensagem, e o sintoma seria o bot emudecer.
+     */
+    agenteEnabled:
+      parsed.data.AGENTE_ENABLED === 'true' && Boolean(parsed.data.OPENAI_API_KEY),
     /*
      * Produção, no painel, é Public Key + Access Token. Teste é o mesmo par
      * da aba sandbox. OAuth (Client ID + Secret) é outro fluxo, se o painel

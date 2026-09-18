@@ -1,5 +1,5 @@
 import type { Address, Coordinates } from '../../value-objects';
-import type { OrderSourceKind } from '../../entities';
+import type { OrderFulfillment, OrderSourceKind } from '../../entities';
 import type { PaymentStatus } from '../../entities/payment';
 
 export interface Geocoder {
@@ -110,14 +110,15 @@ export interface ExternalOrder {
    */
   paymentMethod?: 'CASH' | 'CREDIT' | 'DEBIT' | 'PIX' | 'ONLINE';
   /**
-   * Retirada no balcão: o cliente busca, não há entrega.
+   * Quem leva o pedido embora. Ausente é `DELIVERY`, o caso comum.
    *
-   * Importado do mesmo jeito que os outros — a ideia do Levô é centralizar TODOS
-   * os pedidos das plataformas, para o dono não ter que vigiar o app de cada
-   * marketplace. O que muda é só que a retirada aparece marcada e fica fora da
-   * rota: não tem endereço para geocodificar nem parada para o motoboy fazer.
+   * Todos entram do mesmo jeito — a ideia do Levô é centralizar TODOS os pedidos
+   * das plataformas, para o dono não ter que vigiar o app de cada marketplace. O
+   * que muda é a rota: só `DELIVERY` ocupa um motoboy da casa. Na retirada quem
+   * busca é o cliente; em `PLATFORM` é o entregador da própria plataforma, e nos
+   * dois casos não há endereço para geocodificar nem parada para fazer.
    */
-  pickup?: boolean;
+  fulfillment?: OrderFulfillment;
 }
 
 /**

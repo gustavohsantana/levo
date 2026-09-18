@@ -14,7 +14,7 @@ import { ConfigurationError } from "@/core";
  * gravar nenhum dos dois em claro. Ligar um terceiro marketplace amanhã custa
  * um `provider` a mais, não uma segunda implementação disto.
  */
-export type Provider = "IFOOD" | "AIQFOME" | "MERCADO_PAGO";
+export type Provider = "IFOOD" | "AIQFOME" | "FOOD99" | "MERCADO_PAGO" | "WHATSAPP";
 
 export interface StoredTokens {
   accessToken: string;

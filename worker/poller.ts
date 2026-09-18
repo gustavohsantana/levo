@@ -11,6 +11,7 @@ import {
 } from '../src/infrastructure/integrations/credential-store';
 import { AiqfomeOrderSource } from '../src/infrastructure/integrations/aiqfome/adapter';
 import { aiqfomeAccessTokenFor } from '../src/infrastructure/integrations/aiqfome/factory';
+import { food99OrderSourceFor } from '../src/infrastructure/integrations/99food/factory';
 import { marketplaceCommandsFor } from '../src/infrastructure/integrations/marketplace-factory';
 import { WahaSender } from '../src/infrastructure/messaging/waha';
 import { TelegramSender } from '../src/infrastructure/messaging/telegram';
@@ -60,7 +61,7 @@ const logger = createLogger(config.LOG_LEVEL, !config.isProduction);
 async function sourcesFor(establishmentId: string): Promise<OrderSource[]> {
   const sources: OrderSource[] = [];
 
-  for (const montar of [ifoodSourceFor, aiqfomeSourceFor]) {
+  for (const montar of [ifoodSourceFor, aiqfomeSourceFor, food99SourceFor]) {
     try {
       const source = await montar(establishmentId);
       if (source) sources.push(source);
@@ -140,6 +141,41 @@ async function aiqfomeSourceFor(establishmentId: string): Promise<OrderSource | 
   }
 
   return null;
+}
+
+/**
+ * O 99Food, que não tem o que buscar — tem o que ler.
+ *
+ * Aqui o ciclo de 30 segundos não é polling da plataforma: ela empurra por
+ * webhook, e este ciclo só drena a fila de eventos que a rota anotou. O intervalo
+ * vira latência máxima entre o pedido cair e aparecer na cozinha.
+ */
+async function food99SourceFor(establishmentId: string): Promise<OrderSource | null> {
+  if (!config.food99Enabled) return null;
+
+  const store = new CredentialStore(getPrismaClient(config.DATABASE_URL), config.AUTH_SECRET);
+  const credencial = await store.read(establishmentId, 'FOOD99');
+
+  if (!credencial) {
+    logger.warn({ establishmentId }, 'food99.sem_conexao');
+    return null;
+  }
+
+  /*
+   * No 99Food o `merchantId` guarda o `app_shop_id` — o apelido que NÓS demos à
+   * loja e que o lojista amarrou na página de autorização. É a mesma string que
+   * volta no webhook, e é ela que liga a fila de eventos a este estabelecimento.
+   */
+  if (!credencial.merchantId) {
+    logger.error({ establishmentId }, 'food99.loja_nao_vinculada');
+    return null;
+  }
+
+  return food99OrderSourceFor(
+    getPrismaClient(config.DATABASE_URL),
+    credencial.merchantId,
+    logger,
+  );
 }
 
 /**

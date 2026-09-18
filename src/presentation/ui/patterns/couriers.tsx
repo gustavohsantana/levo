@@ -122,7 +122,14 @@ function CourierRow({
       */}
       <p className="mt-2 text-xs text-ink-faint">
         {entregador.pagamento ?? (
-          <span className="text-amber-700">Acordo de pagamento não definido</span>
+          /* O aviso é o próprio atalho para resolvê-lo: leva à ficha, onde o
+             acordo é definido — em vez de deixar o dono procurar por onde. */
+          <Link
+            href={`/dashboard/entregadores/${entregador.id}`}
+            className="text-amber-700 underline decoration-dotted underline-offset-2 hover:decoration-solid"
+          >
+            Definir acordo de pagamento →
+          </Link>
         )}
       </p>
 

@@ -87,6 +87,8 @@ export interface EstablishmentRepository {
   /** Manda a rota para o motoboy no WhatsApp assim que ela e planejada. */
   setWhatsappRoutes(ligado: boolean): Promise<void>;
   saveSettings(
+    name: string,
+    address: string,
     city: string | null,
     state: string | null,
     deliveryFeeCents: number,
