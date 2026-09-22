@@ -1,0 +1,21 @@
+{
+  "name": "Levô",
+  "install": "bash scripts/cloud-agent-install.sh",
+  "start": "bash scripts/cloud-agent-start.sh",
+  "terminals": [
+    {
+      "name": "osrm-stub",
+      "command": "node infra/osrm-stub.mjs",
+      "description": "Roteirizador de desenvolvimento (rotas em linha reta) em http://localhost:5000. NÃO serve para o piloto — use o OSRM real via Docker para isso."
+    },
+    {
+      "name": "next-dev",
+      "command": "npm run dev",
+      "description": "Servidor Next.js em http://localhost:3000. Login do dono: ze@pizzaria.com.br / pizzaria123."
+    }
+  ],
+  "ports": [
+    { "name": "web", "port": 3000 },
+    { "name": "osrm", "port": 5000 }
+  ]
+}
