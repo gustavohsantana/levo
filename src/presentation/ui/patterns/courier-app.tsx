@@ -17,7 +17,6 @@ interface PonteDoApp {
 import { useRouter } from 'next/navigation';
 import {
   Check,
-  ChevronRight,
   CloudOff,
   LoaderCircle,
   MapPin,
@@ -528,15 +527,18 @@ export function CourierApp({
             {pending
               .filter((stop) => stop.id !== current?.id)
               .map((stop) => (
-                <li key={stop.id}>
+                <li
+                  key={stop.id}
+                  className="-mx-2 flex items-center gap-1 rounded-md px-2 transition active:bg-raised"
+                >
                   {/*
-                    Cada uma é um botão: tocar traz para a frente. Área de toque
+                    Tocar no nome traz a parada para a frente. Área de toque
                     generosa porque quem usa está de luva, parado no farol.
                   */}
                   <button
                     type="button"
                     onClick={() => setFocoManual(stop.id)}
-                    className="-mx-2 flex w-[calc(100%+1rem)] items-start gap-2.5 rounded-md px-2 py-2 text-left text-sm transition active:bg-raised"
+                    className="flex min-w-0 flex-1 items-start gap-2.5 py-2 text-left text-sm"
                   >
                     <span className="numeric mt-0.5 grid size-5 shrink-0 place-items-center rounded-xs bg-raised text-xs text-ink-muted">
                       {stop.position}
@@ -547,14 +549,29 @@ export function CourierApp({
                       </span>
                       <span className="block truncate text-xs text-ink-muted">{stop.address}</span>
                     </span>
-                    <ChevronRight className="mt-1 size-4 shrink-0 text-ink-faint" aria-hidden />
                   </button>
+
+                  {/*
+                    Navegar direto para qualquer parada, sem ter que trazê-la
+                    para a frente antes: vai que ele quer começar por outra. Abre
+                    no mapa escolhido, como o "Navegar" da parada em foco.
+                  */}
+                  <a
+                    href={stopNavUrl(stop, mapProvider)}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`Navegar até ${stop.customerName}`}
+                    className="grid size-11 shrink-0 place-items-center rounded-md text-accent active:bg-canvas"
+                  >
+                    <Navigation className="size-4" aria-hidden />
+                  </a>
                 </li>
               ))}
           </ol>
 
           <p className="mt-2 text-xs text-ink-faint">
-            Toque em qualquer uma para entregar fora de ordem.
+            Toque no nome para entregar fora de ordem, ou no{' '}
+            <Navigation className="inline size-3" aria-hidden /> para ir direto a qualquer uma.
           </p>
 
           {/*
