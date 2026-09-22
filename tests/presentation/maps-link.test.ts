@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_STOPS_PER_LINK, googleMapsRouteUrl } from '@/presentation/ui/maps-link';
+import { MAX_STOPS_PER_LINK, googleMapsRouteUrl, stopNavUrl } from '@/presentation/ui/maps-link';
 
 function stopsAt(count: number) {
   return Array.from({ length: count }, (_, i) => ({
@@ -52,5 +52,41 @@ describe('googleMapsRouteUrl', () => {
   it('devolve null quando nenhuma parada tem coordenada', () => {
     expect(googleMapsRouteUrl([{ coordinates: null }])).toBeNull();
     expect(googleMapsRouteUrl([])).toBeNull();
+  });
+});
+
+describe('stopNavUrl', () => {
+  const comPino = { coordinates: { lat: -22.229914, lng: -45.935824 }, address: 'Rua Um, 10' };
+  const semPino = { coordinates: null, address: 'Rua Trajano Reis, 300 - São Francisco' };
+
+  it('navega por coordenada no Google Maps quando há pino', () => {
+    const url = new URL(stopNavUrl(comPino, 'google'));
+    expect(url.hostname).toBe('www.google.com');
+    expect(url.searchParams.get('destination')).toBe('-22.229914,-45.935824');
+    expect(url.searchParams.get('travelmode')).toBe('driving');
+  });
+
+  it('navega por coordenada no Waze quando há pino', () => {
+    const url = new URL(stopNavUrl(comPino, 'waze'));
+    expect(url.hostname).toBe('waze.com');
+    // O Waze usa `ll=lat,lng` e `navigate=yes` para já entrar em navegação.
+    expect(url.searchParams.get('ll')).toBe('-22.229914,-45.935824');
+    expect(url.searchParams.get('navigate')).toBe('yes');
+  });
+
+  it('cai para o endereço escrito quando a parada não tem pino', () => {
+    const google = new URL(stopNavUrl(semPino, 'google'));
+    expect(google.searchParams.get('destination')).toBe(semPino.address);
+
+    const waze = new URL(stopNavUrl(semPino, 'waze'));
+    expect(waze.searchParams.get('q')).toBe(semPino.address);
+    expect(waze.searchParams.get('navigate')).toBe('yes');
+  });
+
+  it('arredonda a coordenada para seis casas, como o link de rota', () => {
+    const url = new URL(
+      stopNavUrl({ coordinates: { lat: -25.419999999999998, lng: -49.2 }, address: '' }, 'google'),
+    );
+    expect(url.searchParams.get('destination')).toBe('-25.42,-49.2');
   });
 });

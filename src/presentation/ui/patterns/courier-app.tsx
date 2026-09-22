@@ -31,7 +31,7 @@ import type { DriverRouteView, DriverStopView } from '@/presentation/driver-quer
 import { Button } from '../primitives';
 import { cn } from '../cn';
 import { currency, phoneDisplay } from '../format';
-import { googleMapsRouteUrl } from '../maps-link';
+import { googleMapsRouteUrl, stopNavUrl, type MapProvider } from '../maps-link';
 import { enqueue, flush } from '../offline-queue';
 
 const PING_INTERVAL_MS = 15_000;
@@ -60,6 +60,8 @@ export function CourierApp({
   exigeCodigo?: boolean;
 }) {
   const router = useRouter();
+  /** O app de navegação escolhido pelo motoboy, guardado neste aparelho. */
+  const [mapProvider, setMapProvider] = useMapaPadrao();
   const [pendingSync, setPendingSync] = useState(0);
   /** Motivo pelo qual a fila não anda — mostrado ao motoboy, não engolido. */
   const [blocked, setBlocked] = useState<string | null>(null);
@@ -486,7 +488,14 @@ export function CourierApp({
         </p>
       ) : null}
 
-      {current ? <CurrentStop stop={current} onResolve={resolveStop} /> : null}
+      {current ? (
+        <CurrentStop
+          stop={current}
+          onResolve={resolveStop}
+          mapProvider={mapProvider}
+          onChangeMapProvider={setMapProvider}
+        />
+      ) : null}
 
       {pending.length > 1 ? (
         <section className="border-t px-4 py-4">
@@ -598,6 +607,57 @@ function subscribeToConnection(onChange: () => void): () => void {
   };
 }
 
+/**
+ * A preferência de mapa vive no aparelho, não na conta.
+ *
+ * O motoboy entra por link, sem sessão — então não há para onde guardar isto no
+ * servidor sem inventar um cadastro que o produto não tem. E é mesmo uma escolha
+ * do aparelho: é ali que o Waze ou o Google estão instalados. `localStorage`
+ * basta, e o evento próprio faz a mesma aba reagir na hora (o `storage` do
+ * navegador só dispara entre abas).
+ */
+const MAPA_PADRAO_KEY = 'levo:mapa-padrao';
+const MAPA_PADRAO_EVENT = 'levo:mapa-padrao-mudou';
+
+function lerMapaPadrao(): MapProvider {
+  try {
+    return localStorage.getItem(MAPA_PADRAO_KEY) === 'waze' ? 'waze' : 'google';
+  } catch {
+    return 'google';
+  }
+}
+
+function subscribeMapaPadrao(onChange: () => void): () => void {
+  window.addEventListener('storage', onChange);
+  window.addEventListener(MAPA_PADRAO_EVENT, onChange);
+  return () => {
+    window.removeEventListener('storage', onChange);
+    window.removeEventListener(MAPA_PADRAO_EVENT, onChange);
+  };
+}
+
+function useMapaPadrao(): [MapProvider, (provider: MapProvider) => void] {
+  // O snapshot do servidor é sempre o padrão: sem `localStorage` na renderização
+  // do servidor, é o que evita divergência na hidratação.
+  const provider = useSyncExternalStore(
+    subscribeMapaPadrao,
+    lerMapaPadrao,
+    (): MapProvider => 'google',
+  );
+
+  const set = useCallback((next: MapProvider) => {
+    try {
+      localStorage.setItem(MAPA_PADRAO_KEY, next);
+    } catch {
+      // Navegação privada ou storage cheio: a escolha vale só nesta sessão, e
+      // isso é melhor que travar o botão.
+    }
+    window.dispatchEvent(new Event(MAPA_PADRAO_EVENT));
+  }, []);
+
+  return [provider, set];
+}
+
 /** O tema escuro é do container, não do documento: só esta tela é escura. */
 function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -610,9 +670,13 @@ function Shell({ children }: { children: React.ReactNode }) {
 function CurrentStop({
   stop,
   onResolve,
+  mapProvider,
+  onChangeMapProvider,
 }: {
   stop: DriverStopView;
   onResolve: (stop: DriverStopView, outcome: 'DELIVERED' | 'FAILED') => void;
+  mapProvider: MapProvider;
+  onChangeMapProvider: (provider: MapProvider) => void;
 }) {
   const [busy, setBusy] = useState(false);
 
@@ -662,28 +726,12 @@ function CurrentStop({
           className={cn(!stop.coordinates && 'pointer-events-none opacity-40')}
         >
           {/*
-            Abre o app de navegação que o motoboy já usa e confia. Reimplementar
-            navegação passo a passo dentro do produto seria competir com o Waze
-            e perder — e ele nem quer isso.
+            Abre o app de navegação que o motoboy escolheu (Google Maps ou
+            Waze). Reimplementar navegação passo a passo dentro do produto seria
+            competir com o Waze e perder — e ele nem quer isso. O destino sai por
+            coordenada quando há pino, e pelo endereço escrito quando não há.
           */}
-          <a
-            href={
-              stop.coordinates
-                ? `https://www.google.com/maps/dir/?api=1&destination=${stop.coordinates.lat},${stop.coordinates.lng}&travelmode=driving`
-                : /*
-                   * Sem pino, navega pelo ENDEREÇO escrito.
-                   *
-                   * O `href="#"` de antes era um botão que não fazia nada — o
-                   * pior tipo, porque parece funcionar. E o Google Maps acha
-                   * endereço que o nosso geocodificador não acha: a base é
-                   * outra, e "Resende" com S ele resolve. Mandar o texto é uma
-                   * chance a mais de o motoboy chegar sem ligar para ninguém.
-                   */
-                  `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(stop.address)}&travelmode=driving`
-            }
-            target="_blank"
-            rel="noreferrer"
-          >
+          <a href={stopNavUrl(stop, mapProvider)} target="_blank" rel="noreferrer">
             <Navigation />
             Navegar
           </a>
@@ -700,6 +748,40 @@ function CurrentStop({
             {stop.customerPhone ? phoneDisplay(stop.customerPhone) : 'Sem telefone'}
           </a>
         </Button>
+      </div>
+
+      {/*
+        Qual app o "Navegar" abre. Fica junto do botão que ele controla — o
+        motoboy escolhe uma vez, no primeiro uso, e a preferência segue neste
+        aparelho. Waze não faz rota multi-parada por link, então isso vale para
+        a parada em foco; a visão geral de várias paradas continua no Maps.
+      */}
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs text-ink-faint">Navegar com</span>
+        <div
+          role="radiogroup"
+          aria-label="App de navegação padrão"
+          className="flex rounded-md bg-raised p-0.5"
+        >
+          {(['google', 'waze'] as const).map((provider) => {
+            const ativo = mapProvider === provider;
+            return (
+              <button
+                key={provider}
+                type="button"
+                role="radio"
+                aria-checked={ativo}
+                onClick={() => onChangeMapProvider(provider)}
+                className={cn(
+                  'rounded-sm px-3 py-1.5 text-xs font-medium transition',
+                  ativo ? 'bg-canvas text-ink shadow-sm' : 'text-ink-muted active:opacity-70',
+                )}
+              >
+                {provider === 'google' ? 'Google Maps' : 'Waze'}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="mt-auto space-y-2">
