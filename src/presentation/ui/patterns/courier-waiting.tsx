@@ -34,7 +34,10 @@ export function CourierWaiting({ nome }: { nome: string }) {
         <p style={subtitulo}>
           Ainda não tem rota. Quando o dono montar, ela aparece aqui sozinha.
         </p>
-        <div style={{ marginTop: 32 }}>
+        <a href="/entregador/historico" style={linkHistorico}>
+          Ver histórico e ganhos
+        </a>
+        <div style={{ marginTop: 24 }}>
           <CourierLogoutButton />
         </div>
       </div>
@@ -78,4 +81,13 @@ const subtitulo: CSSProperties = {
   fontSize: 14,
   lineHeight: 1.45,
   color: '#6b675f',
+};
+
+const linkHistorico: CSSProperties = {
+  display: 'inline-block',
+  marginTop: 20,
+  fontSize: 14,
+  fontWeight: 600,
+  color: '#3f7d16',
+  textDecoration: 'none',
 };
