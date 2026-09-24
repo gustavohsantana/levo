@@ -72,3 +72,45 @@ export function googleMapsRouteUrl(stops: readonly MapsStop[]): MapsRouteLink | 
 function sixDecimals(value: number): number {
   return Math.round(value * 1e6) / 1e6;
 }
+
+/**
+ * O app de navegação que o motoboy prefere abrir.
+ *
+ * A escolha é dele, guardada no aparelho: quem entrega de moto em cidade
+ * grande costuma jurar pelo Waze, e forçar o Google seria empurrar uma troca de
+ * contexto a cada parada. O padrão é o Google porque é o que a maioria já tem
+ * instalado e o que abre no navegador quando não há app nenhum.
+ */
+export type MapProvider = 'google' | 'waze';
+
+export interface NavStop {
+  coordinates: { lat: number; lng: number } | null;
+  /** Endereço escrito, usado quando a parada não tem pino. */
+  address: string;
+}
+
+/**
+ * Link de navegação para UMA parada, no app que o motoboy escolheu.
+ *
+ * Só uma parada de propósito: o Waze não aceita rota com paradas intermediárias
+ * por URL, e mesmo no Google o "Navegar" de cada parada é o que faz o motoboy
+ * voltar ao app para confirmar a entrega. A visão geral com várias paradas é
+ * outra coisa (`googleMapsRouteUrl`), e continua só no Google.
+ *
+ * Sem pino, navega pelo endereço escrito: o app de mapa acha endereço que o
+ * nosso geocodificador não achou, então mandar o texto é uma chance a mais de
+ * o motoboy chegar sem ligar para ninguém.
+ */
+export function stopNavUrl(stop: NavStop, provider: MapProvider): string {
+  if (provider === 'waze') {
+    const destino = stop.coordinates
+      ? `ll=${sixDecimals(stop.coordinates.lat)},${sixDecimals(stop.coordinates.lng)}`
+      : `q=${encodeURIComponent(stop.address)}`;
+    return `https://waze.com/ul?${destino}&navigate=yes`;
+  }
+
+  const destination = stop.coordinates
+    ? `${sixDecimals(stop.coordinates.lat)},${sixDecimals(stop.coordinates.lng)}`
+    : encodeURIComponent(stop.address);
+  return `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving`;
+}
