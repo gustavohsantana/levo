@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { getCourierSession } from '@/presentation/http/courier-session';
+import { historicoDeHoje } from '@/presentation/driver-queries';
 import { rotaAtualDoMotoboy } from '@/presentation/courier-login';
 import { CourierLoginScreen } from '@/presentation/ui/patterns/courier-login-screen';
 import { CourierWaiting } from '@/presentation/ui/patterns/courier-waiting';
@@ -24,7 +25,11 @@ export default async function EntregadorHomePage() {
    */
   if (rota) redirect(`/m/${rota.accessToken}`);
 
-  return <CourierWaiting nome={session.name} />;
+  const historico = await historicoDeHoje(session.establishmentId, session.courierId).catch(
+    () => null,
+  );
+
+  return <CourierWaiting nome={session.name} historico={historico} />;
 }
 
 async function sessaoDoMotoboy() {

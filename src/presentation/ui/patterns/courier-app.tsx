@@ -28,11 +28,15 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import type { DriverRouteView, DriverStopView } from '@/presentation/driver-queries';
+import type { HistoricoDoDia as Historico } from '@/presentation/historico-do-motoboy';
 import { Button } from '../primitives';
 import { cn } from '../cn';
 import { currency, phoneDisplay } from '../format';
 import { googleMapsRouteUrl } from '../maps-link';
+import { urlDeNavegacao, type AppDeMapa } from '../navegacao';
 import { enqueue, flush } from '../offline-queue';
+import { EscolhaDoMapa, useMapaPadrao } from './escolha-do-mapa';
+import { HistoricoDoDia } from './historico-do-dia';
 
 const PING_INTERVAL_MS = 15_000;
 
@@ -53,13 +57,24 @@ export function CourierApp({
   token,
   route,
   exigeCodigo = false,
+  historico,
 }: {
   token: string;
   route: DriverRouteView;
   /** A loja pede o código do cliente para fechar a entrega. */
   exigeCodigo?: boolean;
+  /** Entregas concluídas hoje. `null` quando a consulta falhou. */
+  historico: Historico | null;
 }) {
   const router = useRouter();
+  /** Qual bloco está em foco. Os dois continuam na página: a rota não sai. */
+  const [aba, setAba] = useState<'rota' | 'hoje'>('rota');
+  const [mapa] = useMapaPadrao();
+
+  function irPara(proxima: 'rota' | 'hoje') {
+    setAba(proxima);
+    document.getElementById(proxima)?.scrollIntoView({ block: 'start' });
+  }
   const [pendingSync, setPendingSync] = useState(0);
   /** Motivo pelo qual a fila não anda — mostrado ao motoboy, não engolido. */
   const [blocked, setBlocked] = useState<string | null>(null);
@@ -381,79 +396,51 @@ export function CourierApp({
     await sync();
   }
 
-  /**
-   * A rota existe mas o dono ainda não clicou em "saiu para entrega".
-   *
-   * Antes desta tela, o botão "Entreguei" aparecia normalmente, o servidor
-   * respondia 409 e a fila descartava a marcação: o motoboy via a entrega como
-   * concluída e nada tinha sido gravado. Agora o estado é explícito.
-   */
-  if (route.status === 'PLANNED') {
-    return (
-      <Shell>
-        <div className="grid flex-1 place-items-center px-6 text-center">
-          <div className="space-y-3">
-            <span className="mx-auto grid size-14 place-items-center rounded-full bg-raised text-ink-muted">
-              <Package className="size-7" aria-hidden />
-            </span>
-            <p className="text-xl font-semibold text-ink">Rota pronta, aguardando liberação</p>
-            <p className="mx-auto max-w-xs text-sm text-ink-muted">
-              São <span className="numeric">{stops.length}</span> entregas. O{' '}
-              {route.establishmentName} precisa confirmar a saída para você começar.
-            </p>
-            <p className="text-xs text-ink-faint">Esta tela se atualiza sozinha.</p>
-          </div>
-        </div>
-      </Shell>
-    );
-  }
-
-  if (route.status === 'FINISHED' || pending.length === 0) {
-    return (
-      <Shell>
-        <div className="grid flex-1 place-items-center px-6 text-center">
-          <div className="space-y-3">
-            <span className="mx-auto grid size-14 place-items-center rounded-full bg-accent text-accent-ink">
-              <Check className="size-7" aria-hidden />
-            </span>
-            <p className="text-xl font-semibold text-ink">Rota concluída</p>
-            <p className="text-sm text-ink-muted">
-              <span className="numeric">{done}</span> de{' '}
-              <span className="numeric">{stops.length}</span> entregas finalizadas. Bom trabalho,{' '}
-              {route.courierName.split(' ')[0]}.
-            </p>
-          </div>
-        </div>
-      </Shell>
-    );
-  }
+  const emAndamento = route.status === 'IN_PROGRESS' && pending.length > 0;
 
   return (
     <Shell>
-      <header className="flex items-center gap-3 border-b px-4 py-3">
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-ink">{route.establishmentName}</p>
-          <p className="text-xs text-ink-muted">
-            <span className="numeric">{done}</span> de{' '}
-            <span className="numeric">{stops.length}</span> entregues
-          </p>
-        </div>
+      {emAndamento ? (
+        <header className="flex items-center gap-3 border-b px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-ink">{route.establishmentName}</p>
+            <p className="text-xs text-ink-muted">
+              <span className="numeric">{done}</span> de{' '}
+              <span className="numeric">{stops.length}</span> entregues
+            </p>
+          </div>
 
-        {/*
-          Estado da conexão sempre visível. O motoboy precisa saber que o que
-          ele marcou está guardado, mesmo sem sinal — senão ele remarca, ou
-          desiste do app.
-        */}
-        {!online || pendingSync > 0 ? (
-          <span
-            className="flex items-center gap-1.5 rounded-sm bg-warning-soft px-2 py-1 text-xs text-warning"
-            title={blocked ?? undefined}
-          >
-            <CloudOff className="size-3.5" aria-hidden />
-            {pendingSync > 0 ? `${pendingSync} p/ enviar` : 'Sem conexão'}
-          </span>
-        ) : null}
-      </header>
+          {/*
+            Estado da conexão sempre visível. O motoboy precisa saber que o que
+            ele marcou está guardado, mesmo sem sinal — senão ele remarca, ou
+            desiste do app.
+          */}
+          {!online || pendingSync > 0 ? (
+            <span
+              className="flex items-center gap-1.5 rounded-sm bg-warning-soft px-2 py-1 text-xs text-warning"
+              title={blocked ?? undefined}
+            >
+              <CloudOff className="size-3.5" aria-hidden />
+              {pendingSync > 0 ? `${pendingSync} p/ enviar` : 'Sem conexão'}
+            </span>
+          ) : null}
+        </header>
+      ) : null}
+
+      <div className="sticky top-0 z-10 bg-canvas">
+        <AbasDaRota aba={aba} onAba={irPara} />
+      </div>
+
+      {/*
+        A rota fica nesta página, acima do dia. "Hoje" só desce a tela —
+        a parada em andamento continua aqui, pronta para o Entreguei.
+      */}
+      <div id="rota" aria-labelledby="aba-rota" className="flex scroll-mt-20 flex-col">
+        {route.status === 'PLANNED' ? (
+          <AguardandoLiberacao stops={stops.length} loja={route.establishmentName} />
+        ) : emAndamento ? null : (
+          <RotaConcluida done={done} total={stops.length} nome={route.courierName} />
+        )}
 
       {/*
         A recusa vira um convite, não um beco.
@@ -486,9 +473,11 @@ export function CourierApp({
         </p>
       ) : null}
 
-      {current ? <CurrentStop stop={current} onResolve={resolveStop} /> : null}
+      {emAndamento && current ? (
+        <CurrentStop stop={current} onResolve={resolveStop} mapa={mapa} />
+      ) : null}
 
-      {pending.length > 1 ? (
+      {emAndamento && pending.length > 1 ? (
         <section className="border-t px-4 py-4">
           <div className="mb-2 flex items-center justify-between gap-3">
             <h2 className="text-xs font-medium uppercase tracking-wide text-ink-faint">
@@ -585,7 +574,98 @@ export function CourierApp({
           ) : null}
         </section>
       ) : null}
+
+        {emAndamento ? null : <EscolhaDoMapa />}
+      </div>
+
+      <div id="hoje" aria-labelledby="aba-hoje" className="scroll-mt-20 border-t">
+        <HistoricoDoDia historico={historico} mostrarTitulo />
+      </div>
     </Shell>
+  );
+}
+
+function AbasDaRota({
+  aba,
+  onAba,
+}: {
+  aba: 'rota' | 'hoje';
+  onAba: (aba: 'rota' | 'hoje') => void;
+}) {
+  const abas = [
+    ['rota', 'Rota'],
+    ['hoje', 'Hoje'],
+  ] as const;
+
+  return (
+    <div
+      className="grid grid-cols-2 gap-1 border-b px-4 py-2"
+      role="tablist"
+      aria-label="Rota e entregas de hoje"
+    >
+      {abas.map(([chave, rotulo]) => {
+        const ativa = aba === chave;
+        return (
+          <button
+            key={chave}
+            type="button"
+            role="tab"
+            id={`aba-${chave}`}
+            aria-selected={ativa}
+            aria-controls={chave}
+            onClick={() => onAba(chave)}
+            className={cn(
+              'min-h-12 rounded-lg text-base font-semibold transition',
+              ativa ? 'bg-accent text-accent-ink' : 'bg-raised text-ink',
+            )}
+          >
+            {rotulo}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * A rota existe mas o dono ainda não clicou em "saiu para entrega".
+ *
+ * Antes desta tela, o botão "Entreguei" aparecia normalmente, o servidor
+ * respondia 409 e a fila descartava a marcação: o motoboy via a entrega como
+ * concluída e nada tinha sido gravado. Agora o estado é explícito.
+ */
+function AguardandoLiberacao({ stops, loja }: { stops: number; loja: string }) {
+  return (
+    <div className="grid flex-1 place-items-center px-6 text-center">
+      <div className="space-y-3">
+        <span className="mx-auto grid size-14 place-items-center rounded-full bg-raised text-ink-muted">
+          <Package className="size-7" aria-hidden />
+        </span>
+        <p className="text-xl font-semibold text-ink">Rota pronta, aguardando liberação</p>
+        <p className="mx-auto max-w-xs text-sm text-ink-muted">
+          São <span className="numeric">{stops}</span> entregas. O {loja} precisa confirmar a saída
+          para você começar.
+        </p>
+        <p className="text-xs text-ink-faint">Esta tela se atualiza sozinha.</p>
+      </div>
+    </div>
+  );
+}
+
+function RotaConcluida({ done, total, nome }: { done: number; total: number; nome: string }) {
+  return (
+    <div className="grid flex-1 place-items-center px-6 text-center">
+      <div className="space-y-3">
+        <span className="mx-auto grid size-14 place-items-center rounded-full bg-accent text-accent-ink">
+          <Check className="size-7" aria-hidden />
+        </span>
+        <p className="text-xl font-semibold text-ink">Rota concluída</p>
+        <p className="text-sm text-ink-muted">
+          <span className="numeric">{done}</span> de <span className="numeric">{total}</span>{' '}
+          entregas finalizadas. Bom trabalho, {nome.split(' ')[0]}.
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -610,9 +690,11 @@ function Shell({ children }: { children: React.ReactNode }) {
 function CurrentStop({
   stop,
   onResolve,
+  mapa,
 }: {
   stop: DriverStopView;
   onResolve: (stop: DriverStopView, outcome: 'DELIVERED' | 'FAILED') => void;
+  mapa: AppDeMapa;
 }) {
   const [busy, setBusy] = useState(false);
 
@@ -654,6 +736,8 @@ function CurrentStop({
         <p className="numeric mt-3 text-lg font-medium text-ink">{currency(stop.amountCents)}</p>
       </div>
 
+      <EscolhaDoMapa embutido />
+
       <div className="grid grid-cols-2 gap-2">
         <Button
           size="touch"
@@ -662,28 +746,10 @@ function CurrentStop({
           className={cn(!stop.coordinates && 'pointer-events-none opacity-40')}
         >
           {/*
-            Abre o app de navegação que o motoboy já usa e confia. Reimplementar
-            navegação passo a passo dentro do produto seria competir com o Waze
-            e perder — e ele nem quer isso.
+            Abre o app que ele escolheu neste aparelho. Reimplementar navegação
+            passo a passo dentro do produto seria competir com o Waze e perder.
           */}
-          <a
-            href={
-              stop.coordinates
-                ? `https://www.google.com/maps/dir/?api=1&destination=${stop.coordinates.lat},${stop.coordinates.lng}&travelmode=driving`
-                : /*
-                   * Sem pino, navega pelo ENDEREÇO escrito.
-                   *
-                   * O `href="#"` de antes era um botão que não fazia nada — o
-                   * pior tipo, porque parece funcionar. E o Google Maps acha
-                   * endereço que o nosso geocodificador não acha: a base é
-                   * outra, e "Resende" com S ele resolve. Mandar o texto é uma
-                   * chance a mais de o motoboy chegar sem ligar para ninguém.
-                   */
-                  `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(stop.address)}&travelmode=driving`
-            }
-            target="_blank"
-            rel="noreferrer"
-          >
+          <a href={urlDeNavegacao(stop, mapa)} target="_blank" rel="noreferrer">
             <Navigation />
             Navegar
           </a>
