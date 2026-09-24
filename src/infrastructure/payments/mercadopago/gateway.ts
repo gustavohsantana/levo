@@ -154,6 +154,55 @@ export async function resolverIdPagamentoMp(
   return { paymentId: resourceId };
 }
 
+/**
+ * O "não" do Mercado Pago em português, sem inventar um "sim".
+ *
+ * Um estorno recusado tem sempre um motivo concreto — já estornado, saldo
+ * sacado, prazo vencido — e é ele que diz ao dono o que fazer em seguida.
+ * "Erro ao estornar" mandaria a pessoa abrir o painel do Mercado Pago para
+ * descobrir o que esta resposta já disse.
+ *
+ * O que não reconhecemos vai inteiro para a tela. A API muda mensagem sem
+ * avisar, e uma frase estranha em inglês ainda é melhor do que engolir a única
+ * pista que existe.
+ */
+function motivoDaRecusa(
+  body: {
+    message?: string;
+    error?: string;
+    status?: string;
+    cause?: Array<{ description?: string; code?: string | number }>;
+  },
+  httpStatus: number,
+): string {
+  const detalhe =
+    body.cause?.[0]?.description
+    ?? body.message
+    ?? body.error
+    ?? (body.status ? `estorno ${body.status}` : `HTTP ${httpStatus}`);
+
+  const texto = detalhe.toLowerCase();
+
+  if (texto.includes('already refunded') || texto.includes('already_refunded')) {
+    return 'este pagamento já foi estornado.';
+  }
+  if (texto.includes('unavailable_funds') || texto.includes('insufficient')) {
+    return 'a conta da loja não tem saldo para devolver — o valor já foi sacado. '
+      + 'Reponha o saldo e estorne pelo painel do Mercado Pago.';
+  }
+  if (texto.includes('expired') || texto.includes('period')) {
+    return 'o prazo de estorno deste pagamento já venceu.';
+  }
+  if (texto.includes('not found') || httpStatus === 404) {
+    return 'não encontrei este pagamento na conta da loja.';
+  }
+  if (texto.includes('status')) {
+    return `o pagamento não está em estado que aceite estorno (${detalhe}).`;
+  }
+
+  return `o estorno foi recusado (${detalhe}).`;
+}
+
 export class MercadoPagoGateway implements PaymentGateway {
   async createPixCharge(input: {
     accessToken: string;
@@ -426,6 +475,101 @@ export class MercadoPagoGateway implements PaymentGateway {
       status: mapMercadoPagoStatus(body.status ?? '', body.status_detail ?? ''),
       paidAt: body.date_approved ? new Date(body.date_approved) : null,
     };
+  }
+
+  /**
+   * `POST /v1/payments/{id}/refunds` com corpo vazio — que é como a API do
+   * Mercado Pago diz "devolve tudo". Mandar `amount` igual ao total daria no
+   * mesmo para ela e abriria a porta para estorno parcial entrar por descuido.
+   *
+   * O id precisa ser o numérico do pagamento. O banco pode ter guardado
+   * `PAY01…`/`ORD01…` do tempo da Orders API, ou o id da preferência do
+   * Checkout Pro, e nenhum dos dois aceita `/refunds`.
+   */
+  async refund(input: { accessToken: string; externalId: string; orderId?: string }) {
+    const id = await this.idNumericoPara(input);
+
+    const response = await fetch(`${PAYMENTS_URL}/${id}/refunds`, {
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${input.accessToken}`,
+        'Content-Type': 'application/json',
+        /*
+         * Derivada do pagamento, e não sorteada: dois cliques em "estornar"
+         * devolvem o mesmo estorno em vez de tentarem devolver duas vezes.
+         */
+        'X-Idempotency-Key': `refund-${id}`,
+      },
+      body: JSON.stringify({}),
+    });
+
+    const body = (await response.json().catch(() => ({}))) as {
+      id?: string | number;
+      amount?: number;
+      status?: string;
+      date_created?: string;
+      message?: string;
+      error?: string;
+      cause?: Array<{ description?: string; code?: string | number }>;
+    };
+
+    if (!response.ok) {
+      throw new ExternalServiceError('Mercado Pago', motivoDaRecusa(body, response.status), {
+        externalId: id,
+        status: response.status,
+        cause: body.cause,
+      });
+    }
+
+    /*
+     * 200 com estorno recusado existe: a API responde o recurso criado com
+     * `status: rejected` quando a conta não tem saldo para devolver. Tratar
+     * como sucesso diria ao dono que o dinheiro voltou.
+     */
+    if (body.status === 'rejected' || body.status === 'cancelled') {
+      throw new ExternalServiceError('Mercado Pago', motivoDaRecusa(body, response.status), {
+        externalId: id,
+        refundStatus: body.status,
+      });
+    }
+
+    return {
+      status: body.status === 'in_process' ? ('IN_PROCESS' as const) : ('APPROVED' as const),
+      amountCents: Math.round((body.amount ?? 0) * 100),
+      refundedAt: body.date_created ? new Date(body.date_created) : new Date(),
+      resolvedExternalId: id,
+    };
+  }
+
+  /**
+   * O id numérico daquele pagamento, custe uma chamada a mais.
+   *
+   * Mesma escada do `getCharge`: tenta resolver o que veio, e cai na busca por
+   * `external_reference` quando o que está guardado não é um pagamento.
+   */
+  private async idNumericoPara(input: {
+    accessToken: string;
+    externalId: string;
+    orderId?: string;
+  }): Promise<string> {
+    const resolvido = await resolverIdPagamentoMp(input.accessToken, input.externalId);
+    if (isNumericPaymentId(resolvido.paymentId)) return resolvido.paymentId;
+
+    const referencia = input.orderId ?? resolvido.orderId;
+    const numerico = referencia
+      ? await buscarIdNumerico(input.accessToken, referencia)
+      : null;
+
+    if (!numerico) {
+      throw new ExternalServiceError(
+        'Mercado Pago',
+        'Não encontrei o pagamento deste pedido para estornar. Confira no painel do Mercado Pago.',
+        { externalId: input.externalId, orderId: input.orderId },
+      );
+    }
+
+    return numerico;
   }
 
   async getCharge(input: { accessToken: string; externalId: string; orderId?: string }) {

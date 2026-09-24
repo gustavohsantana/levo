@@ -335,6 +335,36 @@ export async function cancelOrderAction(
 }
 
 /**
+ * Devolve ao cliente o pagamento online de um pedido do cardápio da loja.
+ *
+ * Devolve o valor estornado para a tela poder dizer **quanto** voltou: "pronto"
+ * sem número não é confirmação de nada quando o assunto é dinheiro, e é o
+ * primeiro que o dono confere no extrato.
+ *
+ * `emAndamento` existe porque o Mercado Pago às vezes aceita o estorno e leva
+ * alguns minutos para devolver. Chamar isso de concluído faria o dono garantir
+ * ao cliente que o dinheiro já está lá.
+ */
+export type EstornoResult =
+  | { ok: true; amountCents: number; emAndamento: boolean }
+  | { ok: false; error: string };
+
+export async function estornarPagamentoAction(orderId: string): Promise<EstornoResult> {
+  try {
+    const session = await requireSession();
+    const resultado = await containerFor(session.establishmentId).useCases.refundPayment.execute(
+      orderId,
+    );
+
+    revalidatePath('/dashboard');
+    revalidatePath('/cozinha');
+    return { ok: true, amountCents: resultado.amountCents, emAndamento: resultado.emAndamento };
+  } catch (cause) {
+    return { ok: false, error: toFormError(cause) };
+  }
+}
+
+/**
  * Cidade e estado da operação.
  *
  * Editável porque entra em toda busca de endereço: um piloto em Pouso Alegre e

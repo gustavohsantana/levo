@@ -30,6 +30,8 @@ export const OrderEvents = {
   TrackingOpened: 'order.tracking_opened',
   PaymentConfirmed: 'order.payment_confirmed',
   PaymentChargedBack: 'order.payment_charged_back',
+  /** Estornado ao pagador — pelo painel do dono, ou pelo do Mercado Pago. */
+  PaymentRefunded: 'order.payment_refunded',
 } as const;
 
 export const RouteEvents = {

@@ -38,6 +38,9 @@ function gatewayFake(overrides: Partial<PaymentGateway> = {}): PaymentGateway {
     async getCharge() {
       throw new Error('não deveria consultar neste teste');
     },
+    async refund() {
+      throw new Error('não deveria estornar neste teste');
+    },
     ...overrides,
   };
 }

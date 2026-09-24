@@ -15,7 +15,10 @@ export const OrderStatus = {
   InRoute: 'IN_ROUTE',
   Delivered: 'DELIVERED',
   Failed: 'FAILED',
-  /** Cancelado na plataforma de origem, fora do Levô. Estado terminal. */
+  /**
+   * Morto: cancelado na plataforma de origem, ou estornado pelo dono no painel.
+   * Estado terminal — não entra em rota, e sai da que já tinha.
+   */
   Cancelled: 'CANCELLED',
 } as const;
 export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
@@ -286,6 +289,31 @@ export class Order extends AggregateRoot {
   markPaymentChargedBack(at: Date): void {
     this.props.paymentStatus = 'CHARGED_BACK';
     this.record(OrderEvents.PaymentChargedBack, this.props.establishmentId, { orderId: this.id }, at);
+  }
+
+  /**
+   * O dinheiro voltou para quem pagou — e o pedido morre com ele.
+   *
+   * Não é só um estado de pagamento: quem estorna está desistindo do pedido.
+   * Deixar `paymentStatus = REFUNDED` num pedido que segue `NEW` produziria a
+   * pior combinação possível — ele sai da fila da cozinha por causa de
+   * `isReleasedToKitchen`, some da tela, e continua vivo o bastante para
+   * alguém achar depois e despachar. Por isso o pedido também é encerrado, e
+   * solta a rota em que estava.
+   *
+   * Idempotente: o webhook do Mercado Pago reentrega, e o mesmo estorno pode
+   * chegar pelo painel e pela notificação.
+   */
+  markPaymentRefunded(at: Date): void {
+    if (this.props.paymentStatus === 'REFUNDED') return;
+
+    this.props.paymentStatus = 'REFUNDED';
+    this.props.status = OrderStatus.Cancelled;
+    this.props.routeId = null;
+    this.record(OrderEvents.PaymentRefunded, this.props.establishmentId, {
+      orderId: this.id,
+      amountCents: this.props.amount.cents,
+    }, at);
   }
 
   /**

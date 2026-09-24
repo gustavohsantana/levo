@@ -1,11 +1,12 @@
 'use client';
 
 import * as Dialog from '@radix-ui/react-dialog';
-import { Ban, MessageCircle, X } from 'lucide-react';
+import { Ban, MessageCircle, Undo2, X } from 'lucide-react';
 import type { OrderView } from '@/presentation/queries';
 import { Button } from '../primitives';
 import { clockTime, currency, phoneDisplay } from '../format';
 import { CancelOrderDialog } from './cancel-order-dialog';
+import { RefundPaymentDialog } from './refund-payment-dialog';
 import { SourceTag } from './source-tag';
 
 /**
@@ -35,6 +36,30 @@ const STATUS_PAGAMENTO: Record<string, string> = {
   REJECTED: 'Cartão recusado',
   CHARGED_BACK: 'Contestação (chargeback)',
 };
+
+/** Pedido vivo. Só nele qualquer uma das duas ações do rodapé faz sentido. */
+function emAndamento(pedido: OrderView): boolean {
+  return pedido.status === 'NEW' || pedido.status === 'IN_ROUTE';
+}
+
+function podeCancelarNaPlataforma(pedido: OrderView): boolean {
+  return pedido.source === 'IFOOD' && emAndamento(pedido);
+}
+
+/**
+ * Estornar aparece só onde há dinheiro da loja para devolver: pagamento online
+ * confirmado, num pedido do cardápio dela.
+ *
+ * Pedido de marketplace fica de fora mesmo pago — quem cobrou foi a plataforma,
+ * e o estorno de lá é o cancelamento dela. Oferecer o botão faria o dono clicar
+ * numa noite cheia e receber uma recusa que ele não tem como resolver.
+ */
+function podeEstornar(pedido: OrderView): boolean {
+  if (pedido.source === 'IFOOD' || pedido.source === 'AIQFOME' || pedido.source === 'WEBHOOK') {
+    return false;
+  }
+  return pedido.paymentStatus === 'PAID' && emAndamento(pedido);
+}
 
 export function OrderDetailDialog({
   pedido,
@@ -214,26 +239,43 @@ export function OrderDetailDialog({
           </div>
 
           {/*
-            Cancelar fica no rodapé do detalhe, longe do fluxo normal e atrás de
-            um segundo diálogo: é a única ação daqui que o lojista não desfaz.
-            Só o iFood por enquanto: no manual não há plataforma para avisar, e
-            a API do aiqfome ainda não expõe cancelamento. Botão que sempre
-            falha é pior que botão ausente — quando eles abrirem o endpoint,
-            muda esta linha.
+            As ações sem volta ficam no rodapé do detalhe, longe do fluxo normal
+            e atrás de um segundo diálogo. Cada uma serve a um caminho diferente
+            do dinheiro, e por isso nunca aparecem juntas: cancelar avisa a
+            plataforma que cobrou pelo pedido; estornar devolve o que a loja
+            recebeu na própria conta.
+
+            Cancelar, só o iFood por enquanto: no manual não há plataforma para
+            avisar, e a API do aiqfome ainda não expõe cancelamento. Botão que
+            sempre falha é pior que botão ausente — quando eles abrirem o
+            endpoint, muda esta linha.
           */}
-          {pedido.source === 'IFOOD' &&
-          (pedido.status === 'NEW' || pedido.status === 'IN_ROUTE') ? (
+          {podeCancelarNaPlataforma(pedido) || podeEstornar(pedido) ? (
             <div className="flex justify-end border-t px-5 py-3">
-              <CancelOrderDialog
-                orderId={pedido.id}
-                customerName={pedido.customerName}
-                trigger={
-                  <Button variant="ghost" size="sm" className="text-danger hover:bg-danger-soft">
-                    <Ban />
-                    Cancelar pedido
-                  </Button>
-                }
-              />
+              {podeEstornar(pedido) ? (
+                <RefundPaymentDialog
+                  orderId={pedido.id}
+                  customerName={pedido.customerName}
+                  amountCents={pedido.amountCents}
+                  trigger={
+                    <Button variant="ghost" size="sm" className="text-danger hover:bg-danger-soft">
+                      <Undo2 />
+                      Estornar pagamento
+                    </Button>
+                  }
+                />
+              ) : (
+                <CancelOrderDialog
+                  orderId={pedido.id}
+                  customerName={pedido.customerName}
+                  trigger={
+                    <Button variant="ghost" size="sm" className="text-danger hover:bg-danger-soft">
+                      <Ban />
+                      Cancelar pedido
+                    </Button>
+                  }
+                />
+              )}
             </div>
           ) : null}
         </Dialog.Content>
