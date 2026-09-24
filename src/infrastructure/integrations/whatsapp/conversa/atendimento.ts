@@ -287,7 +287,7 @@ function semMemoriaInjetada(dialogo: FalaDoDialogo[]): FalaDoDialogo[] {
  * continua com carrinho vazio, e a próxima poda apaga a fala.
  */
 function colherDoDialogo(estado: EstadoDaConversa, dialogo: FalaDoDialogo[]): EstadoDaConversa {
-  let next = { ...estado, carrinho: [...estado.carrinho] };
+  const next = { ...estado, carrinho: [...estado.carrinho] };
 
   for (const fala of dialogo) {
     if (fala.papel !== 'ferramenta') continue;
