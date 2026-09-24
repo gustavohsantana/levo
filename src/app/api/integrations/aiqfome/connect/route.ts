@@ -1,7 +1,7 @@
-import { NextResponse } from 'next/server';
-import { ForbiddenError } from '@/core';
+import { NextResponse, type NextRequest } from 'next/server';
 import { env } from '@/env';
 import { aiqfomeOAuth } from '@/infrastructure/integrations/aiqfome/factory';
+import { aiqfomePronto } from '@/presentation/integracao-disponivel';
 import { toErrorResponse } from '@/presentation/http/error-mapper';
 import { issueOAuthState } from '@/presentation/http/oauth-state';
 import { requireSession } from '@/presentation/http/session';
@@ -13,12 +13,17 @@ import { requireSession } from '@/presentation/http/session';
  * dele** — sem isso, um link solto conectaria a conta de um lojista ao
  * estabelecimento de outro.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await requireSession();
 
-    if (!env().aiqfomeEnabled) {
-      throw new ForbiddenError('Integração com o aiqfome desligada');
+    /*
+     * Sem credencial, o dono não sai do painel para um JSON. Volta para
+     * Integrações, onde o cartão já explica o que falta — o mesmo recado do
+     * 99Food e do iFood.
+     */
+    if (!aiqfomePronto(env())) {
+      return NextResponse.redirect(new URL('/dashboard/integracoes', request.nextUrl.origin));
     }
 
     const state = await issueOAuthState({

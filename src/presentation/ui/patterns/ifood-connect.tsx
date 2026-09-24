@@ -9,6 +9,7 @@ import {
   iniciarVinculacaoIfood,
 } from '@/presentation/integration-actions';
 import { Button, Field, Input } from '../primitives';
+import { IntegracaoIndisponivel } from './integracao-indisponivel';
 
 /**
  * Conectar o iFood sem terminal.
@@ -24,9 +25,11 @@ import { Button, Field, Input } from '../primitives';
 interface Props {
   conectado: boolean;
   lojaAtual: { id: string; nome: string | null } | null;
+  /** Falso quando o ambiente não tem o client id e o segredo do aplicativo. */
+  disponivel: boolean;
 }
 
-export function IfoodConnect({ conectado, lojaAtual }: Props) {
+export function IfoodConnect({ conectado, lojaAtual, disponivel }: Props) {
   const [pendente, startTransition] = useTransition();
   const [codigo, setCodigo] = useState<{ userCode: string; url: string; minutos: number } | null>(
     null,
@@ -64,6 +67,10 @@ export function IfoodConnect({ conectado, lojaAtual }: Props) {
         setErro(resultado.error);
       }
     });
+  }
+
+  if (!disponivel && !conectado) {
+    return <IntegracaoIndisponivel titulo="iFood" />;
   }
 
   if (conectado && !codigo) {
