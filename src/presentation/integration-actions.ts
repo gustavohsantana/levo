@@ -2,6 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
+import { ConfigurationError } from '@/core';
 import { env } from '@/env';
 import { IfoodAuth } from '@/infrastructure/integrations/ifood/auth';
 import { Food99Auth } from '@/infrastructure/integrations/99food/auth';
@@ -15,6 +16,10 @@ import { mercadoPagoEnvCredentials } from '@/infrastructure/payments/mercadopago
 import { getPrismaClient } from '@/infrastructure/persistence/prisma/client';
 import { requireSession } from './http/session';
 import { toFormError } from './http/error-mapper';
+import {
+  AVISO_INTEGRACAO_SEM_CREDENCIAL,
+  ifoodPronto,
+} from './integracao-disponivel';
 
 /**
  * Conectar o iFood pela tela, não pelo terminal.
@@ -52,8 +57,8 @@ export type InicioVinculacao =
 function auth(): IfoodAuth {
   const config = env();
 
-  if (!config.IFOOD_CLIENT_ID || !config.IFOOD_CLIENT_SECRET) {
-    throw new Error('Integração com o iFood não configurada neste ambiente.');
+  if (!ifoodPronto(config)) {
+    throw new ConfigurationError(AVISO_INTEGRACAO_SEM_CREDENCIAL);
   }
 
   return new IfoodAuth({

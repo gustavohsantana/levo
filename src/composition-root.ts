@@ -1,10 +1,7 @@
 import { env } from './env';
 import { getPrismaClient } from './infrastructure/persistence/prisma/client';
 import { PrismaUnitOfWork } from './infrastructure/persistence/prisma/unit-of-work';
-import { CachedGeocoder } from './infrastructure/geocoding/cached-geocoder';
-import { NominatimGeocoder } from './infrastructure/geocoding/nominatim-geocoder';
-import { IbgeGeocoder } from './infrastructure/geocoding/ibge-geocoder';
-import { CascataGeocoder } from './infrastructure/geocoding/cascata-geocoder';
+import { criarGeocoder } from './infrastructure/geocoding/padrao';
 import { OsrmRoutingService } from './infrastructure/routing/osrm-routing-service';
 import { TwoOptOptimizer } from './infrastructure/routing/two-opt-optimizer';
 import { WhatsAppLinkBuilder } from './infrastructure/messaging/whatsapp-link-builder';
@@ -111,37 +108,7 @@ export function containerFor(establishmentId: string): Container {
   const prisma = getPrismaClient(config.DATABASE_URL);
   const uow = new PrismaUnitOfWork(prisma, establishmentId);
 
-  // O cache precisa da própria transação, então o decorator recebe um
-  // repositório que abre a sua. Geocodificar é chamada de rede: manter isso
-  // fora da transação do caso de uso é o que evita segurar conexão do pool
-  // esperando terceiro responder.
-  const geocoder = new CachedGeocoder(
-    /*
-     * IBGE primeiro, Nominatim depois.
-     *
-     * A base do IBGE tem as ruas do interior que faltam no OpenStreetMap — quando
-     * a cidade foi carregada, ela responde e nem chega ao Nominatim. Não achou,
-     * o `null` passa a vez. O cache por cima vale para os dois: o pino do cliente
-     * e o acerto do IBGE ficam guardados juntos.
-     */
-    new CascataGeocoder(
-      [
-        new IbgeGeocoder(getPrismaClient(config.DATABASE_URL), logger),
-        new NominatimGeocoder({
-          baseUrl: config.GEOCODER_BASE_URL,
-          apiKey: config.GEOCODER_API_KEY || undefined,
-          userAgent: config.GEOCODER_USER_AGENT,
-          logger,
-        }),
-      ],
-      logger,
-    ),
-    {
-      get: (key) => uow.run((repos) => repos.geocodeCache.get(key)),
-      set: (key, coords) => uow.run((repos) => repos.geocodeCache.set(key, coords)),
-    },
-    logger,
-  );
+  const geocoder = criarGeocoder(establishmentId, logger);
 
   const routing = new OsrmRoutingService({ baseUrl: config.OSRM_BASE_URL, logger });
   const optimizer = new TwoOptOptimizer();

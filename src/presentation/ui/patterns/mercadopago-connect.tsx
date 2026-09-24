@@ -61,7 +61,13 @@ export function MercadoPagoConnect({
         </h3>
 
         <p className="mt-1 text-sm leading-relaxed text-ink-muted">
-          {precisaReconectar ? (
+          {!disponivel ? (
+            <>
+              Ainda não configurado neste ambiente. As credenciais do Mercado Pago precisam estar
+              no servidor antes de oferecer Pix e cartão. Enquanto isso, o cardápio cobra na
+              entrega.
+            </>
+          ) : precisaReconectar ? (
             <>
               A autorização não vale mais — ela pode ter sido revogada na sua conta do Mercado
               Pago. <strong className="text-ink">Pix e cartão saíram do seu cardápio</strong> até
@@ -151,11 +157,7 @@ export function MercadoPagoConnect({
               </>
             ) : null}
           </div>
-        ) : (
-          <p className="mt-4 text-xs leading-relaxed text-ink-faint">
-            Pagamento online ainda não está configurado neste ambiente.
-          </p>
-        )}
+        ) : null}
       </div>
     );
   }

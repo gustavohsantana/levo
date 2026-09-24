@@ -4,6 +4,7 @@ import type { Order, OrderSourceKind, Route } from '@/core';
 import { requireSession } from './http/session';
 import { completar } from '@/application/use-cases/catalog/reorder-catalog';
 import { statusDoRastreio, textoDoRastreio } from '@/core/services/tracking-status';
+import { totaisParaImpressao } from '@/presentation/impressao';
 
 /**
  * Leituras das telas do dono.
@@ -891,8 +892,9 @@ export async function getRoute(routeId: string) {
  * Um pedido, pronto para o papel — comanda e cupom.
  *
  * Reaproveita a `OrderView` (já tem itens com opção, endereço, taxa, pagamento);
- * o troco fica de fora porque não é campo do pedido. O layout de 80mm calcula
- * subtotal e total a partir das linhas, para bater com o que a cozinha monta.
+ * o troco fica de fora porque não é campo do pedido. O total do papel sai de
+ * `totaisParaImpressao`: com item, das linhas; sem item, do valor guardado,
+ * que é o que o painel cobra.
  */
 export async function getPedidoParaImpressao(
   id: string,
@@ -964,11 +966,16 @@ export async function getRotaParaImpressao(id: string): Promise<RotaImpressao | 
         const pedido = porId.get(stop.orderId);
         if (!pedido) return [];
 
-        const itens = pedido.items.reduce(
-          (t, i) => t + i.unitPrice.cents * i.quantity - i.discount.cents,
-          0,
-        );
-        const total = itens + (pedido.isPickup ? 0 : pedido.deliveryFee.cents);
+        const total = totaisParaImpressao({
+          items: pedido.items.map((item) => ({
+            unitPriceCents: item.unitPrice.cents,
+            quantity: item.quantity,
+            discountCents: item.discount.cents,
+          })),
+          deliveryFeeCents: pedido.deliveryFee.cents,
+          amountCents: pedido.amount.cents,
+          pickup: pedido.isPickup,
+        });
 
         return [
           {
@@ -980,7 +987,7 @@ export async function getRotaParaImpressao(id: string): Promise<RotaImpressao | 
             referencia: pedido.address.reference,
             pickup: pedido.isPickup,
             itensResumo: pedido.items.map((i) => `${i.quantity}x ${i.name}`).join(' · '),
-            totalCents: total,
+            totalCents: total.totalCents,
             pagamento: pedido.paymentMethod,
             pago: pedido.paymentStatus === 'PAID',
           },

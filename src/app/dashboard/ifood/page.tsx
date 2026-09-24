@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { agoraMs } from '@/presentation/relogio';
 import { getLojaIfood } from '@/presentation/queries';
 import { IfoodLoja } from '@/presentation/ui/patterns/ifood-loja';
 import { IfoodTabs } from '@/presentation/ui/patterns/ifood-tabs';
@@ -10,6 +11,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function IfoodPage() {
   const loja = await getLojaIfood();
+  const agoraInicial = agoraMs();
 
   if (!loja) {
     return (
@@ -24,7 +26,7 @@ export default async function IfoodPage() {
   return (
     <div className="flex flex-col gap-4">
       <IfoodTabs ativo="loja" />
-      <IfoodLoja loja={loja} />
+      <IfoodLoja loja={loja} agoraInicial={agoraInicial} />
     </div>
   );
 }
