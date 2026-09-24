@@ -28,7 +28,7 @@ const DIAS: Array<{ key: string; label: string }> = [
  * e o horário de funcionamento. Cada ação chama a API do iFood e reflete no
  * Portal do Parceiro — é o que a homologação pede para provar.
  */
-export function IfoodLoja({ loja }: { loja: LojaIfoodView }) {
+export function IfoodLoja({ loja, agoraInicial }: { loja: LojaIfoodView; agoraInicial: number }) {
   return (
     <div className="flex max-w-3xl flex-col gap-5">
       <div>
@@ -39,7 +39,7 @@ export function IfoodLoja({ loja }: { loja: LojaIfoodView }) {
       </div>
 
       <InfoLoja loja={loja} />
-      <Pausas loja={loja} />
+      <Pausas loja={loja} agoraInicial={agoraInicial} />
       <Horarios loja={loja} />
     </div>
   );
@@ -101,7 +101,7 @@ function InfoLoja({ loja }: { loja: LojaIfoodView }) {
 }
 
 /** Cenário 2: interrupções (pausas). */
-function Pausas({ loja }: { loja: LojaIfoodView }) {
+function Pausas({ loja, agoraInicial }: { loja: LojaIfoodView; agoraInicial: number }) {
   const router = useRouter();
   const [erro, setErro] = useState<string | null>(null);
   const [pendente, submit] = useTransition();
@@ -127,17 +127,21 @@ function Pausas({ loja }: { loja: LojaIfoodView }) {
    * entrou na lista). Sem isto, uma pausa criada no Levô e depois excluída pelo
    * Portal voltaria a aparecer: ela sumia da tela só enquanto estava na lista do
    * servidor, e ao ser excluída lá fora a ponte otimista a ressuscitava.
+   *
+   * O ajuste acontece no render, e não num efeito: o React pede para o estado
+   * acompanhar a prop na hora em que ela muda, em vez de disparar um setState
+   * depois da pintura.
    */
-  useEffect(() => {
+  const [chaveVista, setChaveVista] = useState(chaveServidor);
+  if (chaveServidor !== chaveVista) {
+    setChaveVista(chaveServidor);
     setOtimistas((a) => a.filter((p) => !idsDoServidor.includes(p.id)));
-    // idsDoServidor deriva de chaveServidor; evita recriar o efeito a cada render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chaveServidor]);
+  }
 
-  const agora = Date.now();
+  const agora = useAgora(agoraInicial);
   // A ponte vale por pouco tempo: se em 15s o servidor não confirmou (ex.: a
   // pausa foi excluída antes de propagar), paramos de mostrá-la e confiamos no
-  // servidor. Uma vez confirmada, o efeito acima já a removeu daqui.
+  // servidor. Uma vez confirmada, o ajuste acima já a tirou da lista local.
   const otimistasVisiveis = otimistas.filter(
     (p) => !idsDoServidor.includes(p.id) && agora - p.criadaEm < 15_000,
   );
@@ -418,6 +422,21 @@ function quando(iso: string): string {
   const d = new Date(instante(iso) - 180 * 60_000);
   const p = (n: number) => String(n).padStart(2, '0');
   return `${p(d.getUTCDate())}/${p(d.getUTCMonth() + 1)} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
+}
+
+/**
+ * Hora atual sem chamar `Date.now()` no render.
+ *
+ * O primeiro valor vem do servidor, o mesmo na hidratação. O intervalo só
+ * corre depois, para a pausa vencida e a ponte otimista de 15s saírem sozinhas.
+ */
+function useAgora(inicial: number): number {
+  const [agora, setAgora] = useState(inicial);
+  useEffect(() => {
+    const id = setInterval(() => setAgora(Date.now()), 15_000);
+    return () => clearInterval(id);
+  }, []);
+  return agora;
 }
 
 /**

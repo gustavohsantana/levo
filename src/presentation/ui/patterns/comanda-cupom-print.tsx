@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { totaisParaImpressao } from '@/presentation/impressao';
 import type { OrderView } from '@/presentation/queries';
 
 /**
@@ -22,9 +23,7 @@ export function ComandaCupomPrint({ loja, pedido }: { loja: string; pedido: Orde
     ...i,
     lineCents: i.unitPriceCents * i.quantity - i.discountCents,
   }));
-  const subtotal = linhas.reduce((t, l) => t + l.lineCents, 0);
-  const taxa = pedido.pickup ? 0 : pedido.deliveryFeeCents;
-  const total = subtotal + taxa;
+  const { subtotalCents: subtotal, taxaCents: taxa, totalCents: total } = totaisParaImpressao(pedido);
 
   return (
     <>
@@ -54,15 +53,19 @@ export function ComandaCupomPrint({ loja, pedido }: { loja: string; pedido: Orde
             <span className="g">{FONTE[pedido.source]}</span>
           </div>
           <hr className="r-double" />
-          {linhas.map((l, i) => (
-            <div key={i} className="item">
-              <div className="r-line">
-                <span className="r-qty">{l.quantity}x</span>
-                <span>{l.name.toUpperCase()}</span>
+          {linhas.length > 0 ? (
+            linhas.map((l, i) => (
+              <div key={i} className="item">
+                <div className="r-line">
+                  <span className="r-qty">{l.quantity}x</span>
+                  <span>{l.name.toUpperCase()}</span>
+                </div>
+                {l.options.length > 0 ? <div className="r-opt">{l.options.join(', ')}</div> : null}
               </div>
-              {l.options.length > 0 ? <div className="r-opt">{l.options.join(', ')}</div> : null}
-            </div>
-          ))}
+            ))
+          ) : (
+            <div className="r-tag">Não há itens registrados neste pedido.</div>
+          )}
           {pedido.notes ? (
             <>
               <hr className="r-double" />

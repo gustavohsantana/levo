@@ -8,6 +8,7 @@ import {
   verificarVinculoFood99,
 } from '@/presentation/integration-actions';
 import { Button, Field, Input } from '../primitives';
+import { IntegracaoIndisponivel } from './integracao-indisponivel';
 
 /**
  * Conectar o 99Food.
@@ -36,15 +37,7 @@ export function Food99Connect({ conectado, lojaAtual, disponivel }: Props) {
   const [erro, setErro] = useState<string | null>(null);
 
   if (!disponivel) {
-    return (
-      <div className="flex h-full flex-col rounded-lg bg-surface p-5 hairline">
-        <h3 className="font-semibold text-ink">99Food</h3>
-        <p className="mt-1 text-sm leading-relaxed text-ink-muted">
-          Ainda não configurado neste ambiente. As credenciais do aplicativo precisam estar
-          no servidor antes de vincular a loja.
-        </p>
-      </div>
-    );
+    return <IntegracaoIndisponivel titulo="99Food" />;
   }
 
   if (conectado) {

@@ -2,6 +2,9 @@ import { env } from '@/env';
 import { PortaOpenAI } from '@/infrastructure/agente/openai';
 import type { Ferramenta } from '@/infrastructure/agente/ferramenta';
 import type { PortaDeLLM } from '@/infrastructure/agente/porta-llm';
+import { carregarMenuPublico } from '@/infrastructure/catalog/menu-publico';
+import { buscarCep } from '@/infrastructure/geocoding/cep';
+import { localizarEnderecoDaLoja } from '@/infrastructure/geocoding/localizar-endereco';
 import { ferramentasDoLevo, type CardapioDaLoja } from './ferramentas';
 
 /**
@@ -38,14 +41,12 @@ export async function atendenteDaLoja(
    * Carregar antecipado custaria uma consulta em toda mensagem — inclusive nas
    * que nem falam de comida.
    */
-  const { getMenuPublico } = await import('@/presentation/public-menu');
-
   return {
     porta: new PortaOpenAI({ apiKey: config.OPENAI_API_KEY, modelo: config.OPENAI_MODEL }),
     sistema: promptDaLoja(loja.name),
     ferramentas: ferramentasDoLevo(loja.slug, {
       async cardapio(slug) {
-        const menu = await getMenuPublico(slug);
+        const menu = await carregarMenuPublico(slug);
         if (!menu) return null;
         return {
           nome: menu.establishment.name,
@@ -65,14 +66,10 @@ export async function atendenteDaLoja(
        */
       faixasDeTaxa: async () => [],
       async localizar(slug, endereco) {
-        const { localizarEnderecoAction } = await import('@/presentation/public-menu');
-        const r = await localizarEnderecoAction(slug, endereco);
-        return r.ok ? { lat: r.lat, lng: r.lng } : null;
+        return localizarEnderecoDaLoja(slug, endereco);
       },
       async consultarCep(cep) {
-        const { buscarCepAction } = await import('@/presentation/public-menu');
-        const r = await buscarCepAction(cep);
-        return r.ok ? r.endereco : null;
+        return buscarCep(cep);
       },
     }),
   };

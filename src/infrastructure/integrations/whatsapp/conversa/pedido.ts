@@ -9,7 +9,15 @@ import {
   precoEmReais,
   texto,
 } from './mensagem-de-saida';
-import type { Retrato, Resultado } from './motor';
+import type {
+  GrupoDoRetrato,
+  OpcaoDoRetrato,
+  ProdutoDoRetrato,
+  Retrato,
+  Resultado,
+} from './tipos';
+
+export type { GrupoDoRetrato, OpcaoDoRetrato, ProdutoDoRetrato };
 
 /**
  * Os passos do pedido que o motor conduz sozinho.
@@ -19,28 +27,6 @@ import type { Retrato, Resultado } from './motor';
  * Aqui cada grupo é um toque, com o preço na mesma linha — e o estado guarda
  * o que já fechou, para a poda do diálogo não apagar o açaí.
  */
-
-export interface OpcaoDoRetrato {
-  id: string;
-  nome: string;
-  priceCents: number;
-}
-
-export interface GrupoDoRetrato {
-  id: string;
-  nome: string;
-  min: number;
-  max: number;
-  opcoes: OpcaoDoRetrato[];
-}
-
-export interface ProdutoDoRetrato {
-  id: string;
-  nome: string;
-  aPartirDeCents: number;
-  priceCents?: number;
-  grupos?: GrupoDoRetrato[];
-}
 
 export function aPartirDe(produto: Pick<ProdutoDoRetrato, 'priceCents' | 'grupos'>): number {
   return precoMinimo(

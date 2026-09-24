@@ -17,6 +17,7 @@ import {
 import { listarLojasAiqfome } from '@/infrastructure/integrations/aiqfome/stores';
 import { lerContaMercadoPago } from '@/infrastructure/payments/mercadopago/account';
 import { mercadoPagoAccessTokenFor } from '@/infrastructure/payments/mercadopago/factory';
+import { aiqfomePronto, ifoodPronto } from '@/presentation/integracao-disponivel';
 
 export const metadata: Metadata = { title: 'Integrações · Levô' };
 export const dynamic = 'force-dynamic';
@@ -164,12 +165,14 @@ export default async function IntegracoesPage({
           <IfoodConnect
             conectado={Boolean(ifood)}
             lojaAtual={ifood?.merchantId ? { id: ifood.merchantId, nome: nomeDaLoja } : null}
+            disponivel={ifoodPronto(env())}
           />
 
           <AiqfomeConnect
             conectado={Boolean(aiqfome)}
             lojaAtual={aiqfome ? { id: aiqfome.merchantId ?? '', nome: nomeAiq } : null}
             lojas={lojasAiq}
+            disponivel={aiqfomePronto(env())}
           />
 
           {/*

@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { Check, Link2, LoaderCircle, Unlink } from 'lucide-react';
 import { desconectarAiqfome, escolherLojaAiqfome } from '@/presentation/integration-actions';
 import { Button } from '../primitives';
+import { IntegracaoIndisponivel } from './integracao-indisponivel';
 
 /**
  * Conectar o aiqfome.
@@ -18,13 +19,17 @@ interface Props {
   lojaAtual: { id: string; nome: string | null } | null;
   /** Preenchido só quando o consentimento liberou mais de uma loja. */
   lojas: Array<{ id: string; nome: string }>;
+  /** Falso quando a integração está desligada ou sem credencial de parceiro. */
+  disponivel: boolean;
 }
 
-export function AiqfomeConnect({ conectado, lojaAtual, lojas }: Props) {
+export function AiqfomeConnect({ conectado, lojaAtual, lojas, disponivel }: Props) {
   const [pendente, startTransition] = useTransition();
   const [escolhendo, setEscolhendo] = useState(lojas.length > 1 && !lojaAtual?.id);
 
   if (!conectado) {
+    if (!disponivel) return <IntegracaoIndisponivel titulo="aiqfome" />;
+
     return (
       <div className="flex h-full flex-col rounded-lg bg-surface p-5 hairline">
         <h3 className="font-semibold text-ink">Conectar o aiqfome</h3>
