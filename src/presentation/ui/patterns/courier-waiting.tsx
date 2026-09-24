@@ -1,4 +1,7 @@
 import type { CSSProperties } from 'react';
+import type { HistoricoDoDia as Historico } from '@/presentation/historico-do-motoboy';
+import { EscolhaDoMapa } from './escolha-do-mapa';
+import { HistoricoDoDia } from './historico-do-dia';
 import { CourierLogoutButton } from './courier-logout-button';
 
 /**
@@ -7,7 +10,13 @@ import { CourierLogoutButton } from './courier-logout-button';
  * Estilos embutidos — mesmo motivo do login: WebView de tablet sem o CSS
  * do Tailwind deixa a tela zoada.
  */
-export function CourierWaiting({ nome }: { nome: string }) {
+export function CourierWaiting({
+  nome,
+  historico,
+}: {
+  nome: string;
+  historico: Historico | null;
+}) {
   return (
     <main style={tela}>
       <meta httpEquiv="refresh" content="8;url=/entregador" />
@@ -34,6 +43,12 @@ export function CourierWaiting({ nome }: { nome: string }) {
         <p style={subtitulo}>
           Ainda não tem rota. Quando o dono montar, ela aparece aqui sozinha.
         </p>
+        <div style={{ marginTop: 28 }}>
+          <EscolhaDoMapa />
+        </div>
+        <div style={{ marginTop: 8 }}>
+          <HistoricoDoDia historico={historico} mostrarTitulo />
+        </div>
         <div style={{ marginTop: 32 }}>
           <CourierLogoutButton />
         </div>

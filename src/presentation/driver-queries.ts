@@ -1,7 +1,15 @@
 import 'server-only';
+import { Money } from '@/core';
+import type { CourierPayAgreement } from '@/core/services/courier-pay';
 import { env } from '@/env';
 import { getPrismaClient } from '@/infrastructure/persistence/prisma/client';
 import { containerFor } from '@/composition-root';
+import {
+  montarHistoricoDoDia,
+  type EntregaConcluida,
+  type HistoricoDoDia,
+} from './historico-do-motoboy';
+import { fimDoDia, hojeEmBrasilia, inicioDoDia } from './reports-core';
 
 /**
  * Leituras dos links sem senha (motoboy e cliente).
@@ -92,6 +100,108 @@ export async function getDriverRoute(accessToken: string): Promise<DriverRouteVi
       }),
     };
   });
+}
+
+/**
+ * Entregas que este motoboy concluiu hoje, e a soma do que tem a receber.
+ *
+ * "Hoje" é o dia de Brasília, o mesmo do acerto da loja. A conclusão é
+ * `deliveredAt` — o toque em Entreguei, inclusive o que ficou na fila offline —
+ * e não a hora em que o pedido foi lançado.
+ */
+export async function historicoDeHoje(
+  establishmentId: string,
+  courierId: string,
+  agora = new Date(),
+): Promise<HistoricoDoDia> {
+  const prisma = getPrismaClient(env().DATABASE_URL);
+  const hoje = hojeEmBrasilia(agora);
+
+  const [courier, pedidos] = await Promise.all([
+    prisma.courier.findFirst({
+      where: { id: courierId, establishmentId },
+      select: {
+        payModel: true,
+        payPerDeliveryCents: true,
+        payDailyCents: true,
+        payBands: {
+          orderBy: { uptoMeters: 'asc' },
+          select: { uptoMeters: true, amountCents: true },
+        },
+      },
+    }),
+    prisma.order.findMany({
+      where: {
+        establishmentId,
+        status: 'DELIVERED',
+        deliveredAt: { gte: inicioDoDia(hoje), lt: fimDoDia(hoje) },
+        stop: { route: { courierId, establishmentId } },
+      },
+      select: {
+        id: true,
+        customerName: true,
+        address: true,
+        deliveredAt: true,
+        stop: { select: { legDistanceMeters: true } },
+      },
+      orderBy: { deliveredAt: 'desc' },
+    }),
+  ]);
+
+  const entregas: EntregaConcluida[] = [];
+  for (const pedido of pedidos) {
+    if (!pedido.deliveredAt) continue;
+    entregas.push({
+      id: pedido.id,
+      cliente: pedido.customerName,
+      endereco: pedido.address,
+      quando: pedido.deliveredAt.toISOString(),
+      metros: pedido.stop?.legDistanceMeters ?? 0,
+    });
+  }
+
+  return montarHistoricoDoDia(entregas, acordoDoCourier(courier), agora);
+}
+
+/** O histórico de quem está neste link. `null` se o token não é de rota nenhuma. */
+export async function historicoDeHojePeloToken(
+  accessToken: string,
+): Promise<HistoricoDoDia | null> {
+  const prisma = getPrismaClient(env().DATABASE_URL);
+  const rota = await prisma.route.findUnique({
+    where: { accessToken },
+    select: { courierId: true, establishmentId: true },
+  });
+  if (!rota) return null;
+  return historicoDeHoje(rota.establishmentId, rota.courierId);
+}
+
+function acordoDoCourier(
+  courier: {
+    payModel: CourierPayAgreement['model'];
+    payPerDeliveryCents: number;
+    payDailyCents: number;
+    payBands: Array<{ uptoMeters: number; amountCents: number }>;
+  } | null,
+): CourierPayAgreement {
+  if (!courier) {
+    return {
+      model: 'POR_ENTREGA',
+      perDelivery: Money.fromCents(0),
+      daily: Money.fromCents(0),
+      bands: [],
+    };
+  }
+
+  return {
+    model: courier.payModel,
+    perDelivery: Money.fromCents(courier.payPerDeliveryCents),
+    daily: Money.fromCents(courier.payDailyCents),
+    bands: courier.payBands.map((faixa) => ({
+      uptoMeters: faixa.uptoMeters,
+      amount: Money.fromCents(faixa.amountCents),
+    })),
+  };
 }
 
 export async function resolveRouteContext(accessToken: string) {
